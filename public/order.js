@@ -90,12 +90,16 @@
 
     /* выбор должностей и судов */
     [].forEach.call(document.querySelectorAll("[data-chips]"), function(box){
-        var name = box.getAttribute("data-chips"), max = Number(box.getAttribute("data-max")) || 0, hid = $(name);
+        var name = box.getAttribute("data-chips"), max = Number(box.getAttribute("data-max")) || 0, hid = $(name), pop = box.querySelector(".ms-pop"), btn = box.querySelector(".ms-btn");
+        btn.addEventListener("click", function(){ var open = pop.hidden; [].forEach.call(document.querySelectorAll(".ms-pop"), function(p){ p.hidden = true; }); pop.hidden = !open; });
+        document.addEventListener("click", function(e){ if(!box.contains(e.target)) pop.hidden = true; });
+        document.addEventListener("keydown", function(e){ if(e.key === "Escape") pop.hidden = true; });
         box.addEventListener("change", function(ev){
             var on = [].filter.call(box.querySelectorAll("input:checked"), function(x){ return true; });
             if(max && on.length > max){ ev.target.checked = false; on = on.filter(function(x){ return x !== ev.target; }); fail("Можно выбрать не больше " + max + " должностей"); return; }
-            if(max) box.classList.toggle("lock", on.length >= max);
             var vals = on.map(function(x){ return x.value; });
+            box.querySelector(".ms-btn").textContent = vals.length ? vals.join(", ") : box.getAttribute("data-ph");
+            box.classList.toggle("has", vals.length > 0);
             if(name === "position"){ var oth = $("positionOther"); if(oth) oth.hidden = vals.indexOf("Другая") < 0; }
             hid.value = vals.join(", ");
         });

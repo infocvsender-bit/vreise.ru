@@ -164,3 +164,7 @@ textarea.in{font-weight:400}
 .addon{border:1.5px dashed #8fb8b0;background:#f2faf8;border-radius:16px;padding:18px 20px;margin-top:4px}
 .addon .badge{display:inline-block;background:#e8a317;color:#fff;border-radius:999px;padding:2px 10px;font-size:13px;font-weight:700;margin-left:8px}
 .rpl{margin:10px 0;padding:12px 14px;border-radius:12px;background:#f3f6f7}.rpl .h{font-size:13px;color:var(--muted)}.rpl .b{white-space:pre-wrap;margin-top:6px;font-size:14.5px}
+.msel{position:relative;margin-top:8px}.ms-btn{width:100%;text-align:left;border:1.5px solid var(--line);border-radius:12px;padding:12px 40px 12px 14px;font:inherit;font-size:16px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='8'%3E%3Cpath d='M1 1l6 6 6-6' fill='none' stroke='%235b727a' stroke-width='2'/%3E%3C/svg%3E") no-repeat right 14px center;color:var(--muted);cursor:pointer}
+.msel.has .ms-btn{color:var(--text)}.ms-pop{position:absolute;z-index:20;left:0;right:0;top:calc(100% + 4px);max-height:280px;overflow:auto;background:#fff;border:1.5px solid var(--line);border-radius:12px;box-shadow:0 12px 30px rgba(10,51,64,.18);padding:6px}
+.ms-pop label{display:flex;gap:10px;align-items:center;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:15px}.ms-pop label:hover{background:#eef6f5}.ms-pop input{width:18px;height:18px;accent-color:var(--teal);position:static;opacity:1;pointer-events:auto}
+.ms-pop span{padding:0;border:0;background:none;border-radius:0;color:var(--text);display:inline}

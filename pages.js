@@ -2,6 +2,7 @@
 /* Страницы сайта (HTML на сервере). Только русский язык. */
 const C = require("./catalog.js");
 const {esc, siteUrl, phone, WA, TGL, rub} = require("./mails.js");
+const V = (String(process.env.RAILWAY_GIT_COMMIT_SHA || "").slice(0, 8)) || String(Date.now());
 const env = k => String(process.env[k] || "").trim();
 
 const POSITIONS = ["Master", "Chief Officer", "Second Officer", "Third Officer", "DPO", "SDPO", "Chief Engineer", "Second Engineer", "Third Engineer", "Fourth Engineer", "ETO", "Electrician",
@@ -15,7 +16,7 @@ function shell({title, desc, body, path = "/", hero = "", noindex = false, scrip
 ${noindex ? '<meta name="robots" content="noindex,nofollow">' : `<link rel="canonical" href="${esc(url)}">`}
 <meta property="og:type" content="website"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(desc)}"><meta property="og:url" content="${esc(url)}"><meta property="og:image" content="${esc(img)}"><meta property="og:locale" content="ru_RU">
 <link rel="icon" type="image/png" href="/static/favicon.png"><link rel="apple-touch-icon" href="/static/icon-192.png"><meta name="theme-color" content="#0A3340">
-<link rel="stylesheet" href="/static/style.css"></head><body>
+<link rel="stylesheet" href="/static/style.css?v=${V}"></head><body>
 ${hero}${body}
 <footer class="f"><div class="c"><span>© Vreise.ru${env("LEGAL_NAME") ? " · " + esc(env("LEGAL_NAME")) : ""}</span><span><a href="/policy">Политика конфиденциальности</a><a href="/offer">Публичная оферта</a></span></div></footer>
 ${scripts}</body></html>`;
@@ -72,13 +73,13 @@ function home(counts){
 </div></div></section>
 <section class="sec" id="contacts"><div class="c"><div class="contacts"><div><h2>Остались вопросы?</h2><p>Напишите нам — ответим в WhatsApp или Telegram.</p>${phone() ? `<div class="tel">${esc(phone())}</div>` : ""}</div>
 <div class="btns">${WA() ? `<a class="btn gold" href="${WA()}" target="_blank" rel="noopener">WhatsApp</a>` : ""}${TGL() ? `<a class="btn line" href="${TGL()}" target="_blank" rel="noopener">Telegram</a>` : ""}</div></div></div></section>`;
-    const scripts = `<script src="/static/site.js" defer></script>`;
+    const scripts = `<script src="/static/site.js?v=${V}" defer></script>`;
     return shell({title: "Vreise.ru — рассылка резюме моряков в крюинговые компании", desc: "Рассылка резюме моряков по базам: Россия, Европа, Офшор, Мир. Резюме «Стандарт» с нуля. Оплата картой в рублях.", hero, body, scripts});
 }
 
 /* ---------- форма заказа ---------- */
 const ENGLISH = ["Elementary", "Pre-Intermediate", "Intermediate", "Upper-Intermediate", "Advanced"];
-const chips = (name, list, max) => `<div class="chips" data-chips="${name}"${max ? ` data-max="${max}"` : ""}>${list.map(x => `<label><input type="checkbox" value="${esc(x)}"><span>${esc(x)}</span></label>`).join("")}</div>`;
+const chips = (name, list, max, ph) => `<div class="msel" data-chips="${name}"${max ? ` data-max="${max}"` : ""} data-ph="${esc(ph)}"><button type="button" class="ms-btn">${esc(ph)}</button><div class="ms-pop" hidden>${list.map(x => `<label><input type="checkbox" value="${esc(x)}"><span>${esc(x)}</span></label>`).join("")}</div></div>`;
 /* Форма заказа резюме «Стандарт»: те же поля, что нужны для международной анкеты (Application Form) */
 function orderFormCv(counts){
     const r = (id, label, extra = "", req = true) => `<label class="f">${label}${req ? ' <i class="rq">*</i>' : ""}<input class="in" id="${id}" ${extra}></label>`;
@@ -93,9 +94,9 @@ ${r("last", "Фамилия (на английском)", 'autocomplete="family-
 <label class="f">E-mail <i class="rq">*</i><small> — сюда придут письма и готовое резюме</small><input class="in" id="email" type="email" autocomplete="email"></label>
 ${r("phone", "Телефон", 'type="tel" autocomplete="tel" placeholder="+7 900 000 00 00"')}
 </div>
-<div class="fld"><div class="lbl">Должность <i class="rq">*</i> <small>— до 3-х</small></div><input type="hidden" id="position">${chips("position", POSITIONS.concat(["Другая"]), 3)}
+<div class="fld"><div class="lbl">Должность <i class="rq">*</i> <small>— до 3-х</small></div><input type="hidden" id="position">${chips("position", POSITIONS.concat(["Другая"]), 3, "Выберите должность")}
 <input class="in" id="positionOther" placeholder="Укажите вашу должность" hidden></div>
-<div class="fld"><div class="lbl">Предпочитаемый вид судов <i class="rq">*</i> <small>— можно выбрать несколько</small></div><input type="hidden" id="vessel">${chips("vessel", VESSELS)}</div>
+<div class="fld"><div class="lbl">Предпочитаемый вид судов <i class="rq">*</i> <small>— можно выбрать несколько</small></div><input type="hidden" id="vessel">${chips("vessel", VESSELS, 0, "Выберите типы судов")}</div>
 <div class="grid2" style="margin-top:16px">
 <label class="f">Ссылка на LinkedIn<input class="in" id="linkedin" placeholder="https://linkedin.com/in/…"></label>
 <div class="fld" style="margin:0"><div class="lbl">Мессенджеры на этом номере <i class="rq">*</i></div><div class="chips" id="msgs"><label><input type="checkbox" name="msg" value="WhatsApp"><span>WhatsApp</span></label><label><input type="checkbox" name="msg" value="Telegram"><span>Telegram</span></label><label><input type="checkbox" name="msg" value="Viber"><span>Viber</span></label></div></div>
@@ -125,7 +126,7 @@ ${r("nokName", "Имя Фамилия")}${r("nokRel", "Кем приходитс
 <input type="text" id="hp" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true">
 <div class="sum"><div>К оплате<br><b id="total">${rub(C.cvPrice())}</b></div><button class="btn gold" id="go" type="submit">Оформить заказ</button></div></form></div>`;
     return shell({title: "Заказ резюме «Стандарт» — Vreise.ru", desc: "Оформление заказа на Vreise.ru", path: "/order", noindex: true,
-        hero: `<header class="hero short">${navTop(false)}</header>`, body, scripts: `<script src="/static/order.js" defer></script>`});
+        hero: `<header class="hero short">${navTop(false)}</header>`, body, scripts: `<script src="/static/order.js?v=${V}" defer></script>`});
 }
 
 function orderForm(slug, counts){
@@ -161,7 +162,7 @@ ${cv ? `<div class="panel"><h3>Данные для резюме</h3>
 <input type="text" id="hp" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true">
 <div class="sum"><div>К оплате<br><b id="total">${rub(cv ? C.cvPrice() : sv.price)}</b></div><button class="btn gold" id="go" type="submit">Оформить заказ</button></div></form></div>`;
     return shell({title: (cv ? "Заказ резюме «Стандарт»" : "Заказ рассылки") + " — Vreise.ru", desc: "Оформление заказа на Vreise.ru", path: "/order", noindex: true,
-        hero: `<header class="hero short">${navTop(false)}</header>`, body, scripts: `<script src="/static/order.js" defer></script>`});
+        hero: `<header class="hero short">${navTop(false)}</header>`, body, scripts: `<script src="/static/order.js?v=${V}" defer></script>`});
 }
 
 /* ---------- страница заказа ---------- */
@@ -209,7 +210,7 @@ ${o.phone ? `<tr><td>Телефон</td><td>${esc(o.phone)}</td></tr>` : ""}${o.
 <p class="hint" style="margin-top:12px">Сохраните эту ссылку — по ней всегда можно посмотреть состояние заказа.${phone() ? ` Вопросы — WhatsApp / Telegram ${esc(phone())}.` : ""}</p></div></div>`;
     const live = ["claimed", "paid", "in_progress"].includes(o.status) ? `<script>setInterval(function(){var a=document.activeElement;if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))return;if(document.querySelector("textarea[data-dirty]"))return;location.reload()},45000);document.addEventListener("input",function(e){if(e.target&&e.target.tagName==="TEXTAREA")e.target.setAttribute("data-dirty","1")})</script>` : "";
     return shell({title: `Заказ №${o.num} — Vreise.ru`, desc: "Страница заказа", path: "/o/" + o.token, noindex: true, hero: `<header class="hero short">${navTop(false)}</header>`, body,
-        scripts: `<script>window.__tok=${JSON.stringify(o.token)}</script><script src="/static/order.js" defer></script><script src="/static/noselect.js" defer></script>${live}`});
+        scripts: `<script>window.__tok=${JSON.stringify(o.token)}</script><script src="/static/order.js?v=${V}" defer></script><script src="/static/noselect.js?v=${V}" defer></script>${live}`});
 }
 
 /* ---------- политика и оферта ---------- */
