@@ -485,7 +485,8 @@ function parseBase(text, defaultBase){
             const rp = await q(`SELECT order_id, COUNT(*) AS n FROM replies WHERE kind = 'reply' GROUP BY order_id`), rm = Object.fromEntries(rp.map(x => [x.order_id, Number(x.n)]));
             for(const r of rows){ const x = pm[r.id]; r.sent = x ? Number(x.s) : 0; r.total = x ? Number(x.t) : 0; r.failed = x ? Number(x.f) : 0; r.jobs = jm[r.id] || []; r.replies = rm[r.id] || 0; }
             const sum = await q(`SELECT status, COUNT(*) AS n FROM orders GROUP BY status`);
-            return json(res, 200, {orders: rows, summary: Object.fromEntries(sum.map(r => [r.status, Number(r.n)]))});
+            const stl = await one(`SELECT value FROM meta WHERE key = 'settled_upto'`);
+            return json(res, 200, {orders: rows, settled: Number(stl?.value) || 0, summary: Object.fromEntries(sum.map(r => [r.status, Number(r.n)]))});
         }
         if(req.method === "GET" && (m = p.match(/^\/orders\/([\w-]+)$/))){
             const o = await one(`SELECT ${ORDER_LIST}, letter, subject, draft_letter, draft_subject, cover_ok, res_ok, exclude, comment, details, extra_base FROM orders WHERE id = $1`, [m[1]]); if(!o) return json(res, 404, {error: "нет заказа"});
@@ -542,6 +543,11 @@ function parseBase(text, defaultBase){
             await q(`DELETE FROM orders WHERE id = $1`, [o.id]);
             console.log(`🗑 Заказ №${o.num} удалён из CRM (${who})`);
             return json(res, 200, {ok: true, warn: errs.length ? "Ящики не удалились на почтовом сервере (удалите вручную): " + errs.join("; ") : ""});
+        }
+        if(req.method === "POST" && p === "/settle"){
+            const b = await body(req, 2000), n = Math.max(0, Math.floor(Number(b.num) || 0));
+            await q(`DELETE FROM meta WHERE key = 'settled_upto'`); if(n) await q(`INSERT INTO meta(key, value) VALUES('settled_upto', $1)`, [String(n)]);
+            return json(res, 200, {ok: true, settled: n});
         }
         if(req.method === "POST" && (m = p.match(/^\/orders\/([\w-]+)\/res-skip$/))){
             const o = await one(`SELECT * FROM orders WHERE id = $1`, [m[1]]); if(!o) return json(res, 404, {error: "нет заказа"});
