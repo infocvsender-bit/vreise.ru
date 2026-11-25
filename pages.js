@@ -39,7 +39,7 @@ function home(counts){
 <div class="pill"><b></b>Онлайн-сервис для моряков</div>
 <h1>Ваше резюме — <span>сразу в крюинговые компании</span></h1>
 <p class="lead">Выберите базу, загрузите резюме — мы разошлём его в нужные компании и пришлём отчёт о рассылке. Сопроводительное письмо входит в услугу, а резюме «Стандарт» составим с нуля.</p>
-<div class="cta"><a class="btn gold" href="#services">Выбрать рассылку</a><a class="btn line" href="/order?s=${C.CV.slug}">Составить резюме · ${rub(C.cvPrice())}</a></div>
+<div class="cta"><a class="btn gold" href="#services">Выбрать рассылку</a><a class="btn line" href="#resume">Составить резюме · ${rub(C.cvPrice())}</a></div>
 <div class="facts"><div><b>${C.BASES.length} баз</b>Россия · Европа<br>Офшор · Мир</div><div><b>Статистика</b>и статус в личном<br>кабинете</div><div><b>от ${rub(Math.min(...C.BASES.map(b => C.priceOf(b, 1))))}</b>оплата картой<br>в рублях</div></div>
 </div><div class="photo"><img src="/static/ship.jpg" alt="Контейнеровоз в море" width="1656" height="740">
 <div class="glass g1"><span class="ic">✉️</span><div><b>Рассылка резюме</b>крюинговым компаниям и судовладельцам по всему миру</div></div>
@@ -52,7 +52,7 @@ function home(counts){
 <ul class="pcs">${rows}</ul></div>
 <div class="included" id="included"><h3>Что входит в заказ</h3><ul>
 <li>Рассылка вашего резюме по выбранной базе компаний</li><li>Сопроводительное письмо — своё или готовое</li><li>Личный кабинет: ход рассылки и отправленные письма</li><li>Тему и письмо можно поменять в любой момент</li><li>Возможность заменить резюме</li><li>Можно исключить ненужные компании</li><li>Ответы компаний — в кабинете и на вашу почту</li><li>Вопросы менеджеру — прямо из кабинета</li></ul></div>
-<div class="strip"><div><h3>Составление резюме «Стандарт»</h3><ul>${C.CV.bullets.map(b => `<li>${esc(b)}</li>`).join("")}</ul></div>
+<div class="strip" id="resume"><div><h3>Составление резюме «Стандарт»</h3><ul>${C.CV.bullets.map(b => `<li>${esc(b)}</li>`).join("")}</ul></div>
 <div class="pr"><b>${rub(C.cvPrice())}</b><a class="btn gold" href="/order?s=${C.CV.slug}">Заказать резюме</a></div></div>
 </div></section>
 <section class="sec alt" id="how"><div class="c"><div class="kick">Как это работает</div><h2>Четыре шага до рассылки</h2><p class="sub">Никакой регистрации и паролей — всё по ссылке из письма.</p>

@@ -73,11 +73,11 @@ nav.top .sp{flex:1}
 .included ul{list-style:none;margin:0 auto;padding:0;max-width:880px;display:flex;flex-wrap:wrap;justify-content:center;gap:10px 28px}
 .included li:before{content:"✓";color:var(--teal);font-weight:800;margin-right:7px}
 
-.strip{margin-top:30px;background:#fff;border:1.5px solid var(--line);border-left:8px solid var(--gold);border-radius:20px;padding:30px 34px;display:grid;grid-template-columns:1fr auto;gap:30px;align-items:center}
+.strip{margin-top:30px;background:#fff;border:1.5px solid var(--line);border-top:8px solid var(--gold);border-radius:20px;padding:30px 34px;display:grid;grid-template-columns:1fr;gap:22px;justify-items:center;text-align:center;max-width:760px;margin-left:auto;margin-right:auto;scroll-margin-top:24px}
 .strip h3{font-size:24px;letter-spacing:-.5px;color:var(--deep);margin-bottom:12px}
 .strip ul{list-style:none;padding:0;display:grid;gap:7px;font-size:15.5px}
 .strip li:before{content:"—";color:var(--teal);font-weight:800;margin-right:9px}
-.strip .pr{text-align:right}.strip .pr b{display:block;font-size:38px;letter-spacing:-1.2px;color:var(--deep);margin-bottom:12px}
+.strip .pr{text-align:center}.strip .pr b{display:block;font-size:38px;letter-spacing:-1.2px;color:var(--deep);margin-bottom:12px}
 
 /* как это работает */
 .steps{list-style:none;padding:0;display:grid;grid-template-columns:repeat(4,1fr);gap:0;counter-reset:s;border-top:2px solid var(--line)}
@@ -147,7 +147,7 @@ table.t th{font-size:12.5px;text-transform:uppercase;letter-spacing:.06em;color:
  .facts{gap:22px;margin-top:30px}.facts b{font-size:19px}.btn{padding:14px 22px}
  .sec{padding:56px 0}.sec h2{font-size:30px}
  .pcs{grid-template-columns:1fr 1fr;gap:12px}.pc{padding:22px 16px 18px}.pc h4{font-size:17px}.pc-cnt b{font-size:26px}.pc-price{font-size:23px}.pc-note{min-height:0}
- .strip{grid-template-columns:1fr;padding:24px 22px}.strip .pr{text-align:left}
+ .strip{padding:24px 22px}
  .steps{grid-template-columns:1fr;border-top:0;border-left:2px solid var(--line);padding-left:24px}
  .steps li{padding:0 0 26px 14px}.steps li:before{top:0;left:-43px}
  .pay{grid-template-columns:1fr}
