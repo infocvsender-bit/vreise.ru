@@ -64,9 +64,15 @@ const T = {
         (() => { const P = require("./plan.js"), act = P.activeMs(j.total), end = P.plannedEnd(Date.now(), act);
             return `<p>Рассылка вашего резюме началась: ${j.total} адресов. Письма уходят постепенно, чтобы не попасть в спам.</p>
          <p>Отправка займёт около <b>${P.hoursText(act)}</b>: письма уходят по будням с 06:00 до 18:00 по Москве, поэтому плановое окончание — <b>${P.fmtMsk(end)} МСК</b>.</p><p>Ответы компаний приходят на вашу почту <b>${esc(o.reply_to || o.email)}</b>, а статистику и ответы можно смотреть в личном кабинете.</p>`; })(), "Личный кабинет", orderLink(o)),
-    finished: (o, j) => toClient(o.email, `Рассылка по заказу №${o.num} завершена`,
-        `<p>Рассылка №${j.m} завершена: отправлено <b>${j.sent}</b> из ${j.total}${j.failed ? `, не доставлено ${j.failed}` : ""}.</p>${Number(o.times) > Number(j.m) ? `<p>Следующая рассылка по вашему заказу пройдёт в выбранную вами дату — расписание можно посмотреть в личном кабинете.</p>` : ""}
-         <p>Полный список компаний — на странице заказа.</p>`, "Отчёт о рассылке", orderLink(o)),
+    finished: (o, j) => toClient(o.email, `Рассылка по заказу №${o.num} завершена ✅`,
+        `<p>Здравствуйте, ${esc(o.first_name || "")}! Рассылка вашего резюме завершена.</p>
+         <table width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0"><tr><td align="center" style="background:#eef8f3;border:1px solid #c5e6d3;border-radius:16px;padding:22px 16px">
+           <div style="font-size:13px;letter-spacing:1px;text-transform:uppercase;color:#2f7a55;font-weight:bold">Рассылка №${j.m} · завершена</div>
+           <div style="font-size:46px;line-height:1.15;font-weight:bold;color:#0A3340;margin:6px 0 2px">${Number(j.sent).toLocaleString("ru-RU")}</div>
+           <div style="font-size:15px;color:#0A3340">${(() => { const n = Number(j.sent), m = n % 100, k = n % 10; return m > 10 && m < 20 ? "компаний получили" : k === 1 ? "компания получила" : k >= 2 && k <= 4 ? "компании получили" : "компаний получили"; })()} ваше резюме</div>
+         </td></tr></table>
+         <p>Ответы компаний приходят на <b>${esc(o.reply_to || o.email)}</b> и появляются в личном кабинете — мы сообщим, как только придёт письмо.</p>
+         ${Number(o.times) > Number(j.m) ? `<p>Следующая рассылка по вашему заказу пройдёт в выбранную вами дату — расписание в личном кабинете.</p>` : ""}`, "Личный кабинет", orderLink(o)),
     reply: (o, text, subject, attach) => toClient(o.email, subject || `Ответ менеджера по заказу №${o.num}`,
         `<p>Здравствуйте, ${esc(o.first_name || "")}!</p><p>${esc(text).replace(/\n/g, "<br>")}</p><p style="color:#5b727a;font-size:13.5px">Написать нам можно на странице заказа или в мессенджеры.</p>`, "Открыть заказ", orderLink(o), attach, true),
     free: (to, subject, text, attach) => toClient(to, subject, String(text).split(/\n{2,}/).map(p => `<p>${esc(p).replace(/\n/g, "<br>")}</p>`).join(""), null, null, attach, true),

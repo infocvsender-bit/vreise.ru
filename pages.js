@@ -237,7 +237,7 @@ ${o.status === "new" ? `<div style="margin-top:18px"><button class="btn gold" id
         return `<div class="jc2"><div class="jh"><b>Рассылка №${j.m}</b><span class="jst ${j.status}">${badge}</span></div>
 ${active && j.status !== "pause" ? `<div class="chips"><span>🕒 ${fmtShort(startMs)} – ${fmtShort(endMs)} МСК</span><span class="dk">${Math.round(act / 3600e3)} ч</span></div>` : ""}
 <div class="bigp"><div class="bgn">${pct}<small>%</small></div><div class="bgr"><div class="bar"><i style="width:${pct}%"></i></div>
-<div>${total ? `Отправлено: <b>${sentN}</b> из ${total.toLocaleString("ru-RU")} адресов` : "Отправлено: <b>0</b> · адреса подберём перед стартом"}${failN ? `, не доставлено ${failN}` : ""}</div>
+<div>${j.status === "done" ? `✅ Резюме отправлено в <b>${sentN.toLocaleString("ru-RU")}</b> ${sentN % 10 === 1 && sentN % 100 !== 11 ? "компанию" : "компаний"}` : total ? `Отправлено: <b>${sentN}</b> из ${total.toLocaleString("ru-RU")} адресов` : j.status === "stop" ? "Рассылка не была запущена" : "Отправлено: <b>0</b> · адреса подберём перед стартом"}</div>
 ${active ? `<span class="hint">Старт: ${fmtShort(startMs)} МСК · плановое окончание: ${fmtShort(endMs)} МСК</span>` : ""}</div></div>
 <p class="jn">${info}</p>
 ${btns.length ? `<div class="ja">${btns.join("")}<span class="hint jmsg"></span></div>` : ""}
