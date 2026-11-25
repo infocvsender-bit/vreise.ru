@@ -301,3 +301,5 @@ button#go[disabled]{opacity:.5;cursor:not-allowed}
 .in.auto{border-color:#2f9e6f;background:#f3fbf7}
 .in.need{border-color:#e0a31a;background:#fff8e6}
 .docsnote{background:#fff8e6;border:1px solid #f0d58a;border-radius:10px;padding:10px 12px;color:#5b4a14}
+
+@media print{.nosel{display:none!important}}
