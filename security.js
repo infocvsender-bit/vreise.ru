@@ -35,8 +35,23 @@ function create({one, q, now, Mail, env, siteUrl}){
         if(!ip || isTrusted(ip)) return;
         bans.set(ip, Date.now() + hours * 3600e3);
         console.log(`🛡 бан ${ip} на ${hours} ч: ${String(why).slice(0, 120)}`);
-        once("ban:" + why.slice(0, 20), 60, () => Mail.owner(`🛡 Заблокирован адрес ${ip} на ${hours} ч\nПричина: ${String(why).slice(0, 200)}`).catch(() => {}));
+        logBan(ip, why, hours);                                  // сразу владельцу НЕ пишем — только сводка в конце дня (решение владельца 25.11)
     }
+    /* сводка блокировок: копим в meta('ban_log'), раз в день (после 21:00 МСК) одним сообщением — письмо + админ-бот */
+    let banLog = null;
+    const mskDay = () => new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10), mskHour = () => new Date(Date.now() + 3 * 3600e3).getUTCHours();
+    async function loadLog(){ if(banLog) return banLog; let v = null; try { v = JSON.parse((await one(`SELECT value FROM meta WHERE key = 'ban_log'`))?.value || "null"); } catch(e){} banLog = v && Array.isArray(v.items) ? v : {items: [], sent: ""}; return banLog; }
+    async function saveLog(){ try { await q(`DELETE FROM meta WHERE key = 'ban_log'`); await q(`INSERT INTO meta(key, value) VALUES('ban_log', $1)`, [JSON.stringify(banLog)]); } catch(e){} }
+    function logBan(ip, why, hours){ loadLog().then(L => { L.items.push({at: Date.now(), ip, why: String(why).slice(0, 120), h: hours}); if(L.items.length > 500) L.items.splice(0, L.items.length - 500); return saveLog(); }).catch(() => {}); }
+    async function digest(){
+        const L = await loadLog(), day = mskDay(); if(L.sent === day || mskHour() < 21 || !L.items.length) return;
+        const g = new Map(); for(const x of L.items){ const k = x.why.replace(/^(сканер): .*/, "$1"); const e = g.get(k) || {ips: new Set(), paths: new Set()}; e.ips.add(x.ip); const m = x.why.match(/^сканер: (.*)/); if(m) e.paths.add(m[1]); g.set(k, e); }
+        const ips = new Set(L.items.map(x => x.ip));
+        const lines = [...g.entries()].sort((a, b) => b[1].ips.size - a[1].ips.size).map(([k, e]) => `• ${k}: ${e.ips.size} адр.${e.paths.size ? " (" + [...e.paths].slice(0, 5).join(", ") + (e.paths.size > 5 ? "…" : "") + ")" : ""}`);
+        L.items = []; L.sent = day; await saveLog();
+        await Mail.owner(`🛡 Сводка защиты за день: заблокировано адресов — ${ips.size}\n${lines.join("\n")}\nВсе блокировки автоматические (24 ч), ничего делать не нужно.`).catch(() => {});
+    }
+    setInterval(() => { digest().catch(() => {}); }, 5 * 60e3).unref();
     const badToken = ip => { if(ip && hit("badtok:" + ip, 12, 3600e3)) ban(ip, "подбор ссылок кабинетов клиентов"); };
 
     /* ---------- секретная ссылка CRM ---------- */
