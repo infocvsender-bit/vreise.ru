@@ -16,7 +16,8 @@ module.exports = function engine(db){
 
     /* ---------- выбор адресов ---------- */
     const PARTS = {evropa: ["evropa", "rossiya"], "ofsor-evropa": ["ofsor", "evropa", "rossiya"], "mir-ofsor": ["mir", "ofsor"]};
-    const hasBase = (r, key) => key === "tanker" ? /tanker|gas|lng|lpg/i.test(r.fleets || "") : (PARTS[key] || [key]).concat(key).some(k => String(r.bases || "").split(/[;,\s]+/).includes(k));
+    const inBases = (r, k) => String(r.bases || "").split(/[;,\s]+/).includes(k);
+    const hasBase = (r, key) => key === "tanker" ? /tanker|gas|lng|lpg/i.test(r.fleets || "") : key === "tanker-rossiya" ? (hasBase(r, "tanker") || inBases(r, "rossiya")) : (PARTS[key] || [key]).concat(key).some(k => inBases(r, k));
     const parseExclude = t => String(t || "").split(/[\n,;]+/).map(x => x.trim().toLowerCase()).filter(x => x.length >= 3);
     function excluded(r, tokens){
         const e = String(r.email).toLowerCase(), dom = e.split("@")[1] || "", co = String(r.company || "").toLowerCase();
