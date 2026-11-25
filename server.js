@@ -10,7 +10,7 @@ const uuid = () => crypto.randomUUID(), now = () => new Date().toISOString();
 const MAX_FILE = 5 * 1024 * 1024;
 
 /* ---------- мелочи ---------- */
-const SECM = require("./security.js"), ipOf = SECM.ipOf;
+const RU = require("./ru.js"), SECM = require("./security.js"), ipOf = SECM.ipOf;
 const hits = new Map();
 function limited(key, max, ms){
     const t = Date.now(), a = (hits.get(key) || []).filter(x => t - x < ms);
@@ -102,6 +102,7 @@ function parseBase(text, defaultBase){
         else r = {email: f[0], company: f[1] || ""};
         const email = String(r.email || "").trim().toLowerCase(); if(!EMAIL.test(email)) continue;
         const bases = [...new Set(String(r.bases || "").split(/[;,\s]+/).filter(Boolean).concat(defaultBase ? [defaultBase] : []))];
+        if(RU.isRu(email, r.country, r.phone || r.tel || r.телефон) && !bases.includes("rossiya")) bases.push("rossiya");   // российские компании (.ru/.su/.рф, страна, телефон +7/8) — всегда и в базу «Россия»
         if(!bases.length) continue;
         out.push({email, company: clean(r.company, 120), country: clean(r.country, 60), fleets: clean(r.fleets, 120), bases: bases.join(";")});
     }
@@ -447,6 +448,14 @@ function parseBase(text, defaultBase){
         if(req.method === "GET" && p === "/bases"){
             counts = null; const c = await getCounts();
             return json(res, 200, {total: c.total, byBase: c.byBase, bases: C.BASES.map(b => ({key: b.key, name: b.name}))});
+        }
+        if(req.method === "POST" && p === "/bases/ru-rescan"){            // добавить в базу «Россия» уже загруженные адреса российских компаний
+            const rows = await q(`SELECT email, country, bases FROM base_rows`); let n = 0;
+            for(const r of rows){
+                if(String(r.bases || "").split(/[;,\s]+/).includes("rossiya") || !RU.isRu(r.email, r.country, "")) continue;
+                await q(`UPDATE base_rows SET bases = $1 WHERE email = $2`, [String(r.bases || "").split(/[;,\s]+/).filter(Boolean).concat("rossiya").join(";"), r.email]); n++;
+            }
+            counts = null; return json(res, 200, {ok: true, added: n, total: rows.length});
         }
         if(req.method === "POST" && p === "/bases/import"){
             const b = await body(req), def = clean(b.base, 40), rows = parseBase(b.text, def);

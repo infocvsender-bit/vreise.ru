@@ -105,8 +105,10 @@
                 '<div style="margin-top:14px"><label class="f">Файл CSV / TXT<input class="in" type="file" id="bf" accept=".csv,.txt,text/csv,text/plain"></label></div>' +
                 '<div style="margin-top:14px"><label class="f">…или вставьте список<textarea class="in" id="bt" style="min-height:120px"></textarea></label></div>' +
                 '<div class="acts"><button class="btn gold sm" id="bgo">Загрузить</button></div><p id="bmsg" class="mut" style="margin-top:10px"></p></div>' +
+                '<div class="panel"><h3>База «Россия»</h3><p class="mut">Адреса на .ru, .su, .рф, компании из России (страна) и с российскими номерами (+7 / 8 в колонке phone) попадают в базу «Россия» сами при загрузке. Эта кнопка добавит в «Россию» уже загруженные адреса.</p><div class="acts"><button class="btn sm" id="rurs">Добавить российские адреса в базу «Россия»</button></div><p id="rumsg" class="mut" style="margin-top:10px"></p></div>' +
                 '<div class="panel"><h3>Очистить все базы</h3><p class="mut">Удалит все адреса. Введите слово «очистить».</p><div style="display:flex;gap:8px;margin-top:10px"><input class="in" id="cc" style="max-width:200px"><button class="btn sm red" id="cgo">Очистить</button></div></div>';
             var $ = function(i){ return document.getElementById(i); };
+            $("rurs").onclick = function(){ $("rumsg").textContent = "Проверяю…"; api("/bases/ru-rescan", {body: {}}).then(function(r){ $("rumsg").textContent = "Добавлено в «Россия»: " + r.added + " (всего адресов в базах: " + r.total + ")"; }).catch(function(e){ $("rumsg").textContent = ""; alertErr(e); }); };
             $("bgo").onclick = function(){
                 var f = $("bf").files[0], go = function(text){
                     if(!text.trim()) return alert("Выберите файл или вставьте список");
