@@ -218,6 +218,9 @@ function orderFormMain(slug, counts){
 <form id="f" novalidate><div class="err" id="err" hidden></div>
 <div class="panel">${cv ? "<h3>Услуга</h3>" : ""}${pick}${cv ? `<p class="hint" style="margin-top:0">${esc(C.CV.title)} · <b>${rub(C.cvPrice())}</b></p>` : ""}</div>
 ${cv ? "" : `<div class="panel"><h3>📅 Дата и время рассылки</h3><div id="sched"></div><p class="hint" style="margin:12px 0 0">${SCHED_NOTE}</p></div>`}
+${cv ? "" : `<div class="panel autofill"><h3>⚡ Не хотите заполнять вручную?</h3>
+<p class="hint" style="margin-top:0">Прикрепите ваше резюме (PDF или Word) — мы прочитаем его и заполним имя, e-mail, телефон, должность и суда сами. Это же резюме уйдёт в рассылку, второй раз прикреплять не нужно.</p>
+<input class="in" type="file" id="autoFile" accept=".pdf,.doc,.docx"><div class="hint" id="autoMsg" style="margin-top:8px"></div></div>`}
 <div class="panel"><h3>О вас</h3><div class="grid2">
 <label class="f">Имя<input class="in" id="first" autocomplete="given-name" required></label>
 <label class="f">Фамилия<input class="in" id="last" autocomplete="family-name" required></label>

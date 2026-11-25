@@ -335,38 +335,48 @@
         dIn.value = ""; renderDocs(); if(bad.length) fail(bad.join("; "));
     });
 
-    /* автозаполнение анкеты по прикреплённому резюме */
-    function setVal(id, v){ var el = $(id); if(!el || v == null || String(v) === "") return 0; el.value = String(v); el.classList.add("auto"); el.classList.remove("need"); return 1; }
+    /* автозаполнение анкеты по прикреплённому резюме (резюме «Стандарт» и рассылка) */
+    function setVal(id, v){ var el = $(id); if(!el || v == null || String(v) === "") return 0; if(el.value && !el.classList.contains("auto")) return 0; el.value = String(v); el.classList.add("auto"); el.classList.remove("need"); return 1; }
     function fillForm(F){
         var n = 0;
         ["first", "last", "email", "phone", "linkedin", "location", "dob", "minSalary", "school", "vesselExp", "engines", "eyes", "height", "weight", "overall", "shoe", "nokName", "nokRel", "nokPhone"].forEach(function(k){ n += setVal(k, F[k]); });
-        if(F.english){ var en = $("english"); if(en && [].some.call(en.options, function(o){ return o.value === F.english; })){ en.value = F.english; en.classList.add("auto"); n++; } }
+        if(F.english){ var en = $("english"); if(en && (!en.value || en.classList.contains("auto")) && [].some.call(en.options, function(o){ return o.value === F.english; })){ en.value = F.english; en.classList.add("auto"); n++; } }
         [["position", F.position], ["vessel", F.vessel]].forEach(function(pr){
             var box = document.querySelector('[data-chips="' + pr[0] + '"]'); if(!box || !pr[1] || !pr[1].length) return;
+            var hid = $(pr[0]); if(hid && hid.value && !box.getAttribute("data-auto")) return;
             var ins = [].slice.call(box.querySelectorAll("input")); ins.forEach(function(i){ i.checked = false; });
             var on = ins.filter(function(i){ return pr[1].indexOf(i.value) >= 0; }); on.forEach(function(i){ i.checked = true; });
-            if(on.length){ on[0].dispatchEvent(new Event("change", {bubbles: true})); n++; }
+            if(on.length){ box.setAttribute("data-auto", "1"); on[0].dispatchEvent(new Event("change", {bubbles: true})); n++; }
         });
-        if(F.messengers && F.messengers.length){ [].forEach.call(document.querySelectorAll("input[name=msg]"), function(c){ c.checked = F.messengers.indexOf(c.value) >= 0; }); n++; }
+        if(F.messengers && F.messengers.length && $("msgs") && !document.querySelector("input[name=msg]:checked")){ [].forEach.call(document.querySelectorAll("input[name=msg]"), function(c){ c.checked = F.messengers.indexOf(c.value) >= 0; }); n++; }
         return n;
     }
-    var af = $("autoFile");
-    if(af) af.addEventListener("change", function(){
-        var fl = af.files[0], msg = $("autoMsg"); if(!fl) return;
-        msg.style.color = ""; 
-        if(fl.size > 5 * 1024 * 1024){ msg.textContent = "Файл больше 5 МБ — приложите его в разделе «Документы» ниже и заполните анкету вручную."; return; }
+    function autoRead(fl){
+        var msg = $("autoMsg"); if(!msg || !fl) return;
+        if(/\.doc$/i.test(fl.name)){ msg.textContent = isCv ? "Файл .doc автоматически не читается — приложите его в разделе «Документы» ниже и заполните анкету вручную. Или сохраните резюме как PDF / .docx." : "Резюме прикреплено, но файл .doc автоматически не читается — заполните поля вручную (или сохраните резюме как PDF / .docx и прикрепите заново)."; return; }
+        if(fl.size > 5 * 1024 * 1024){ msg.textContent = "Файл больше 5 МБ — заполните поля вручную."; return; }
         msg.textContent = "⏳ Читаем резюме… обычно до минуты. Не закрывайте страницу.";
         fetch("/api/parse-cv", {method: "POST", headers: {"Content-Type": "application/octet-stream", "X-Name": encodeURIComponent(fl.name)}, body: fl})
             .then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error || "Не удалось прочитать файл"); return j; }); })
             .then(function(j){
                 var n = fillForm(j.fields || {});
-                if(!docs.some(function(d){ return d.name === fl.name && d.size === fl.size; }) && docs.length < DOC_COUNT){ docs.push(fl); renderDocs(); }
-                var miss = [["first", "last", "email", "phone", "location", "dob", "english", "school", "vesselExp", "eyes", "height", "weight", "overall", "shoe", "nokName", "nokRel", "nokPhone"]][0].filter(function(id){ var el = $(id); return el && !el.value; });
+                if(isCv && !docs.some(function(d){ return d.name === fl.name && d.size === fl.size; }) && docs.length < DOC_COUNT){ docs.push(fl); renderDocs(); }
+                var ids = isCv ? ["first", "last", "email", "phone", "location", "dob", "english", "school", "vesselExp", "eyes", "height", "weight", "overall", "shoe", "nokName", "nokRel", "nokPhone"] : ["first", "last", "email"];
+                var miss = ids.filter(function(id){ var el = $(id); return el && !el.value; });
                 miss.forEach(function(id){ $(id).classList.add("need"); });
-                msg.textContent = n ? "✅ Заполнили полей: " + n + ". Файл добавлен к заказу. Проверьте данные" + (miss.length ? " и допишите поля, выделенные жёлтым — их нет в резюме." : ".") : "В файле не нашлось данных для анкеты — заполните её вручную.";
+                msg.textContent = n ? "✅ Заполнили полей: " + n + ". " + (isCv ? "Файл добавлен к заказу. " : "Резюме прикреплено к заказу. ") + "Проверьте данные" + (miss.length ? " и допишите поля, выделенные жёлтым — их нет в резюме." : ".") : "В файле не нашлось данных для анкеты — заполните поля вручную.";
             })
             .catch(function(e){ msg.textContent = "⚠ " + e.message; });
+    }
+    var af = $("autoFile"), mainFile = !isCv ? $("file") : null;
+    if(af) af.addEventListener("change", function(){
+        var fl = af.files[0]; if(!fl) return;
+        if(mainFile){                                    // рассылка: то же резюме сразу прикрепляем в поле «Ваше резюме»
+            try { var dt = new DataTransfer(); dt.items.add(fl); mainFile.files = dt.files; } catch(e){ $("autoMsg").textContent = "Выберите это же резюме ещё раз в поле «Ваше резюме» ниже."; return; }
+        }
+        autoRead(fl);
     });
+    if(mainFile) mainFile.addEventListener("change", function(){ var fl = mainFile.files[0]; if(fl && fl !== (af && af.files[0])) autoRead(fl); });
     [].forEach.call(document.querySelectorAll(".in"), function(el){ el.addEventListener("input", function(){ el.classList.remove("need"); }); el.addEventListener("change", function(){ el.classList.remove("need"); }); });
 
     function fail(t){ var e = $("err"); e.textContent = t; e.hidden = false; e.scrollIntoView({behavior: "smooth", block: "center"}); }
