@@ -32,7 +32,7 @@ function page(authed, enabled){
 function login(){fetch("/crm/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:pw.value})}).then(function(r){return r.json().then(function(j){return{ok:r.ok,j:j}})}).then(function(x){if(x.ok)location.reload();else{er.textContent=x.j.error||"Ошибка";er.hidden=false}})}
 go.onclick=login;pw.onkeydown=function(e){if(e.key==="Enter")login()}</script>` : `<div class="err">Не задан пароль CRM. Добавьте переменную CRM_PASSWORD в Railway.</div>`}</div></body></html>`;
     return head + `<div class="crm"><div class="top2"><h1>CRM Vreise.ru</h1><a class="btn sm line" style="color:var(--deep);border-color:#9fb6bb" href="/crm/logout">Выйти</a></div>
-<div class="tabs" id="tabs"><button data-t="orders" class="on">Заказы</button><button data-t="chats">Чаты</button><button data-t="boxes">Ящики</button><button data-t="bases">Базы адресов</button><button data-t="letter">Письмо</button><button data-t="servers">Серверы и настройки</button></div>
+<div class="tabs" id="tabs"><button data-t="orders" class="on">Заказы</button><button data-t="online" id="tabOnline">🟢 Онлайн</button><button data-t="chats">Чаты</button><button data-t="boxes">Ящики</button><button data-t="bases">Базы адресов</button><button data-t="letter">Письмо</button><button data-t="servers">Серверы и настройки</button></div>
 <div id="view">Загрузка…</div></div><script src="/static/crm.js?v=${V}"></script></body></html>`;
 }
 module.exports = {page};

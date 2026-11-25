@@ -154,13 +154,24 @@ F.onsubmit = function(e){ e.preventDefault(); ask(TA.value); };
 TA.addEventListener("keydown", function(e){ if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); ask(TA.value); } });
 TA.addEventListener("input", function(){ TA.style.height = "42px"; TA.style.height = Math.min(96, TA.scrollHeight) + "px"; });
 document.addEventListener("keydown", function(e){ if(e.key === "Escape" && box.classList.contains("on")) open(false); });
+/* «кто сейчас на сайте»: анонимный пинг раз в ~25 с (в фоновой вкладке реже) */
+(function(){
+  var vid = ""; try { vid = localStorage.getItem("vr_vid") || ""; if(!vid){ vid = Math.random().toString(36).slice(2, 12) + Date.now().toString(36); localStorage.setItem("vr_vid", vid); } } catch(e){}
+  if(!vid) return;
+  var q = new URLSearchParams(location.search), tok = (/^\/o\/([A-Za-z0-9_-]{10,80})/.exec(location.pathname) || [])[1] || (location.pathname === "/payment_in_rub" ? q.get("o") : "") || "";
+  var ref = q.get("utm_source") || ""; if(!ref){ try { var rh = new URL(document.referrer).hostname; if(rh && rh !== location.hostname) ref = rh; } catch(e){} }
+  function send(){ try { fetch("/api/ping", {method: "POST", keepalive: true, headers: {"Content-Type": "application/json"}, body: JSON.stringify({v: vid, p: location.pathname, s: location.pathname === "/order" ? q.get("s") || "" : "", h: document.hidden ? 1 : 0, r: ref, t: tok, c: SID || ""})}).catch(function(){}); } catch(e){} }
+  send(); var tm = setInterval(function(){ send(); }, 25000);
+  document.addEventListener("visibilitychange", send);
+})();
 window.VRAsst = {open: function(w){ open(true, w); }};
+var onOrder = /^\/(order|payment_in_rub)/.test(location.pathname);
 setTimeout(function(){
-  var seen = false; try { seen = sessionStorage.getItem("vr_asst_tease") === "1"; } catch(e){}
+  var key = onOrder ? "vr_asst_tease_o" : "vr_asst_tease", seen = false; try { seen = sessionStorage.getItem(key) === "1"; } catch(e){}
   if(seen || box.classList.contains("on")) return;
-  try { sessionStorage.setItem("vr_asst_tease", "1"); } catch(e){}
-  teaser = document.createElement("div"); teaser.className = "vr-tease"; teaser.innerHTML = "Есть вопросы? Онлайн-помощник знает ответы — спросите 👇<u>×</u>";
+  try { sessionStorage.setItem(key, "1"); } catch(e){}
+  teaser = document.createElement("div"); teaser.className = "vr-tease"; teaser.innerHTML = onOrder ? "Нужна помощь или есть вопрос? Напишите нам — ответим в чате 👇<u>×</u>" : "Есть вопросы? Онлайн-помощник знает ответы — спросите 👇<u>×</u>";
   teaser.onclick = function(ev){ if(ev.target.tagName === "U") hideTease(); else open(true); };
-  document.body.appendChild(teaser); setTimeout(hideTease, 9000);
-}, 8000);
+  document.body.appendChild(teaser); setTimeout(hideTease, onOrder ? 16000 : 9000);
+}, onOrder ? 12000 : 8000);
 })();

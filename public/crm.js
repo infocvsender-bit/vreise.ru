@@ -400,10 +400,28 @@
         }).catch(alertErr);
     }
 
-    function show(){ ({orders: orders, chats: chatsTab, boxes: boxesTab, bases: bases, letter: letter, servers: servers})[tab](); }
+    /* ---------- кто сейчас на сайте ---------- */
+    function dur(ms){ var s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? s + " с" : s < 3600 ? Math.floor(s / 60) + " мин " + (s % 60) + " с" : Math.floor(s / 3600) + " ч " + Math.floor(s % 3600 / 60) + " мин"; }
+    function onlineBadge(d){ var b = document.getElementById("tabOnline"); if(b) b.textContent = "🟢 Онлайн" + (d.online ? " · " + d.online : ""); }
+    function onlineTab(){
+        api("/online").then(function(d){
+            onlineBadge(d);
+            var ST = {on: ["🟢", "на странице"], idle: ["🟡", "вкладка неактивна"], left: ["⚪", "ушёл"]};
+            view.innerHTML = '<div class="panel"><h3>Сейчас на сайте: ' + d.online + (d.active !== d.online ? ' <span class="mut" style="font-weight:400">(активны: ' + d.active + ")</span>" : "") + ' · сегодня уникальных: ' + d.today + "</h3>" +
+                '<p class="mut" style="margin-top:0">Список обновляется сам каждые 8 секунд. Показываются те, кто был на сайте за последние 15 минут. Данные хранятся только в памяти сервера (после перезапуска список пустой), без IP-адресов. Имя и e-mail видны, если человек писал в чат; номер заказа — если он в личном кабинете или на странице оплаты. Ваши заходы на сайт, пока вы вошли в CRM, сюда не попадают.</p>' +
+                (d.rows.length ? '<div style="overflow:auto"><table class="t"><thead><tr><th></th><th>Страница</th><th>Кто</th><th>Устройство</th><th>Откуда</th><th>На сайте</th><th>Страниц</th><th>Активность</th></tr></thead><tbody>' +
+                d.rows.map(function(r){ var st = ST[r.state] || ST.left, who = r.who || {};
+                    var wh = (who.order ? "<b>Заказ №" + who.order + "</b> · " + esc(who.name || "") : "") + (who.chatName || who.email ? (who.order ? "<br>" : "") + "💬 " + esc(who.chatName || "") + (who.email ? " &lt;" + esc(who.email) + "&gt;" : "") : "");
+                    return '<tr' + (r.state === "left" ? ' style="opacity:.55"' : "") + '><td title="' + st[1] + '">' + st[0] + "</td><td title=\"" + esc((r.trail || []).join(" → ")) + "\">" + esc(r.label) + '</td><td>' + (wh || '<span class="mut">аноним · ' + esc(r.id) + "</span>") + "</td><td>" + esc(r.dev || "") + "</td><td>" + (r.ref ? esc(r.ref) : '<span class="mut">прямой заход</span>') + "</td><td>" + dur(d.now - r.since) + "</td><td>" + r.pages + "</td><td>" + (r.state === "left" ? "ушёл " + dur(d.now - r.last) + " назад" : dur(d.now - r.last) + " назад") + "</td></tr>"; }).join("") + "</tbody></table></div>" : '<p class="mut">Сейчас на сайте никого нет.</p>') + "</div>";
+        }).catch(alertErr);
+    }
+
+    function show(){ ({orders: orders, online: onlineTab, chats: chatsTab, boxes: boxesTab, bases: bases, letter: letter, servers: servers})[tab](); }
     [].forEach.call(document.querySelectorAll("#tabs button"), function(b){ b.onclick = function(){
         tab = b.getAttribute("data-t"); [].forEach.call(document.querySelectorAll("#tabs button"), function(x){ x.classList.toggle("on", x === b); }); show(); }; });
     show();
     setInterval(function(){ if(tab === "chats" && chatView === "chats" && document.activeElement && document.activeElement.tagName !== "TEXTAREA") chatsTab(); }, 20000);
+    setInterval(function(){ if(tab === "online") onlineTab(); }, 8000);
+    function badge(){ api("/online").then(onlineBadge).catch(function(){}); } badge(); setInterval(badge, 20000);
     setInterval(function(){ if(tab === "orders" && document.activeElement && document.activeElement.id !== "q" && view.querySelector(".flt")) orders(); }, 60000);
 })();

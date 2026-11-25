@@ -1,7 +1,7 @@
 "use strict";
 /* Vreise.ru — сервер: сайт, заказы, CRM, рассылка. Только русский язык. */
 const http = require("http"), fs = require("fs"), path = require("path"), crypto = require("crypto");
-const openDb = require("./db.js"), makeEngine = require("./engine.js"), Mail = require("./mails.js"), M = require("./mailer.js"), C = require("./catalog.js"), P = require("./pages.js"), CRM = require("./crmpage.js"), Mask = require("./mask.js"), Resume = require("./resume.js");
+const openDb = require("./db.js"), makeEngine = require("./engine.js"), Mail = require("./mails.js"), M = require("./mailer.js"), C = require("./catalog.js"), P = require("./pages.js"), CRM = require("./crmpage.js"), Mask = require("./mask.js"), Resume = require("./resume.js"), Online = require("./online.js");
 const {env} = M;
 
 const PUB = path.join(__dirname, "public");
@@ -247,6 +247,23 @@ function parseBase(text, defaultBase){
                 (fresh ? Mail.owner(note, "chat:" + sid) : Mail.toBot(note, "chat:" + sid)).catch(() => {});
                 return json(res, 200, {ok: true, id, at});
             }
+        }
+        if(req.method === "POST" && p === "/api/ping"){                           // «кто на сайте»: лёгкий пинг со страниц
+            const ip = ipOf(req), b = await body(req, 2000), vid = String(b.v || "");
+            if(!/^[a-z0-9]{8,32}$/i.test(vid) || limited("ping:" + ip, 120, 60e3) || limited("pingv:" + vid, 8, 60e3) || crmAuthed(req) || /bot|crawl|spider|slurp|headless|preview|monitor/i.test(String(req.headers["user-agent"] || ""))) return json(res, 200, {ok: true});
+            let path = String(b.p || "/").split("?")[0].slice(0, 120); if(!/^\/[A-Za-z0-9\/_.-]{0,110}$/.test(path)) path = "/";
+            if(/^\/o\//.test(path)) path = "/o/…";
+            const slug = clean(b.s, 80), sv = path === "/order" && slug ? C.bySlug(slug) : null;
+            const label = path === "/" ? "Главная" : path === "/order" ? "Форма заказа" + (sv ? ": " + sv.title : "") : path === "/payment_in_rub" ? "💳 Страница оплаты" : path === "/o/…" ? "Личный кабинет заказа" : path === "/blog" ? "Блог"
+                : /^\/blog\//.test(path) ? "Статья: " + path.slice(6) : path === "/policy" ? "Политика конфиденциальности" : path === "/offer" ? "Оферта" : path;
+            const dev = /Mobi|Android|iPhone|iPad/i.test(String(req.headers["user-agent"] || "")) ? "телефон" : "компьютер";
+            const v = Online.ping({vid, path, label, hidden: !!b.h, dev, ref: clean(b.r, 60).replace(/[^\w.\-а-яА-Я]/g, "")});
+            if(v){
+                const tk = String(b.t || ""), sid = String(b.c || "");
+                if(/^[A-Za-z0-9_-]{10,80}$/.test(tk) && !(v.who && v.who.order)){ const o = await one(`SELECT num, first_name, last_name FROM orders WHERE token = $1`, [tk]).catch(() => null); if(o) v.who = {...(v.who || {}), order: o.num, name: [o.first_name, o.last_name].filter(Boolean).join(" ")}; }
+                if(/^[a-z0-9]{10,24}$/.test(sid) && Date.now() - v.chatAt > 120e3){ v.chatAt = Date.now(); const c = await one(`SELECT name, email FROM chat_info WHERE sid = $1`, [sid]).catch(() => null); if(c && (c.name || c.email)) v.who = {...(v.who || {}), chatName: c.name || "", email: c.email || ""}; }
+            }
+            return json(res, 200, {ok: true});
         }
         if(req.method === "POST" && p === "/api/parse-cv"){                       // автозаполнение анкеты резюме по прикреплённому файлу
             const ip = ipOf(req), day = new Date().toISOString().slice(0, 10);
@@ -654,6 +671,7 @@ function parseBase(text, defaultBase){
             console.log(`🗑 Заказ №${o.num} удалён из CRM (${who})`);
             return json(res, 200, {ok: true, warn: errs.length ? "Ящики не удалились на почтовом сервере (удалите вручную): " + errs.join("; ") : ""});
         }
+        if(req.method === "GET" && p === "/online") return json(res, 200, Online.list());
         if(req.method === "GET" && p === "/chats"){
             const rows = await q(`SELECT sid, who, text, at FROM chat_msgs ORDER BY at DESC LIMIT 2000`), seen = new Map();
             for(const r of rows){ const c = seen.get(r.sid) || {sid: r.sid, last_who: r.who, last_text: String(r.text).slice(0, 120), last_at: r.at, n: 0}; c.n++; seen.set(r.sid, c); }
