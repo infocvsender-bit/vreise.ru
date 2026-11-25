@@ -237,6 +237,26 @@ function parseBase(text, defaultBase){
                 return json(res, 200, {ok: true, id, at});
             }
         }
+        if(req.method === "POST" && p === "/api/parse-cv"){                       // автозаполнение анкеты резюме по прикреплённому файлу
+            const ip = ipOf(req), day = new Date().toISOString().slice(0, 10);
+            if(!String(env("ASSISTANT_API_KEY") || "").trim() || env("PARSE_CV") === "0") return json(res, 503, {error: "Автозаполнение сейчас недоступно — заполните анкету вручную"});
+            if(limited("parse:" + ip, 4, 3600e3) || limited("parsed:" + ip, 12, 864e5) || limited("parseall:" + day, Number(env("PARSE_DAILY")) || 150, 864e5)) return json(res, 429, {error: "Много попыток. Заполните анкету вручную или попробуйте позже"});
+            const name = clean(decodeURIComponent(String(req.headers["x-name"] || "resume")), 120) || "resume";
+            if(!/\.(pdf|docx|odt|txt|rtf|jpe?g|png|webp)$/i.test(name)) return json(res, 400, {error: "Для автозаполнения подойдёт PDF, Word (.docx), фото или скан. Файл .doc приложите в разделе «Документы» и заполните анкету вручную"});
+            const buf = await rawBody(req, 5 * 1024 * 1024); if(!buf.length) return json(res, 400, {error: "Пустой файл"});
+            let r; try { r = await Resume.parseForm({file: {name, buf}, positions: P.POSITIONS, vessels: P.VESSELS, english: P.ENGLISH}); }
+            catch(e){ console.error("Автозаполнение анкеты:", e.message); return json(res, 502, {error: "Не удалось прочитать файл. Заполните анкету вручную"}); }
+            const lat = v => { v = clean(v, 60); return LATIN.test(v) ? v : ""; }, dg = (v, n) => clean(v, n).replace(/[^\d]/g, ""), ph = v => { v = clean(v, 30).replace(/[^\d+\s()-]/g, "").trim(); return PHONE_OK(v) ? v : ""; };
+            const arr = (a, list, max) => (Array.isArray(a) ? a : []).filter(x => list.includes(x)).slice(0, max);
+            const dob = clean(r.date_of_birth, 10), age = (Date.now() - Date.parse(dob)) / 31557600e3, em = clean(r.email, 120).toLowerCase();
+            const f = {first: lat(r.first_name), last: lat(r.last_name), email: EMAIL.test(em) ? em : "", phone: ph(r.phone), position: arr(r.positions, P.POSITIONS, 3), vessel: arr(r.vessel_types, P.VESSELS, 5),
+                linkedin: /^https?:\/\/(www\.)?linkedin\.com\//i.test(clean(r.linkedin, 200)) ? clean(r.linkedin, 200) : "", messengers: arr(r.messengers, ["WhatsApp", "Telegram", "Viber"], 3), location: clean(r.location, 120),
+                dob: /^\d{4}-\d{2}-\d{2}$/.test(dob) && age >= 16 && age <= 80 ? dob : "", english: P.ENGLISH.includes(r.english_level) ? r.english_level : "", minSalary: dg(r.min_salary_usd, 12), school: clean(r.education, 200),
+                vesselExp: clean(r.vessel_experience, 200), engines: clean(r.engines, 200), eyes: clean(r.eye_color, 40), height: dg(r.height_cm, 3), weight: dg(r.weight_kg, 3), overall: clean(r.overall_size, 12), shoe: dg(r.shoe_size, 2),
+                nokName: clean(r.next_of_kin_name, 80), nokRel: clean(r.next_of_kin_relation, 60), nokPhone: ph(r.next_of_kin_phone)};
+            console.log("🧾 автозаполнение анкеты:", Object.values(f).filter(v => Array.isArray(v) ? v.length : v).length, "полей");
+            return json(res, 200, {fields: f});
+        }
         if(req.method === "POST" && p === "/api/order"){
             const ip = ipOf(req);
             if(limited("order:" + ip, 6, 3600e3)) return json(res, 429, {error: "Слишком много заказов с вашего адреса. Попробуйте позже или напишите нам в чате на сайте."});

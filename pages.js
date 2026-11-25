@@ -144,10 +144,13 @@ const coverModal = () => `<div class="modal" id="coverModal" data-price="${C.cov
 function orderFormCv(counts){
     const r = (id, label, extra = "", req = true) => `<label class="f">${label}${req ? ' <i class="rq">*</i>' : ""}<input class="in" id="${id}" ${extra}></label>`;
     const body = `<div class="page"><h1>Заказ резюме «Стандарт»</h1>
-<p class="sub">Заполните анкету — мы составим резюме по международному образцу (Application Form). Поля со звёздочкой обязательны.</p>
+<p class="sub">Заполните анкету или просто прикрепите резюме — анкету мы заполним сами. По вашим данным составим резюме по международному образцу (Application Form). Поля со звёздочкой обязательны.</p>
 <form id="f" novalidate><div class="err" id="err" hidden></div>
 <input type="hidden" id="slug" value="${C.CV.slug}" data-price="${C.cvPrice()}">
 <div class="panel"><h3>Услуга</h3><p class="hint" style="margin-top:0">${esc(C.CV.title)} · <b>${rub(C.cvPrice())}</b></p><p class="hint" style="margin:8px 0 0"><a href="/static/resume-example.pdf" target="_blank" rel="noopener">👁 Посмотреть пример готового резюме</a></p></div>
+<div class="panel autofill"><h3>⚡ Не хотите заполнять вручную?</h3>
+<p class="hint" style="margin-top:0">Прикрепите ваше резюме (PDF, Word .docx, фото или скан) — мы прочитаем его и заполним анкету сами. Вам останется проверить данные и дописать то, чего в резюме нет.</p>
+<input class="in" type="file" id="autoFile" accept=".pdf,.docx,.odt,.txt,.rtf,.jpg,.jpeg,.png,.webp"><div class="hint" id="autoMsg" style="margin-top:8px"></div></div>
 <div class="panel"><h3>👤 Основные данные</h3><div class="grid2">
 ${r("first", "Имя (на английском)", 'autocomplete="given-name" placeholder="Ivan" lang="en"')}
 ${r("last", "Фамилия (на английском)", 'autocomplete="family-name" placeholder="Petrov" lang="en"')}
@@ -176,7 +179,7 @@ ${r("nokName", "Имя Фамилия")}${r("nokRel", "Кем приходитс
 <label class="f">Старое резюме, паспорт моряка, дипломы, сертификаты<small> — по желанию: можно выбрать сразу несколько файлов (PDF, Word, Excel, JPG, PNG…), до 15 МБ каждый, не больше 25 файлов</small>
 <input class="in" type="file" id="docs" multiple accept=".pdf,.doc,.docx,.rtf,.odt,.xls,.xlsx,.ods,.txt,.jpg,.jpeg,.png,.webp"></label>
 <div id="docList" class="doclist"></div>
-<p class="hint">Можно оформить заказ и без файлов — резюме составим по анкете, а документы пришлёте менеджеру позже.</p>
+<p class="hint docsnote">📌 <b>Прикрепите все ваши документы!</b> Либо старое резюме, либо документы, по которым мы составим новое: паспорт моряка, дипломы, сертификаты, медицинское заключение, визы. Чем больше файлов — тем точнее и полнее получится резюме.</p>
 <div style="margin-top:16px"><label class="f">Дополнительно<small> — по желанию: опыт, пожелания к резюме</small><textarea class="in" id="comment" style="min-height:110px"></textarea></label></div></div>
 <div class="panel addon"><h3>➕ Добавить рассылку резюме <span class="badge">−${C.discPct()}%</span></h3>
 <p class="hint" style="margin-top:0">Разошлём готовое резюме в крюинговые компании со скидкой ${C.discPct()}%. Рассылка стартует сама, как только резюме будет готово и вы подтвердите e-mail.</p>
@@ -429,4 +432,4 @@ function blogArticle(slug){
 const notFound = () => shell({title: "Страница не найдена — Vreise.ru", desc: "", noindex: true, hero: `<header class="hero short">${navTop(false)}</header>`,
     body: `<div class="page"><h1>Страница не найдена</h1><p class="sub">Такой страницы нет. <a href="/">Перейти на главную</a></p></div>`});
 
-module.exports = {home, orderForm, orderPage, legal, notFound, shell, blogIndex, blogArticle};
+module.exports = {POSITIONS, VESSELS, ENGLISH, home, orderForm, orderPage, legal, notFound, shell, blogIndex, blogArticle};

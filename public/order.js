@@ -335,6 +335,40 @@
         dIn.value = ""; renderDocs(); if(bad.length) fail(bad.join("; "));
     });
 
+    /* автозаполнение анкеты по прикреплённому резюме */
+    function setVal(id, v){ var el = $(id); if(!el || v == null || String(v) === "") return 0; el.value = String(v); el.classList.add("auto"); el.classList.remove("need"); return 1; }
+    function fillForm(F){
+        var n = 0;
+        ["first", "last", "email", "phone", "linkedin", "location", "dob", "minSalary", "school", "vesselExp", "engines", "eyes", "height", "weight", "overall", "shoe", "nokName", "nokRel", "nokPhone"].forEach(function(k){ n += setVal(k, F[k]); });
+        if(F.english){ var en = $("english"); if(en && [].some.call(en.options, function(o){ return o.value === F.english; })){ en.value = F.english; en.classList.add("auto"); n++; } }
+        [["position", F.position], ["vessel", F.vessel]].forEach(function(pr){
+            var box = document.querySelector('[data-chips="' + pr[0] + '"]'); if(!box || !pr[1] || !pr[1].length) return;
+            var ins = [].slice.call(box.querySelectorAll("input")); ins.forEach(function(i){ i.checked = false; });
+            var on = ins.filter(function(i){ return pr[1].indexOf(i.value) >= 0; }); on.forEach(function(i){ i.checked = true; });
+            if(on.length){ on[0].dispatchEvent(new Event("change", {bubbles: true})); n++; }
+        });
+        if(F.messengers && F.messengers.length){ [].forEach.call(document.querySelectorAll("input[name=msg]"), function(c){ c.checked = F.messengers.indexOf(c.value) >= 0; }); n++; }
+        return n;
+    }
+    var af = $("autoFile");
+    if(af) af.addEventListener("change", function(){
+        var fl = af.files[0], msg = $("autoMsg"); if(!fl) return;
+        msg.style.color = ""; 
+        if(fl.size > 5 * 1024 * 1024){ msg.textContent = "Файл больше 5 МБ — приложите его в разделе «Документы» ниже и заполните анкету вручную."; return; }
+        msg.textContent = "⏳ Читаем резюме… обычно до минуты. Не закрывайте страницу.";
+        fetch("/api/parse-cv", {method: "POST", headers: {"Content-Type": "application/octet-stream", "X-Name": encodeURIComponent(fl.name)}, body: fl})
+            .then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error || "Не удалось прочитать файл"); return j; }); })
+            .then(function(j){
+                var n = fillForm(j.fields || {});
+                if(!docs.some(function(d){ return d.name === fl.name && d.size === fl.size; }) && docs.length < DOC_COUNT){ docs.push(fl); renderDocs(); }
+                var miss = [["first", "last", "email", "phone", "location", "dob", "english", "school", "vesselExp", "eyes", "height", "weight", "overall", "shoe", "nokName", "nokRel", "nokPhone"]][0].filter(function(id){ var el = $(id); return el && !el.value; });
+                miss.forEach(function(id){ $(id).classList.add("need"); });
+                msg.textContent = n ? "✅ Заполнили полей: " + n + ". Файл добавлен к заказу. Проверьте данные" + (miss.length ? " и допишите поля, выделенные жёлтым — их нет в резюме." : ".") : "В файле не нашлось данных для анкеты — заполните её вручную.";
+            })
+            .catch(function(e){ msg.textContent = "⚠ " + e.message; });
+    });
+    [].forEach.call(document.querySelectorAll(".in"), function(el){ el.addEventListener("input", function(){ el.classList.remove("need"); }); el.addEventListener("change", function(){ el.classList.remove("need"); }); });
+
     function fail(t){ var e = $("err"); e.textContent = t; e.hidden = false; e.scrollIntoView({behavior: "smooth", block: "center"}); }
     function readFile(file){
         return new Promise(function(ok, no){
