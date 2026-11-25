@@ -177,3 +177,5 @@ textarea.in{font-weight:400}
 @media(max-width:1100px){.pcs{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:760px){.pcs{grid-template-columns:1fr 1fr}}
 @media(max-width:480px){.pcs{grid-template-columns:1fr}}
+.pc .btn.ghost{background:transparent;color:var(--deep);border:1.5px solid var(--line);box-shadow:none;font-weight:700}.pc .btn.ghost:hover{border-color:var(--teal);background:#eef6f5}
+.included{scroll-margin-top:24px}
