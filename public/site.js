@@ -16,3 +16,23 @@
         btns.forEach(function(b){ b.addEventListener("click", function(){ setN(Number(b.getAttribute("data-n"))); }); });
     });
 })();
+
+/* карусель отзывов */
+(function(){
+    var car = document.querySelector("[data-rv]"); if(!car) return;
+    var tr = car.querySelector(".rv-track"), cards = tr.children;
+    function step(){ var c = cards[0]; return c ? c.getBoundingClientRect().width + 16 : 300; }
+    function go(d){
+        var max = tr.scrollWidth - tr.clientWidth;
+        if(d > 0 && tr.scrollLeft >= max - 4) tr.scrollTo({left: 0, behavior: "smooth"});
+        else if(d < 0 && tr.scrollLeft <= 4) tr.scrollTo({left: max, behavior: "smooth"});
+        else tr.scrollBy({left: d * step(), behavior: "smooth"});
+    }
+    var pr = car.querySelector(".rv-prev"), nx = car.querySelector(".rv-next");
+    if(pr) pr.addEventListener("click", function(){ go(-1); });
+    if(nx) nx.addEventListener("click", function(){ go(1); });
+    var hold = false;
+    ["mouseenter", "touchstart", "focusin"].forEach(function(e){ car.addEventListener(e, function(){ hold = true; }, {passive: true}); });
+    ["mouseleave", "touchend", "focusout"].forEach(function(e){ car.addEventListener(e, function(){ hold = false; }, {passive: true}); });
+    if(cards.length > 1 && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) setInterval(function(){ if(!hold && !document.hidden) go(1); }, 5000);
+})();

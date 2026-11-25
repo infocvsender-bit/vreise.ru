@@ -167,7 +167,7 @@ function parseBase(text, defaultBase){
         if(p === "/robots.txt") return send(res, 200, `User-agent: *\nAllow: /\nDisallow: /crm\nDisallow: /o/\nDisallow: /payment_in_rub\nDisallow: /api/\nDisallow: /order\nSitemap: ${Mail.siteUrl()}/sitemap.xml\n`, "text/plain; charset=utf-8");
         if(p === "/sitemap.xml"){
             const s = Mail.siteUrl(), B = require("./blog.js"), last = B.SLUGS.map(x => B.A[x].date).sort().pop();
-            const rows = [["/", "weekly", "1.0", last], ["/blog", "weekly", "0.8", last], ...B.SLUGS.map(x => ["/blog/" + x, "monthly", "0.7", B.A[x].date]), ["/policy", "yearly", "0.2", ""], ["/offer", "yearly", "0.2", ""]];
+            const rows = [["/", "weekly", "1.0", last], ["/blog", "weekly", "0.8", last], ...B.SLUGS.map(x => ["/blog/" + x, "monthly", "0.7", B.A[x].date]), ["/policy", "yearly", "0.2", ""], ["/offer", "yearly", "0.2", ""]].concat((await approvedReviews(1).catch(() => [])).length ? [["/reviews", "weekly", "0.5", ""]] : []);
             const urls = rows.map(([x, cf, pr, lm]) => `<url><loc>${s}${x === "/" ? "/" : x}</loc>${lm ? `<lastmod>${lm}</lastmod>` : ""}<changefreq>${cf}</changefreq><priority>${pr}</priority></url>`).join("");
             return send(res, 200, `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`, "application/xml; charset=utf-8");
         }
@@ -178,7 +178,8 @@ function parseBase(text, defaultBase){
             if(!f.startsWith(PUB + path.sep) || !fs.existsSync(f) || !fs.statSync(f).isFile()) return send(res, 404, "not found", "text/plain");
             return send(res, 200, fs.readFileSync(f), MIME[path.extname(f).toLowerCase()] || "application/octet-stream", {"Cache-Control": "public, max-age=86400"});
         }
-        if(p === "/") return send(res, 200, P.home(await getCounts().catch(() => null)));
+        if(p === "/") return send(res, 200, P.home(await getCounts().catch(() => null), await approvedReviews(20).catch(() => [])));
+        if(p === "/reviews") return send(res, 200, P.reviewsPage(await approvedReviews(200).catch(() => [])));
         if(p === "/order") return send(res, 200, P.orderForm(u.searchParams.get("s") || "", await getCounts().catch(() => null), await ordersClosed() ? CLOSED_MSG() : ""));
         if(p === "/policy" || p === "/offer") return send(res, 200, P.legal(p.slice(1)));
         if(p === "/blog") return send(res, 200, P.blogIndex());
@@ -210,6 +211,10 @@ function parseBase(text, defaultBase){
         return send(res, 404, P.notFound());
     }
 
+    /* отзывы: показываем только одобренные владельцем */
+    const approvedReviews = (lim = 20) => q(`SELECT name, position, stars, text, created_at FROM reviews WHERE status = 'ok' ORDER BY created_at DESC LIMIT $1`, [lim]);
+    const refreshReviews = async () => { try { P.setReviews(Number((await one(`SELECT COUNT(*) AS n FROM reviews WHERE status = 'ok'`)).n)); } catch(e){} };
+    const reviewAllowed = (o, jobs) => o.status !== "cancelled" && (o.status === "done" || jobs.some(j => Number(j.sent) > 0) || (o.kind === "cv" && !!o.res_name));
     async function cabinetHtml(o){
         const jobs = await q(`SELECT * FROM jobs WHERE order_id = $1 ORDER BY m`, [o.id]);
         const msgs = await q(`SELECT at, author, text FROM notes WHERE order_id = $1 AND author IN ('Сообщение клиента', 'Ответ менеджера') ORDER BY at`, [o.id]);
@@ -217,7 +222,8 @@ function parseBase(text, defaultBase){
         const std = o.base ? {cur: engine.letterFor(o), def: engine.letterFor({...o, letter: "", subject: ""})} : null;
         const replies = o.base ? await q(`SELECT id, from_email, from_name, subject, text, kind, at FROM replies WHERE order_id = $1 AND kind <> 'bounce' ORDER BY at DESC LIMIT 100`, [o.id]) : [];
         if(replies.length){ const fw = new Set((await q(`SELECT reply_id FROM reply_fwd WHERE order_id = $1`, [o.id])).map(x => x.reply_id)); for(const r of replies) r.fwd = fw.has(r.id); }
-        return P.orderPage(o, jobs, sent, msgs, std, replies);
+        const rv = await one(`SELECT status FROM reviews WHERE order_id = $1`, [o.id]);
+        return P.orderPage(o, jobs, sent, msgs, std, replies, rv, !rv && reviewAllowed(o, jobs));
     }
 
     /* ---------- публичные API ---------- */
@@ -247,6 +253,22 @@ function parseBase(text, defaultBase){
                 (fresh ? Mail.owner(note, "chat:" + sid) : Mail.toBot(note, "chat:" + sid)).catch(() => {});
                 return json(res, 200, {ok: true, id, at});
             }
+        }
+        const mr = p.match(/^\/api\/o\/([A-Za-z0-9_-]{10,80})\/review$/);
+        if(req.method === "POST" && mr){
+            if(limited("rv:" + ipOf(req), 10, 3600e3)) return json(res, 429, {error: "Слишком много попыток, попробуйте позже"});
+            const o = await byToken(mr[1]); if(!o) return json(res, 404, {error: "Заказ не найден"});
+            const b = await body(req, 5000), stars = Math.round(Number(b.stars)), text = clean(b.text, 1500);
+            if(!(stars >= 1 && stars <= 5)) return json(res, 400, {error: "Поставьте оценку от 1 до 5 звёзд"});
+            if(text.length < 10) return json(res, 400, {error: "Напишите хотя бы пару предложений"});
+            if(await one(`SELECT id FROM reviews WHERE order_id = $1`, [o.id])) return json(res, 400, {error: "Вы уже оставили отзыв по этому заказу"});
+            const jobs = await q(`SELECT sent FROM jobs WHERE order_id = $1`, [o.id]);
+            if(!reviewAllowed(o, jobs)) return json(res, 400, {error: "Отзыв можно оставить, когда заказ будет выполнен"});
+            const name = [o.first_name, o.last_name ? String(o.last_name)[0] + "." : ""].filter(Boolean).join(" "), pos = String(o.position || "").split(",")[0].trim();
+            await q(`INSERT INTO reviews(id, order_id, name, position, stars, text, status, created_at) VALUES($1,$2,$3,$4,$5,$6,'new',$7)`, [uuid(), o.id, name, pos, stars, text, now()]);
+            await engine.note(o.id, `Клиент оставил отзыв: ${stars}/5`, "Клиент");
+            Mail.owner(`⭐ Новый отзыв ${stars}/5 — заказ №${o.num}\n${text.slice(0, 300)}\nОдобрить: CRM → Отзывы`, o.id);
+            return json(res, 200, {ok: true});
         }
         if(req.method === "POST" && p === "/api/ping"){                           // «кто на сайте»: лёгкий пинг со страниц
             const ip = ipOf(req), b = await body(req, 2000), vid = String(b.v || "");
@@ -666,12 +688,18 @@ function parseBase(text, defaultBase){
             for(const b of await q(`SELECT * FROM boxes WHERE order_id = $1 AND deleted_at IS NULL`, [o.id])) try { await engine.deleteBox(b); } catch(e){ errs.push(`${b.email}: ${e.message}`); }
             for(const b of await q(`SELECT id FROM boxes WHERE order_id = $1`, [o.id])) await q(`DELETE FROM imap_state WHERE box_id = $1`, [b.id]);
             await q(`DELETE FROM queue WHERE job_id IN (SELECT id FROM jobs WHERE order_id = $1)`, [o.id]);
-            for(const t of ["jobs", "boxes", "replies", "reply_fwd", "notes", "order_docs", "ai_resumes"]) await q(`DELETE FROM ${t} WHERE order_id = $1`, [o.id]);
+            for(const t of ["jobs", "boxes", "replies", "reply_fwd", "notes", "order_docs", "ai_resumes", "reviews"]) await q(`DELETE FROM ${t} WHERE order_id = $1`, [o.id]);
             await q(`DELETE FROM orders WHERE id = $1`, [o.id]);
             console.log(`🗑 Заказ №${o.num} удалён из CRM (${who})`);
             return json(res, 200, {ok: true, warn: errs.length ? "Ящики не удалились на почтовом сервере (удалите вручную): " + errs.join("; ") : ""});
         }
-        if(req.method === "GET" && p === "/online") return json(res, 200, Online.list());
+        if(req.method === "GET" && p === "/online") return json(res, 200, {...Online.list(), newReviews: Number((await one(`SELECT COUNT(*) AS n FROM reviews WHERE status = 'new'`)).n)});
+        if(req.method === "GET" && p === "/reviews") return json(res, 200, {reviews: await q(`SELECT r.id, r.name, r.position, r.stars, r.text, r.status, r.created_at, o.num FROM reviews r LEFT JOIN orders o ON o.id = r.order_id ORDER BY CASE WHEN r.status = 'new' THEN 0 ELSE 1 END, r.created_at DESC LIMIT 300`)});
+        if(req.method === "POST" && (m = p.match(/^\/reviews\/([\w-]+)\/(ok|hide|delete)$/))){
+            if(m[2] === "delete") await q(`DELETE FROM reviews WHERE id = $1`, [m[1]]);
+            else await q(`UPDATE reviews SET status = $1, decided_at = $2 WHERE id = $3`, [m[2] === "ok" ? "ok" : "hidden", now(), m[1]]);
+            await refreshReviews(); return json(res, 200, {ok: true});
+        }
         if(req.method === "GET" && p === "/chats"){
             const rows = await q(`SELECT sid, who, text, at FROM chat_msgs ORDER BY at DESC LIMIT 2000`), seen = new Map();
             for(const r of rows){ const c = seen.get(r.sid) || {sid: r.sid, last_who: r.who, last_text: String(r.text).slice(0, 120), last_at: r.at, n: 0}; c.n++; seen.set(r.sid, c); }
@@ -931,6 +959,6 @@ function parseBase(text, defaultBase){
     }));
     server.requestTimeout = 60000;
     const port = Number(env("PORT")) || 3000;
-    server.listen(port, () => { console.log(`✅ Vreise.ru на порту ${port} · БД: ${db.kind} · серверов рассылки: ${M.sendCfgs().length}`); engine.start(); });
+    server.listen(port, () => { console.log(`✅ Vreise.ru на порту ${port} · БД: ${db.kind} · серверов рассылки: ${M.sendCfgs().length}`); engine.start(); refreshReviews(); });
     process.on("unhandledRejection", e => console.error("unhandled:", e && e.message || e));
 })().catch(e => { console.error("СТАРТ НЕ УДАЛСЯ:", e); process.exit(1); });

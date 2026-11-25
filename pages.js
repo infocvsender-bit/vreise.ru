@@ -37,7 +37,7 @@ const FOOT_BLOG = [["kak-sostavit-rezyume-moryaka", "Как собрать ре�
 const footer = () => `<footer class="f"><div class="c">
 <div class="fg">
 <div class="fb">${logo}<p>Рассылка резюме моряков в крюинговые компании и резюме «Стандарт». Вы выбираете базу, дату и время старта, а ход рассылки смотрите в личном кабинете.</p><ul class="fchips"><li>Без регистрации и паролей</li><li>Оплата картой в рублях</li></ul></div>
-<div><h4>Сервис</h4><ul><li><a href="/#services">Услуги и цены</a></li><li><a href="/#how">Как это работает</a></li><li><a href="/#pay">Оплата</a></li><li><a href="/order?s=reziume-standart">Резюме «Стандарт»</a></li><li><a href="/#contacts">Контакты</a></li></ul></div>
+<div><h4>Сервис</h4><ul><li><a href="/#services">Услуги и цены</a></li><li><a href="/#how">Как это работает</a></li><li><a href="/#pay">Оплата</a></li>${HAS_REVIEWS ? '<li><a href="/reviews">Отзывы</a></li>' : ""}<li><a href="/order?s=reziume-standart">Резюме «Стандарт»</a></li><li><a href="/#contacts">Контакты</a></li></ul></div>
 <div><h4>Блог</h4><ul>${FOOT_BLOG.filter(([sl]) => B.A[sl]).map(([sl, t]) => `<li><a href="/blog/${sl}">${esc(t)}</a></li>`).join("")}<li><a class="all" href="/blog">Все статьи →</a></li></ul></div>
 <div><h4>Документы и помощь</h4><ul><li><a href="/policy">Политика конфиденциальности</a></li><li><a href="/offer">Публичная оферта</a></li><li><a href="/offer#refund">Условия возврата</a></li></ul><div class="fbtn"><button class="btn gold sm" type="button" onclick="window.VRAsst&&VRAsst.open()">Открыть чат</button><button class="btn line sm" type="button" onclick="window.VRAsst&&VRAsst.open('mgr')">Менеджеру</button></div></div>
 </div>
@@ -45,11 +45,31 @@ const footer = () => `<footer class="f"><div class="c">
 </div></footer>`;
 const navTop = (full = true) => `<nav class="top">${logo}<span class="sp"></span>${full ? `<a class="l" href="/#services">Услуги</a><a class="l" href="/#how">Как это работает</a><a class="l" href="/#pay">Оплата</a><a class="l" href="/blog">Блог</a><a class="l" href="/#contacts">Контакты</a>`  : ""}${full ? `<a class="btn gold sm" href="/order">Заказать рассылку</a>` : `<a class="btn gold sm" href="/#services">← Главное меню</a>`}</nav>`;
 
+
+/* ---------- отзывы (только настоящие: моряк оставляет сам в личном кабинете, владелец одобряет в CRM) ---------- */
+let HAS_REVIEWS = false;
+const setReviews = n => { HAS_REVIEWS = Number(n) > 0; };
+const starsHtml = n => `<span class="rv-st" aria-label="Оценка ${n} из 5">${"★".repeat(n)}<i>${"★".repeat(5 - n)}</i></span>`;
+const reviewCard = r => `<article class="rv-card"><div class="rv-h"><div><b>${esc(r.name)}</b>${r.position ? ` <span class="rv-pos">· ${esc(r.position)}</span>` : ""}</div>${starsHtml(Number(r.stars) || 5)}</div><p>${esc(r.text)}</p></article>`;
+const reviewsSection = list => !list.length ? "" : `<section class="sec alt" id="reviews"><div class="c"><div class="kick">Отзывы</div><h2>Отзывы клиентов</h2>
+<p class="sub">Эти отзывы моряки оставили сами — в личном кабинете после выполненного заказа.</p>
+<div class="rv-car" data-rv><div class="rv-track">${list.map(reviewCard).join("")}</div>
+<div class="rv-nav"><button type="button" class="rv-prev" aria-label="Назад">‹</button><button type="button" class="rv-next" aria-label="Вперёд">›</button></div></div>
+<p style="text-align:center;margin:18px 0 0"><a class="rv-all" href="/reviews">Все отзывы →</a></p></div></section>`;
+function reviewsPage(list){
+    const body = `<div class="page">${crumbsHtml([["/", "Главная"], [null, "Отзывы"]])}<h1>Отзывы клиентов</h1>
+<p class="sub">Эти отзывы моряки оставили сами — в личном кабинете после выполненного заказа. Мы публикуем только отзывы наших клиентов.</p>
+${list.length ? `<div class="rv-grid">${list.map(reviewCard).join("")}</div>` : `<p class="hint">Пока отзывов нет — они появятся здесь после первых выполненных заказов.</p>`}
+<p style="margin-top:26px"><a class="btn gold" href="/order">Оформить заказ</a></p></div>`;
+    return shell({title: "Отзывы клиентов — Vreise.ru", desc: "Отзывы моряков о рассылке резюме и составлении резюме на Vreise.ru: оставлены клиентами в личном кабинете после выполненного заказа.", path: "/reviews", noindex: !list.length,
+        hero: `<header class="hero short">${navTop(false)}</header>`, body, jsonld: [crumbLd([["/", "Главная"], ["/reviews", "Отзывы"]]), {"@context": "https://schema.org", ...ORG()}]});
+}
+
 /* ---------- главная ---------- */
 const plAddr = n => { const a = n % 10, b = n % 100; return (a === 1 && b !== 11) ? "адрес" : (a >= 2 && a <= 4 && (b < 12 || b > 14)) ? "адреса" : "адресов"; };
 const numFmt = n => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, "\u00a0");
 const addrCount = n => n > 0 ? `${numFmt(n)}\u00a0${plAddr(n)}` : "";
-function home(counts){
+function home(counts, reviews = []){
     const n = counts && counts.byBase || {};
     const minP = Math.min(...C.BASES.map(b => C.priceOf(b, 1)));
     const faqList = [
@@ -108,7 +128,8 @@ function home(counts){
 <p class="sub" style="margin-bottom:0">После оформления заказа вы увидите сумму и реквизиты карты для перевода. Платёж проверяем вручную и сразу запускаем работу.</p></div>
 <div class="note"><p><b>Что входит в стоимость.</b> Рассылка по выбранной базе, сопроводительное письмо, статистика и статус рассылки в личном кабинете.</p>
 <p style="margin-top:10px"><b>Даты рассылок.</b> Дату и время старта каждой рассылки вы выбираете при оформлении заказа: не раньше завтрашнего дня, старт с 06:00 до 18:00 по Москве. Письма уходят по будням с 06:00 до 18:00, рассылка занимает не менее 10 часов, в выходные перерыв — продолжение в понедельник.</p></div></div></div></section>
-<section class="sec alt"><div class="c faq"><div class="kick">Вопросы</div><h2>Коротко о главном</h2><div style="margin-top:20px">
+${reviewsSection(reviews)}
+<section class="sec${reviews.length ? "" : " alt"}"><div class="c faq"><div class="kick">Вопросы</div><h2>Коротко о главном</h2><div style="margin-top:20px">
 ${faqList.map(([q, a]) => `<details><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join("\n")}
 </div></div></section>
 <section class="sec" id="blog"><div class="c"><div class="kick">Блог для моряков</div><h2>Полезное перед отправкой резюме</h2><p class="sub">Как составить резюме, написать в крюинг и не наделать ошибок — короткие практические статьи.</p>
@@ -248,7 +269,7 @@ ${extraPanel}
 /* ---------- страница заказа ---------- */
 const STATUS = {new: "Ожидает оплаты", claimed: "Проверяем оплату", paid: "Оплачен", in_progress: "В работе", done: "Выполнен", cancelled: "Отменён"};
 const fmtCard = c => String(c).replace(/\s+/g, "").replace(/(\d{4})(?=\d)/g, "$1 ");
-function orderPage(o, jobs, sent, msgs = [], std = null, replies = []){
+function orderPage(o, jobs, sent, msgs = [], std = null, replies = [], rv = null, canReview = false){
     const cv = o.kind === "cv", mail = !!o.base, pay = o.status === "new" || o.status === "claimed";
     const cards = [["PAY_CARD", "PAY_BANK"], ["PAY_CARD_2", "PAY_BANK_2"]].map(([c, b]) => ({card: String(env(c) || "").replace(/\s+/g, ""), bank: env(b) || ""})).filter(x => x.card);
     const cardsHtml = (cards.length > 1 ? `<div class="seg" style="margin-top:12px">${cards.map((x, i) => `<button type="button" class="${i ? "" : "on"}" data-bank="${i}">${esc(x.bank || "Карта " + (i + 1))}</button>`).join("")}</div>` : "")
@@ -348,12 +369,17 @@ ${notStarted ? `<div class="jtf" hidden data-j="${esc(j.id)}"><label class="f">�
 <div style="margin-top:14px"><label class="f">Текст письма<textarea class="in" id="ltxt" maxlength="4000" style="min-height:230px">${esc(std.cur.text)}</textarea></label></div>
 <div style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><button class="btn gold sm" id="lsave" type="submit">Сохранить</button><button class="btn line sm" id="lreset" type="button" style="color:var(--deep);border-color:#9fb6bb">Вернуть стандартное</button><span class="hint" id="lmsg"></span></div></form>
 <script type="application/json" id="lstd">${JSON.stringify({subject: std.def.subject, text: std.def.text}).replace(/</g, "\\u003c")}</script></div>` : "";
+    const reviewBlock = rv ? `<div class="panel"><h3>⭐ Ваш отзыв</h3><p class="hint" style="margin:0">${rv.status === "ok" ? "Ваш отзыв опубликован на сайте. Спасибо!" : "Спасибо! Ваш отзыв получен и появится на сайте после проверки."}</p></div>`
+        : canReview ? `<div class="panel" id="rvBox"><h3>⭐ Оставьте отзыв</h3><p class="hint" style="margin:0 0 12px">Ваш заказ выполнен — расскажите, как всё прошло. Отзыв появится на сайте после проверки; имя — только имя и первая буква фамилии.</p>
+<form id="rvForm"><div class="rv-pick" id="rvStars" role="radiogroup" aria-label="Оценка">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-s="${n}" aria-label="${n}">★</button>`).join("")}</div><input type="hidden" id="rvVal" value="0">
+<label class="f" style="margin-top:12px">Ваш отзыв<textarea class="in" id="rvText" maxlength="1500" style="min-height:120px" placeholder="Что понравилось, что получилось, что можно улучшить"></textarea></label>
+<div style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><button class="btn gold sm" id="rvGo" type="submit">Отправить отзыв</button><span class="hint" id="rvMsg"></span></div></form></div>` : "";
     const chat = `<div class="faq" style="margin-bottom:22px"><details${msgs.length ? " open" : ""} style="border:1px solid var(--line);border-radius:16px;padding:16px 20px;background:#fff"><summary>💬 Что-то непонятно? Напишите менеджеру</summary>
 ${msgs.map(m => `<div style="margin-top:14px;padding:10px 14px;border-radius:12px;background:${m.author === "Ответ менеджера" ? "#e9f6f3" : "#f3f6f7"}"><span class="hint">${m.author === "Ответ менеджера" ? "Менеджер" : "Вы"} · ${esc(new Date(m.at).toLocaleString("ru-RU", {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"}))}</span><div style="color:var(--ink);white-space:pre-wrap">${esc(m.text)}</div></div>`).join("")}
 <form id="msgf" style="margin-top:14px"><textarea class="in" id="msgt" maxlength="1500" placeholder="Ваш вопрос. Ответ придёт на ${esc(o.email)} и появится здесь." style="min-height:90px"></textarea>
 <div style="margin-top:10px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><button class="btn gold sm" id="msgb" type="submit">Отправить</button><span class="hint" id="msgs"></span></div></form></details></div>`;
     const body = `<div class="page"><h1>Заказ №${o.num}</h1><p class="sub">${esc(o.title)} · <span class="tag ${o.status}">${STATUS[o.status] || o.status}</span></p>
-${tracker}${mail ? `<div id="pushbar"></div>` : ""}${emailBanner}${coverBanner}${coverDraft}${payBlock}${wait}${res}${progress}${exclBlock}${replyBlock}${repl}${list}${letterBlock}${resumeBlock}${chat}
+${tracker}${mail ? `<div id="pushbar"></div>` : ""}${emailBanner}${coverBanner}${coverDraft}${payBlock}${wait}${res}${progress}${exclBlock}${replyBlock}${repl}${list}${letterBlock}${resumeBlock}${reviewBlock}${chat}
 <div class="panel"><h3>Данные заказа</h3><table class="t"><tbody>
 <tr><td>Клиент</td><td>${esc([o.first_name, o.last_name].filter(Boolean).join(" "))}</td></tr><tr><td>E-mail</td><td>${esc(o.email)}</td></tr>
 ${o.phone ? `<tr><td>Телефон</td><td>${esc(o.phone)}</td></tr>` : ""}${o.position ? `<tr><td>Должность</td><td>${esc(o.position)}</td></tr>` : ""}
@@ -435,4 +461,4 @@ function blogArticle(slug){
 const notFound = () => shell({title: "Страница не найдена — Vreise.ru", desc: "", noindex: true, hero: `<header class="hero short">${navTop(false)}</header>`,
     body: `<div class="page"><h1>Страница не найдена</h1><p class="sub">Такой страницы нет. <a href="/">Перейти на главную</a></p></div>`});
 
-module.exports = {POSITIONS, VESSELS, ENGLISH, home, orderForm, orderPage, legal, notFound, shell, blogIndex, blogArticle};
+module.exports = {POSITIONS, VESSELS, ENGLISH, setReviews, reviewsPage, home, orderForm, orderPage, legal, notFound, shell, blogIndex, blogArticle};

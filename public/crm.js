@@ -402,7 +402,7 @@
 
     /* ---------- кто сейчас на сайте ---------- */
     function dur(ms){ var s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? s + " с" : s < 3600 ? Math.floor(s / 60) + " мин " + (s % 60) + " с" : Math.floor(s / 3600) + " ч " + Math.floor(s % 3600 / 60) + " мин"; }
-    function onlineBadge(d){ var b = document.getElementById("tabOnline"); if(b) b.textContent = "🟢 Онлайн" + (d.online ? " · " + d.online : ""); }
+    function onlineBadge(d){ var rb = document.getElementById("tabReviews"); if(rb) rb.textContent = "Отзывы" + (d.newReviews ? " · " + d.newReviews : ""); var b = document.getElementById("tabOnline"); if(b) b.textContent = "🟢 Онлайн" + (d.online ? " · " + d.online : ""); }
     function onlineTab(){
         api("/online").then(function(d){
             onlineBadge(d);
@@ -416,7 +416,25 @@
         }).catch(alertErr);
     }
 
-    function show(){ ({orders: orders, online: onlineTab, chats: chatsTab, boxes: boxesTab, bases: bases, letter: letter, servers: servers})[tab](); }
+    /* ---------- отзывы ---------- */
+    function reviewsTab(){
+        api("/reviews").then(function(d){
+            var ST = {new: "🆕 на проверке", ok: "✅ на сайте", hidden: "⛔ скрыт"};
+            view.innerHTML = '<div class="panel"><h3>Отзывы клиентов</h3><p class="mut" style="margin-top:0">Клиент оставляет отзыв в личном кабинете, когда заказ выполнен. На сайте (главная, «Все отзывы», карусель) видны только одобренные. Пока нет ни одного одобренного — блок на сайте не показывается. Текст можно только показать или скрыть, править нельзя.</p>' +
+                (d.reviews.length ? d.reviews.map(function(r){
+                    return '<div style="border:1px solid #d9e4e7;border-radius:12px;padding:12px 16px;margin-top:10px;background:' + (r.status === "new" ? "#fffbe8" : "#fff") + '"><div><b>' + esc(r.name) + '</b>' + (r.position ? ' · ' + esc(r.position) : '') + ' · <span style="color:#d49e00">' + "★".repeat(r.stars) + "☆".repeat(5 - r.stars) + '</span> · заказ №' + (r.num || "—") + ' · ' + (ST[r.status] || r.status) + ' <span class="mut">' + esc(new Date(r.created_at).toLocaleDateString("ru-RU")) + '</span></div>' +
+                        '<div style="margin:8px 0;white-space:pre-wrap">' + esc(r.text) + '</div><div style="display:flex;gap:8px;flex-wrap:wrap">' +
+                        (r.status !== "ok" ? '<button class="btn gold sm" data-a="ok" data-id="' + r.id + '">Опубликовать</button>' : "") +
+                        (r.status !== "hidden" ? '<button class="btn sm line" style="color:var(--deep);border-color:#9fb6bb" data-a="hide" data-id="' + r.id + '">Скрыть</button>' : "") +
+                        '<button class="btn sm red" data-a="delete" data-id="' + r.id + '">Удалить</button></div></div>';
+                }).join("") : '<p class="mut">Пока отзывов нет.</p>') + "</div>";
+            [].forEach.call(view.querySelectorAll("[data-a]"), function(b){ b.onclick = function(){
+                var a = b.getAttribute("data-a"); if(a === "delete" && !confirm("Удалить отзыв насовсем?")) return;
+                api("/reviews/" + b.getAttribute("data-id") + "/" + a, {body: {}}).then(reviewsTab).then(badge).catch(alertErr); }; });
+        }).catch(alertErr);
+    }
+
+    function show(){ ({orders: orders, online: onlineTab, reviews: reviewsTab, chats: chatsTab, boxes: boxesTab, bases: bases, letter: letter, servers: servers})[tab](); }
     [].forEach.call(document.querySelectorAll("#tabs button"), function(b){ b.onclick = function(){
         tab = b.getAttribute("data-t"); [].forEach.call(document.querySelectorAll("#tabs button"), function(x){ x.classList.toggle("on", x === b); }); show(); }; });
     show();

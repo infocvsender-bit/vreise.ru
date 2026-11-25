@@ -193,6 +193,25 @@
             .catch(function(e){ b.disabled = false; st.textContent = e.message; });
     });
 
+    /* отзыв */
+    var rvf = $("rvForm");
+    if(rvf){
+        var rvBtns = [].slice.call($("rvStars").querySelectorAll("button"));
+        function rvPaint(n){ rvBtns.forEach(function(b){ b.classList.toggle("on", Number(b.getAttribute("data-s")) <= n); }); }
+        rvBtns.forEach(function(b){ b.addEventListener("click", function(){ $("rvVal").value = b.getAttribute("data-s"); rvPaint(Number($("rvVal").value)); }); });
+        rvf.addEventListener("submit", function(ev){
+            ev.preventDefault();
+            var st = $("rvMsg"), b = $("rvGo"), n = Number($("rvVal").value), t = $("rvText").value.trim();
+            if(!n){ st.textContent = "Поставьте оценку звёздами"; return; }
+            if(t.length < 10){ st.textContent = "Напишите хотя бы пару предложений"; return; }
+            b.disabled = true; st.textContent = "Отправляем…";
+            fetch("/api/o/" + window.__tok + "/review", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({stars: n, text: t})})
+                .then(function(r){ return r.json().then(function(j){ return {ok: r.ok, j: j}; }); })
+                .then(function(x){ if(!x.ok) throw new Error(x.j.error || "Не удалось отправить"); location.reload(); })
+                .catch(function(e){ b.disabled = false; st.textContent = e.message; });
+        });
+    }
+
     /* форма заказа */
     var f = $("f"); if(!f) return;
     var sel = $("slug"), total = $("total"), isCv = !!$("dob"), addBase = $("addBase"), extra = $("extra"), docs = [];
