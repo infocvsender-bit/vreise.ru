@@ -41,17 +41,19 @@ module.exports = function engine(db){
         "Балкеры": "Bulk carriers", "Генеральные грузы": "General cargo", "Ро-ро / паромы": "Ro-Ro / ferries", "Пассажирские суда": "Passenger ships", "Яхты": "Yachts", "Любые суда": "Any vessel type"};
     const vesEn = s => String(s || "").split(/,\s(?=[А-ЯЁA-Z])/).map(x => VES_EN[x.trim()] || x.trim()).join(", ");
     const latin = s => cap(M.translit(s).replace(/[^a-z\s'-]/g, " ").replace(/\s+/g, " ").trim());
+    const posList = o => String(o.position || "").split(/,\s*/).map(x => x.trim()).filter(x => x && x !== "Другая");
     function defaultLetter(o, ru){
-        const phone = o.phone ? (ru ? `\nТелефон / WhatsApp: ${o.phone}` : `\nPhone / WhatsApp: ${o.phone}`) : "";
+        const name = [o.first_name, o.last_name].filter(Boolean).join(" "), P = posList(o), many = P.length > 1;
+        const phone = o.phone ? `\n${ru ? "Телефон" : "Phone"}: ${o.phone}` : "";
         if(ru){
-            return `Здравствуйте!\n\nНаправляю своё резюме на рассмотрение${o.position ? (String(o.position).includes(",") ? ` по должностям: ${o.position}` : ` по должности ${o.position}`) : ""}${o.vessel ? ` (суда: ${o.vessel})` : ""}. Резюме во вложении.\n\nГотов(а) приступить к работе в удобные для вас сроки. Буду рад(а) ответу.\n\nКонтакты:\nE-mail: ${o.email}${phone}\n\nС уважением,\n${[o.first_name, o.last_name].filter(Boolean).join(" ")}`;
+            return `Добрый день!\nУважаемый менеджер по экипажам!\nМеня зовут ${name}.\nПишу, чтобы откликнуться на ${many ? "должности" : "должность"} ${P.join(", ") || "моряка"} в вашей компании. У меня большой морской опыт, я ответственно отношусь к безопасности и умею работать в команде.\nЯ работал(а) на судах разных типов, имею все необходимые документы по конвенции ПДНВ (STCW). Если вашей компании потребуются дополнительные документы, я готов(а) их оформить.\n${o.vessel ? `Хотел(а) бы работать на судах: ${o.vessel}.\n` : ""}Безопасность для меня — приоритет: умею оценивать риски, действовать в аварийных ситуациях и применять эффективные меры безопасности. Легко нахожу общий язык с интернациональными экипажами.\nРезюме прикладываю — там подробнее о моей квалификации и опыте.\nСпасибо за внимание к моей кандидатуре. Готов(а) пройти собеседование в удобное для вас время и буду рад(а) обсудить, чем могу быть полезен(на) вашей компании.\nМои контакты:\n\nE-mail: ${o.email}${phone}\n\nС уважением,\n${name}`;
         }
-        const nm = latin([o.first_name, o.last_name].filter(Boolean).join(" "));
-        return `Dear Sir/Madam,\n\nI would like to apply for ${o.position ? (String(o.position).includes(",") ? `one of the following positions: ${o.position}` : `the position of ${o.position}`) : "a seafarer position"}${o.vessel ? ` (vessel types: ${vesEn(o.vessel)})` : ""}. Please find my CV attached.\n\nI am available to join at short notice and would be glad to hear from you.\n\nContact details:\nE-mail: ${o.email}${phone}\n\nBest regards,\n${nm}`;
+        const nm = latin(name);
+        return `Good day\nDear Crew Manager\nMy name is ${nm}\nI am writing to apply for ${many ? "the positions" : "the position"} of ${P.join(", ") || "a seafarer position"} at your company. With my extensive maritime experience and strong commitment to safety and teamwork.\nI have experience in the maritime industry, having served onboard various types of vessels. I possess the necessary certifications according to STCW convention. Also I\u2019m ready to obtain any additional documents if it is required by your company.\n${o.vessel ? `I would like to work onboard: ${vesEn(o.vessel)}.\n` : ""}Safety is my top priority, and I have a proven track record of promoting a culture of safety onboard. I am skilled in risk assessment, emergency response, and implementing effective safety measures. I am also a team player with excellent communication skills and the ability to work well with multicultural crews.\nI have attached my resume for your review, which provides further details on my qualifications and experiences.\nThank you for considering my application. I am available for an interview at your convenience, and I look forward to the opportunity to discuss how my skills align with the needs of your company.\nMy Contact details\n\nEmail: ${o.email}${phone}\n\nBest Regards\n${nm}`;
     }
     function letterFor(o){
         const ru = o.base === "rossiya" && !o.extra_base, name = [o.first_name, o.last_name].filter(Boolean).join(" ");
-        const std = ru ? `Резюме: ${o.position || "моряк"} — ${name}` : `Application: ${o.position || "Seafarer"} — ${latin(name)}`;
+        const std = [ru ? name : latin(name), posList(o).join(", ") || (ru ? "Моряк" : "Seafarer"), o.vessel ? (ru ? o.vessel : vesEn(o.vessel)).replace(/\s*\([^)]*\)/g, "") : "", ru ? "В любое время" : "Any Time"].filter(Boolean).join("/");
         return {subject: String(o.subject || "").trim() || std, text: String(o.letter || "").trim() || defaultLetter(o, ru)};
     }
 
@@ -93,6 +95,7 @@ module.exports = function engine(db){
             await q(`INSERT INTO jobs(id, order_id, m, status, start_at) VALUES($1,$2,$3,'wait',$4)`, [uuid(), o.id, m, new Date(Date.now() + (m - 1) * WEEK).toISOString()]);
         await q(`UPDATE orders SET status = 'in_progress' WHERE id = $1`, [o.id]);
         await note(o.id, `Рассылка поставлена в очередь: ${o.times} шт. (интервал — неделя)`, who || "Система");
+        try { const L = letterFor(o); Mail.T.preview(o, L, o.kind === "cv" ? o.res_name : o.cv_name).catch(() => {}); } catch(e){}
         setTimeout(() => tick().catch(() => {}), 1500);
     }
 
