@@ -21,6 +21,7 @@
     function orders(){
         api("/orders?status=" + (mode === "board" ? "" : encodeURIComponent(filter)) + "&q=" + encodeURIComponent(search)).then(function(d){
             if(mode === "board") return board(d);
+            if(mode === "list") return table(d);
             var s = d.summary, fl = [["", "Все"]].concat(Object.keys(ST).map(function(k){ return [k, ST[k] + (s[k] ? " · " + s[k] : "")]; }));
             view.innerHTML = '<div class="flt">' + fl.map(function(f){ return '<button data-f="' + f[0] + '"' + (f[0] === filter ? ' class="on"' : "") + ">" + esc(f[1]) + "</button>"; }).join("") +
                 '<input class="in" id="q" placeholder="Поиск: №, имя, e-mail" style="max-width:260px;padding:7px 12px" value="' + esc(search) + '"></div>' +
@@ -34,8 +35,52 @@
     }
 
 
+    /* ---------- таблица заказов: суммы в рублях, «Часть Дима» = сумма минус 40% ---------- */
+    var tStatus = "", tService = "", PAID = ["paid", "in_progress", "done"], DIMA = 0.6;
+    function dfull(s){ return s ? new Date(s).toLocaleString("ru-RU", {day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit"}) : "—"; }
+    function mailDate(o, m){
+        var j = (o.jobs || []).filter(function(x){ return x.m === m; })[0]; if(j && j.start_at) return dfull(j.start_at);
+        var sc = []; try { sc = JSON.parse(o.schedule || "[]"); } catch(e){}
+        var x = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}:\d{2})$/.exec(sc[m - 1] || ""); return x ? x[3] + "." + x[2] + "." + x[1] + " " + x[4] : "—";
+    }
+    function table(d){
+        var all = d.orders.filter(function(o){ return (!tStatus || o.status === tStatus) && (!tService || (tService === "cv" ? o.kind === "cv" : o.kind === "mailing")); });
+        var rows = all.slice().sort(function(a, b){ return a.created_at < b.created_at ? 1 : -1; });
+        var paid = function(o){ return PAID.indexOf(o.status) >= 0; };
+        var sum = function(list){ return list.filter(paid).reduce(function(a, o){ return a + Number(o.price); }, 0); };
+        var tot = sum(rows), MN = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
+        var groups = [], gi = {};
+        rows.forEach(function(o){ var dd = new Date(o.created_at), k = dd.getFullYear() * 100 + dd.getMonth(); if(!gi[k]){ gi[k] = {t: MN[dd.getMonth()] + " " + dd.getFullYear(), l: []}; groups.push(gi[k]); } gi[k].l.push(o); });
+        var th = ["№ заказа", "Дата заказа", "1 рассылка", "2 рассылка", "3 рассылка", "Имя Фамилия", "Статус", "Сумма заказа", "Часть Дима (−40%)", "Услуга", "Тип судов", "Должность", "E-mail", "Телефон", "Резюме"];
+        var body = groups.map(function(g){
+            var gs = sum(g.l);
+            return '<tr class="grp"><td colspan="' + th.length + '">' + esc(g.t) + " · " + g.l.length + " заказ(ов) · зашло " + rub(gs) + " · часть Дима " + rub(gs * DIMA) + "</td></tr>" + g.l.map(function(o){
+                var files = (o.cv_name ? '<a href="/crm/api/orders/' + o.id + '/cv" onclick="event.stopPropagation()">📎 ' + esc(o.cv_name) + "</a>" : "") + (o.res_name ? '<div><a href="/crm/api/orders/' + o.id + '/res" onclick="event.stopPropagation()">📄 ' + esc(o.res_name) + "</a></div>" : "");
+                var p = paid(o);
+                return '<tr class="click' + (o.status === "cancelled" ? " canc" : "") + '" data-id="' + o.id + '"><td><b>№' + o.num + "</b></td><td>" + dfull(o.created_at) + "</td><td>" + (o.base ? mailDate(o, 1) : "—") + "</td><td>" + (o.base && Number(o.times) > 1 ? mailDate(o, 2) : "—") + "</td><td>" + (o.base && Number(o.times) > 2 ? mailDate(o, 3) : "—") + "</td><td>" + esc(((o.first_name || "") + " " + (o.last_name || "")).trim()) + "</td><td>" + esc(ST[o.status] || o.status) + '</td><td class="num">' + (p ? rub(o.price) : '<span class="mut">' + rub(o.price) + "</span>") + '</td><td class="num">' + (p ? "<b>" + rub(o.price * DIMA) + "</b>" : '<span class="mut">—</span>') + "</td><td>" + esc(o.title) + (Number(o.cover) ? " + персональное письмо" : "") + "</td><td>" + esc(o.vessel || "—") + "</td><td>" + esc(o.position || "—") + "</td><td>" + esc(o.email) + "</td><td>" + esc(o.phone || "—") + "</td><td>" + (files || "—") + "</td></tr>";
+            }).join("");
+        }).join("");
+        var opts = function(map, cur){ return Object.keys(map).map(function(k){ return '<option value="' + k + '"' + (k === cur ? " selected" : "") + ">" + esc(map[k]) + "</option>"; }).join(""); };
+        var stOpts = {}; stOpts[""] = "Все статусы"; Object.keys(ST).forEach(function(k){ stOpts[k] = ST[k]; });
+        view.innerHTML = '<div class="flt tbar"><b style="font-size:18px">📋 Таблица заказов</b><span class="mut">' + rows.length + " · зашло " + rub(tot) + " · часть Дима (−40%): <b>" + rub(tot * DIMA) + "</b></span>" +
+            '<input class="in" id="q" placeholder="Поиск: имя, e-mail, телефон, №, должность" style="max-width:300px;padding:7px 12px" value="' + esc(search) + '">' +
+            '<select class="in" id="tst" style="max-width:170px;padding:7px 10px">' + opts(stOpts, tStatus) + '</select><select class="in" id="tsv" style="max-width:170px;padding:7px 10px">' + opts({"": "Все услуги", mailing: "Рассылки", cv: "Резюме"}, tService) + '</select>' +
+            '<button class="btn gold sm" id="tcsv" type="button">⬇ Excel (CSV)</button></div>' +
+            '<div class="panel tbl" style="padding:0;overflow:auto;max-height:78vh"><table class="t wide"><thead><tr>' + th.map(function(h){ return "<th>" + h + "</th>"; }).join("") + "</tr></thead><tbody>" + (body || '<tr><td colspan="' + th.length + '" class="mut" style="padding:20px">Заказов нет</td></tr>') + "</tbody></table></div>";
+        view.insertAdjacentHTML("afterbegin", modeSwitch()); bindMode();
+        [].forEach.call(view.querySelectorAll("tr.click"), function(r){ r.onclick = function(){ order(r.getAttribute("data-id")); }; });
+        var q = document.getElementById("q"); q.onkeydown = function(e){ if(e.key === "Enter"){ search = q.value; orders(); } };
+        document.getElementById("tst").onchange = function(){ tStatus = this.value; table(d); };
+        document.getElementById("tsv").onchange = function(){ tService = this.value; table(d); };
+        document.getElementById("tcsv").onclick = function(){
+            var csv = [th.concat([]).join(";")].concat(rows.map(function(o){ var p = paid(o);
+                return [o.num, dfull(o.created_at), o.base ? mailDate(o, 1) : "", o.base && o.times > 1 ? mailDate(o, 2) : "", o.base && o.times > 2 ? mailDate(o, 3) : "", ((o.first_name || "") + " " + (o.last_name || "")).trim(), ST[o.status] || o.status, Math.round(o.price), p ? Math.round(o.price * DIMA) : "", o.title, o.vessel || "", o.position || "", o.email, o.phone || "", o.cv_name || o.res_name || ""].map(function(x){ return '"' + String(x == null ? "" : x).replace(/"/g, '""') + '"'; }).join(";"); })).join("\r\n");
+            var a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["\ufeff" + csv], {type: "text/csv;charset=utf-8"})); a.download = "zakazy-vreise-" + new Date().toISOString().slice(0, 10) + ".csv"; a.click();
+        };
+    }
+
     /* ---------- доска заказов (канбан) ---------- */
-    function modeSwitch(){ return '<div class="flt" id="msw"><button data-m="board"' + (mode === "board" ? ' class="on"' : "") + '>🗂 Доска</button><button data-m="list"' + (mode === "list" ? ' class="on"' : "") + ">📋 Список</button></div>"; }
+    function modeSwitch(){ return '<div class="flt" id="msw"><button data-m="board"' + (mode === "board" ? ' class="on"' : "") + '>🗂 Доска</button><button data-m="list"' + (mode === "list" ? ' class="on"' : "") + ">📋 Таблица</button></div>"; }
     function bindMode(){ [].forEach.call(document.querySelectorAll("#msw [data-m]"), function(b){ b.onclick = function(){ mode = b.getAttribute("data-m"); orders(); }; }); }
     var COLS = [["new", "🆕 Ждёт оплаты", "#e0a030"], ["claimed", "💬 Проверка оплаты", "#e05a2a"], ["paid", "💰 Оплачен", "#2f9e63"], ["work", "🛠 В работе", "#3b78c9"],
         ["run", "📨 Рассылка", "#6b4fd8"], ["done", "✅ Выполнен", "#0A3340"], ["cancelled", "✖ Отменён", "#a33"]];
