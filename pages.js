@@ -46,8 +46,8 @@ function home(counts){
 <div class="glass g2"><span class="chip on">Россия</span><span class="chip">Европа</span><span class="chip">Офшор</span><span class="chip">Мир</span></div></div></div></header>`;
     const body = `<section class="sec" id="services"><div class="c">
 <div class="kick">Услуги</div><h2>Рассылка резюме по базам</h2>
-<p class="sub">Выберите базу и количество рассылок. Письма уходят с отдельного почтового ящика на ваше имя, а ответы компаний приходят прямо вам на почту.</p>
-<div class="board" id="board"><div class="board-head"><h3>Выберите базу и количество рассылок</h3>
+<p class="sub">Выберите базу и количество рассылок. Письма уходят от вашего имени, а ответы компаний приходят на вашу почту и в личный кабинет!</p>
+<div class="board" id="board"><div class="board-head"><h3>Количество рассылок</h3>
 <div class="seg" role="group" aria-label="Количество рассылок"><button type="button" data-n="1" class="on">1 рассылка</button><button type="button" data-n="2">2 рассылки</button><button type="button" data-n="3">3 рассылки</button></div></div>
 <ul class="pcs">${rows}</ul></div>
 <div class="included" id="included"><h3>Что входит в заказ</h3><ul>
