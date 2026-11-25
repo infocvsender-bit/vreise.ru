@@ -111,6 +111,23 @@
     }
 
     /* ---------- серверы ---------- */
+    function letter(){
+        api("/letters").then(function(d){
+            view.innerHTML = '<div class="panel"><h3>Написать письмо</h3><p class="mut" style="margin-top:0">Любое письмо — тема и текст ваши, можно приложить файл. Уйдёт в фирменном оформлении Vreise.ru' + (d.from ? " от " + esc(d.from) : "") + '. Ответы придут на эту почту.</p>' +
+                '<input class="in" id="lto" type="email" placeholder="Кому (e-mail)" style="margin-bottom:8px"><input class="in" id="lsu" placeholder="Тема" style="margin-bottom:8px"><textarea class="in" id="ltx" placeholder="Текст письма" style="min-height:180px"></textarea>' +
+                '<input type="file" id="lfl" class="in" style="margin-top:8px"><p class="mut" style="margin:4px 0 0">Вложение — до 8 МБ.</p><div class="acts"><button class="btn gold" id="lgo">Отправить письмо</button> <span class="mut" id="lmg"></span></div></div>' +
+                '<div class="panel"><h3>Отправленные письма</h3>' + (d.letters.length ? '<table class="t"><thead><tr><th>Когда</th><th>Кому</th><th>Тема</th><th>Файл</th><th></th></tr></thead><tbody>' + d.letters.map(function(l){
+                    return "<tr><td>" + dt(l.at) + "</td><td>" + esc(l.to_email) + "</td><td>" + esc(l.subject) + "</td><td>" + esc(l.file_name || "") + "</td><td>" + (l.ok ? "✅" : '<span style="color:#c0392b" title="' + esc(l.error || "") + '">❌ не ушло</span>') + "</td></tr>"; }).join("") + "</tbody></table>" : '<p class="mut">Пока ничего не отправляли</p>') + "</div>";
+            var $ = function(i){ return document.getElementById(i); };
+            $("lgo").onclick = function(){
+                if(!$("lto").value.trim() || !$("lsu").value.trim() || !$("ltx").value.trim()) return alert("Заполните: кому, тему и текст письма");
+                if(!confirm("Отправить письмо на " + $("lto").value.trim() + "?")) return;
+                var f = $("lfl").files[0]; $("lgo").disabled = true; $("lmg").textContent = "Отправляю…";
+                (f ? readFile(f) : Promise.resolve(null)).then(function(fl){ return api("/letter", {body: {to: $("lto").value, subject: $("lsu").value, text: $("ltx").value, file: fl}}); })
+                    .then(function(){ alert("Письмо отправлено"); letter(); }).catch(function(e){ $("lgo").disabled = false; $("lmg").textContent = ""; alertErr(e); });
+            };
+        }).catch(alertErr);
+    }
     function servers(){
         api("/servers").then(function(d){
             var yes = function(b){ return b ? "✅" : "⚠️ не задано"; };
@@ -126,7 +143,7 @@
         }).catch(alertErr);
     }
 
-    function show(){ ({orders: orders, bases: bases, servers: servers})[tab](); }
+    function show(){ ({orders: orders, bases: bases, letter: letter, servers: servers})[tab](); }
     [].forEach.call(document.querySelectorAll("#tabs button"), function(b){ b.onclick = function(){
         tab = b.getAttribute("data-t"); [].forEach.call(document.querySelectorAll("#tabs button"), function(x){ x.classList.toggle("on", x === b); }); show(); }; });
     show();

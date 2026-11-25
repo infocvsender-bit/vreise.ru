@@ -409,6 +409,26 @@ function parseBase(text, defaultBase){
             if(!EMAIL.test(to)) return json(res, 400, {error: "Укажите e-mail для теста"});
             try { return json(res, 200, {ok: true, domain: await engine.testSend(to)}); } catch(e){ return json(res, 500, {error: e.message}); }
         }
+        if(req.method === "GET" && p === "/letters"){
+            return json(res, 200, {letters: await q(`SELECT id, at, to_email, subject, file_name, ok, error FROM crm_letters ORDER BY at DESC LIMIT 100`), from: env("SYS_SMTP_FROM") || env("SYS_SMTP_USER") || ""});
+        }
+        if(req.method === "POST" && p === "/letter"){
+            const lb = await body(req, 14 * 1024 * 1024), to = clean(lb.to, 200).toLowerCase(), subject = clean(lb.subject, 200).replace(/[\r\n]+/g, " "), text = clean(lb.text, 20000);
+            if(!/^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]{2,}$/.test(to)) return json(res, 400, {error: "Укажите один корректный e-mail получателя"});
+            if(!subject) return json(res, 400, {error: "Укажите тему письма"});
+            if(!text) return json(res, 400, {error: "Напишите текст письма"});
+            let attach = null;
+            if(lb.file && lb.file.b64){
+                const nm = clean(lb.file.name, 120) || "file", data = Buffer.from(String(lb.file.b64).replace(/^data:[^,]*,/, "").replace(/\s+/g, ""), "base64");
+                if(!data.length || data.length > 8 * 1024 * 1024) return json(res, 400, {error: "Файл не принят (до 8 МБ)"});
+                attach = {name: nm, mime: M.mimeOf(nm), data};
+            }
+            let err = null;
+            try { await Mail.T.free(to, subject, text, attach); } catch(e){ err = String(e.message || e).slice(0, 300); }
+            await q(`INSERT INTO crm_letters(id, at, to_email, subject, body, file_name, ok, error) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, [uuid(), now(), to, subject, text, attach ? attach.name : null, err ? 0 : 1, err]);
+            if(err) return json(res, 502, {error: "Письмо не ушло: " + err + ". Проверьте «Серверы и настройки» → «Тест системной почты»."});
+            return json(res, 200, {ok: true});
+        }
         if(req.method === "POST" && p === "/servers/test-system"){
             const b = await body(req), to = clean(b.to, 120);
             if(!EMAIL.test(to)) return json(res, 400, {error: "Укажите e-mail для теста"});

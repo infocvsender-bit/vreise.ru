@@ -53,6 +53,7 @@ const T = {
          <p>Полный список компаний — на странице заказа.</p>`, "Отчёт о рассылке", orderLink(o)),
     reply: (o, text, subject, attach) => toClient(o.email, subject || `Ответ менеджера по заказу №${o.num}`,
         `<p>Здравствуйте, ${esc(o.first_name || "")}!</p><p>${esc(text).replace(/\n/g, "<br>")}</p><p style="color:#5b727a;font-size:13.5px">Написать нам можно на странице заказа или в мессенджеры.</p>`, "Открыть заказ", orderLink(o), attach, true),
+    free: (to, subject, text, attach) => toClient(to, subject, String(text).split(/\n{2,}/).map(p => `<p>${esc(p).replace(/\n/g, "<br>")}</p>`).join(""), null, null, attach, true),
     newReplies: (o, n) => toClient(o.email, `Ответ компании по заказу №${o.num}`,
         `<p>Здравствуйте, ${esc(o.first_name || "")}!</p><p>На вашу рассылку пришл${n === 1 ? "о новое письмо" : "и новые письма"} от компаний (${n}). Прочитать ${n === 1 ? "его" : "их"} можно на странице заказа.</p>
          <p style="color:#5b727a;font-size:13.5px">Отвечать компаниям лучше со своей личной почты — на ту, с которой вам написали.</p>`, "Открыть ответы", orderLink(o)),
