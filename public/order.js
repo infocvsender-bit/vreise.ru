@@ -49,6 +49,20 @@
         var rs = $("lreset"); if(rs) rs.addEventListener("click", function(){ $("lsub").value = std.subject || ""; $("ltxt").value = std.text || ""; post({reset: true}); });
     }
 
+    /* замена резюме */
+    var rg = $("rsgo");
+    if(rg) rg.addEventListener("click", function(){
+        var fl = $("rsfile").files[0], st = $("rsmsg2");
+        if(!fl){ st.textContent = "Выберите файл"; return; }
+        if(!/\.(pdf|docx?)$/i.test(fl.name)){ st.textContent = "Нужен файл PDF или Word"; return; }
+        if(fl.size > 5 * 1024 * 1024){ st.textContent = "Файл больше 5 МБ"; return; }
+        rg.disabled = true; st.textContent = "Загружаем…";
+        fetch("/api/o/" + window.__tok + "/resume", {method: "POST", headers: {"Content-Type": "application/octet-stream", "X-Name": encodeURIComponent(fl.name)}, body: fl})
+            .then(function(r){ return r.json().then(function(j){ return {ok: r.ok, j: j}; }); })
+            .then(function(x){ if(!x.ok) throw new Error(x.j.error || "Не удалось заменить"); sessionStorage.setItem("vr_open", "1"); location.reload(); })
+            .catch(function(e){ rg.disabled = false; st.textContent = e.message; });
+    });
+
     /* сообщение менеджеру */
     var mf = $("msgf");
     if(mf) mf.addEventListener("submit", function(ev){

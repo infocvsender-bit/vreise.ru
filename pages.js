@@ -40,9 +40,9 @@ function home(counts){
 <h1>Ваше резюме — <span>сразу в крюинговые компании</span></h1>
 <p class="lead">Выберите базу, загрузите резюме — мы разошлём его в нужные компании и пришлём отчёт о рассылке. Сопроводительное письмо входит в услугу, а резюме «Стандарт» составим с нуля.</p>
 <div class="cta"><a class="btn gold" href="#services">Выбрать рассылку</a><a class="btn line" href="/order?s=${C.CV.slug}">Составить резюме · ${rub(C.cvPrice())}</a></div>
-<div class="facts"><div><b>${C.BASES.length} баз</b>Россия · Европа<br>Офшор · Мир</div><div><b>Отчёт</b>о каждой<br>рассылке</div><div><b>от ${rub(Math.min(...C.BASES.map(b => C.priceOf(b, 1))))}</b>оплата картой<br>в рублях</div></div>
+<div class="facts"><div><b>${C.BASES.length} баз</b>Россия · Европа<br>Офшор · Мир</div><div><b>Статистика</b>и статус в личном<br>кабинете</div><div><b>от ${rub(Math.min(...C.BASES.map(b => C.priceOf(b, 1))))}</b>оплата картой<br>в рублях</div></div>
 </div><div class="photo"><img src="/static/ship.jpg" alt="Контейнеровоз в море" width="1656" height="740">
-<div class="glass g1"><span class="ic">✉️</span><div><b>Рассылка резюме</b>в компании по вашей базе</div></div>
+<div class="glass g1"><span class="ic">✉️</span><div><b>Рассылка резюме</b>крюинговым компаниям и судовладельцам по всему миру</div></div>
 <div class="glass g2"><span class="chip on">Россия</span><span class="chip">Европа</span><span class="chip">Офшор</span><span class="chip">Мир</span></div></div></div></header>`;
     const body = `<section class="sec" id="services"><div class="c">
 <div class="kick">Услуги</div><h2>Рассылка резюме по базам</h2>
@@ -51,7 +51,7 @@ function home(counts){
 <div class="seg" role="group" aria-label="Количество рассылок"><button type="button" data-n="1" class="on">1 рассылка</button><button type="button" data-n="2">2 рассылки</button><button type="button" data-n="3">3 рассылки</button></div></div>
 <ul class="pcs">${rows}</ul></div>
 <div class="included" id="included"><h3>Что входит в заказ</h3><ul>
-<li>Рассылка вашего резюме по выбранной базе компаний</li><li>Сопроводительное письмо — своё или готовое</li><li>Отдельный почтовый ящик на ваше имя на время рассылки</li><li>Личный кабинет: ход рассылки и отправленные письма</li><li>Тему и текст письма можно поправить до старта</li><li>Можно исключить ненужные компании</li><li>Ответы компаний — в кабинете и на вашу почту</li><li>Вопросы менеджеру — прямо из кабинета</li></ul></div>
+<li>Рассылка вашего резюме по выбранной базе компаний</li><li>Сопроводительное письмо — своё или готовое</li><li>Личный кабинет: ход рассылки и отправленные письма</li><li>Тему и письмо можно поменять в любой момент</li><li>Возможность заменить резюме</li><li>Можно исключить ненужные компании</li><li>Ответы компаний — в кабинете и на вашу почту</li><li>Вопросы менеджеру — прямо из кабинета</li></ul></div>
 <div class="strip"><div><h3>Составление резюме «Стандарт»</h3><ul>${C.CV.bullets.map(b => `<li>${esc(b)}</li>`).join("")}</ul></div>
 <div class="pr"><b>${rub(C.cvPrice())}</b><a class="btn gold" href="/order?s=${C.CV.slug}">Заказать резюме</a></div></div>
 </div></section>
@@ -192,18 +192,22 @@ ${o.status === "new" ? `<div style="margin-top:18px"><button class="btn gold" id
     const wait = cv && ["paid", "in_progress"].includes(o.status) && !o.res_name ? `<div class="ok">Оплата получена. Готовим ваше резюме — оно придёт на почту и появится здесь в течение 6 часов.</div>` : "";
     const emailBanner = !o.email_ok && o.status !== "cancelled" ? `<div class="err" style="background:#fff7dc;color:#6b4e00;border-color:#f0d78a;margin-bottom:18px">✉️ <b>Подтвердите e-mail.</b> Мы отправили письмо на <b>${esc(o.email)}</b> — нажмите в нём кнопку. ${cv ? "" : "Без подтверждения рассылка не начнётся. "}Письма нет? Проверьте «Спам» или <button class="btn gold sm" id="resend" type="button" style="margin:0 6px">отправьте ещё раз</button><span class="hint" id="rsmsg"></span></div>` : "";
     const running = jobs.some(j => j.status === "run");
+    const resumeBlock = o.kind === "mailing" && o.status !== "cancelled" ? `<div class="panel"><h3>Ваше резюме</h3>
+<p class="hint" style="margin:0 0 12px">Сейчас компаниям уходит файл <b>${esc(o.cv_name || "резюме")}</b>. Можно заменить его в любой момент${running ? " — новый файл будет приложен к письмам, которые ещё не отправлены" : ""}.</p>
+<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><input class="in" type="file" id="rsfile" accept=".pdf,.doc,.docx" style="max-width:360px"><button class="btn gold sm" id="rsgo" type="button">Заменить резюме</button><span class="hint" id="rsmsg2"></span></div>
+<p class="hint" style="margin:10px 0 0">PDF или Word, до 5 МБ.</p></div>` : "";
     const letterBlock = std && o.status !== "cancelled" ? `<div class="panel"><h3>Тема и сопроводительное письмо</h3>
 <p class="hint" style="margin:0 0 14px">${o.letter || o.subject ? "Здесь ваш вариант письма." : "Пока стоит стандартное письмо, составленное по вашим данным."} Именно оно уйдёт компаниям, резюме прикладывается автоматически. ${running ? "Рассылка идёт — изменить письмо можно после её окончания, для следующих рассылок." : "Поправьте текст как вам нужно — изменения применятся к рассылке."}</p>
-<form id="lf"><label class="f">Тема письма<input class="in" id="lsub" maxlength="200" value="${esc(std.cur.subject)}" ${running ? "disabled" : ""}></label>
-<div style="margin-top:14px"><label class="f">Текст письма<textarea class="in" id="ltxt" maxlength="4000" style="min-height:230px" ${running ? "disabled" : ""}>${esc(std.cur.text)}</textarea></label></div>
-${running ? "" : `<div style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><button class="btn gold sm" id="lsave" type="submit">Сохранить</button><button class="btn line sm" id="lreset" type="button" style="color:var(--deep);border-color:#9fb6bb">Вернуть стандартное</button><span class="hint" id="lmsg"></span></div>`}</form>
+<form id="lf"><label class="f">Тема письма<input class="in" id="lsub" maxlength="200" value="${esc(std.cur.subject)}"></label>
+<div style="margin-top:14px"><label class="f">Текст письма<textarea class="in" id="ltxt" maxlength="4000" style="min-height:230px">${esc(std.cur.text)}</textarea></label></div>
+<div style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><button class="btn gold sm" id="lsave" type="submit">Сохранить</button><button class="btn line sm" id="lreset" type="button" style="color:var(--deep);border-color:#9fb6bb">Вернуть стандартное</button><span class="hint" id="lmsg"></span></div></form>
 <script type="application/json" id="lstd">${JSON.stringify({subject: std.def.subject, text: std.def.text}).replace(/</g, "\\u003c")}</script></div>` : "";
     const chat = `<div class="faq" style="margin-bottom:22px"><details${msgs.length ? " open" : ""} style="border:1px solid var(--line);border-radius:16px;padding:16px 20px;background:#fff"><summary>💬 Что-то непонятно? Напишите менеджеру</summary>
 ${msgs.map(m => `<div style="margin-top:14px;padding:10px 14px;border-radius:12px;background:${m.author === "Ответ менеджера" ? "#e9f6f3" : "#f3f6f7"}"><span class="hint">${m.author === "Ответ менеджера" ? "Менеджер" : "Вы"} · ${esc(new Date(m.at).toLocaleString("ru-RU", {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"}))}</span><div style="color:var(--ink);white-space:pre-wrap">${esc(m.text)}</div></div>`).join("")}
 <form id="msgf" style="margin-top:14px"><textarea class="in" id="msgt" maxlength="1500" placeholder="Ваш вопрос. Ответ придёт на ${esc(o.email)} и появится здесь." style="min-height:90px"></textarea>
 <div style="margin-top:10px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><button class="btn gold sm" id="msgb" type="submit">Отправить</button><span class="hint" id="msgs"></span></div></form></details></div>`;
     const body = `<div class="page"><h1>Заказ №${o.num}</h1><p class="sub">${esc(o.title)} · <span class="tag ${o.status}">${STATUS[o.status] || o.status}</span></p>
-${emailBanner}${payBlock}${wait}${res}${progress}${repl}${list}${letterBlock}${chat}
+${emailBanner}${payBlock}${wait}${res}${progress}${repl}${list}${letterBlock}${resumeBlock}${chat}
 <div class="panel"><h3>Данные заказа</h3><table class="t"><tbody>
 <tr><td>Клиент</td><td>${esc([o.first_name, o.last_name].filter(Boolean).join(" "))}</td></tr><tr><td>E-mail</td><td>${esc(o.email)}</td></tr>
 ${o.phone ? `<tr><td>Телефон</td><td>${esc(o.phone)}</td></tr>` : ""}${o.position ? `<tr><td>Должность</td><td>${esc(o.position)}</td></tr>` : ""}

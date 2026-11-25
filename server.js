@@ -256,7 +256,6 @@ function parseBase(text, defaultBase){
             if(limited("letter:" + m[1], 30, 3600e3)) return json(res, 429, {error: "Слишком много изменений, попробуйте позже"});
             const o = await byToken(m[1]); if(!o || !o.base) return json(res, 404, {error: "Заказ не найден"});
             if(o.status === "cancelled") return json(res, 400, {error: "Заказ отменён"});
-            if(await one(`SELECT id FROM jobs WHERE order_id = $1 AND status = 'run'`, [o.id])) return json(res, 400, {error: "Рассылка идёт — письмо можно изменить после её окончания, для следующих рассылок."});
             const b = await body(req, 40000), std = engine.letterFor({...o, letter: "", subject: ""});
             let subject = clean(b.subject, 200).replace(/[\r\n]+/g, " "), text = String(b.text ?? "").replace(/\r/g, "").trim().slice(0, 4000);
             if(b.reset){ subject = ""; text = ""; }
@@ -264,6 +263,19 @@ function parseBase(text, defaultBase){
                 if(text.replace(/\s+/g, " ") === std.text.replace(/\s+/g, " ")) text = ""; if(subject === std.subject) subject = ""; }
             await q(`UPDATE orders SET letter = $1, subject = $2, letter_ok = $3 WHERE id = $4`, [text, subject, now(), o.id]);
             await engine.note(o.id, b.reset ? "Клиент вернул стандартное письмо" : "Клиент изменил тему и текст письма", "Клиент");
+            return json(res, 200, {ok: true});
+        }
+        m = p.match(/^\/api\/o\/([A-Za-z0-9_-]{10,80})\/resume$/);
+        if(req.method === "POST" && m){
+            if(limited("resume:" + m[1], 10, 3600e3)) return json(res, 429, {error: "Слишком много замен, попробуйте позже"});
+            const o = await byToken(m[1]); if(!o || o.kind !== "mailing") return json(res, 404, {error: "Заказ не найден"});
+            if(["cancelled"].includes(o.status)) return json(res, 400, {error: "Заказ отменён"});
+            const nm = clean(decodeURIComponent(String(req.headers["x-name"] || "cv.pdf")), 120) || "cv.pdf";
+            if(!/\.(pdf|docx?)$/i.test(nm)) return json(res, 400, {error: "Нужен файл PDF или Word"});
+            const buf = await rawBody(req, 5 * 1024 * 1024);
+            if(!buf.length) return json(res, 400, {error: "Пустой файл"});
+            await q(`UPDATE orders SET cv_name = $1, cv_b64 = $2 WHERE id = $3`, [nm, buf.toString("base64"), o.id]);
+            await engine.note(o.id, `Клиент заменил резюме: ${nm}`, "Клиент");
             return json(res, 200, {ok: true});
         }
         m = p.match(/^\/api\/o\/([A-Za-z0-9_-]{10,80})\/message$/);
