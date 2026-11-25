@@ -23,7 +23,7 @@ ${scripts}</body></html>`;
 }
 
 const logo = `<a class="brand" href="/"><img src="/static/logo.svg" alt="" width="44" height="44"><span>Vreise<i>.ru</i></span></a>`;
-const navTop = (full = true) => `<nav class="top">${logo}<span class="sp"></span>${full ? `<a class="l" href="/#services">Услуги</a><a class="l" href="/#how">Как это работает</a><a class="l" href="/#pay">Оплата</a><a class="l" href="/#contacts">Контакты</a>` : `<a class="l" href="/">← На главную</a>`}<a class="btn gold sm" href="/order">Заказать рассылку</a></nav>`;
+const navTop = (full = true) => `<nav class="top">${logo}<span class="sp"></span>${full ? `<a class="l" href="/#services">Услуги</a><a class="l" href="/#how">Как это работает</a><a class="l" href="/#pay">Оплата</a><a class="l" href="/#contacts">Контакты</a>` : `<a class="l" href="/#services">← Главное меню</a>`}<a class="btn gold sm" href="/order">Заказать рассылку</a></nav>`;
 
 /* ---------- главная ---------- */
 const plAddr = n => { const a = n % 10, b = n % 100; return (a === 1 && b !== 11) ? "адрес" : (a >= 2 && a <= 4 && (b < 12 || b > 14)) ? "адреса" : "адресов"; };
