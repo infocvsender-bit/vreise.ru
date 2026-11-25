@@ -214,20 +214,12 @@ ${o.status === "new" ? `<div style="margin-top:18px"><button class="btn gold" id
         : `<ol class="trk">${steps.map(x => `<li class="${x.s}"><i>${x.s === "done" ? "✓" : ""}</i><b>${x.t}</b><span>${x.d}</span></li>`).join("")}</ol>`;
     /* карточки рассылок */
     const MSKMS = 3 * 3600e3, DAYMS = 864e5;
-    const plannedEnd = startMs => {                      // 10 часов отправки внутри окна «будни 06:00–18:00 МСК»
-        let left = 10 * 3600e3, t = startMs;
-        for(let i = 0; i < 40 && left > 0; i++){
-            const d = new Date(t + MSKMS), dow = d.getUTCDay(), h = d.getUTCHours() + d.getUTCMinutes() / 60, day0 = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - MSKMS;
-            if(dow >= 1 && dow <= 5 && h >= 6 && h < 18){ const can = Math.min(left, day0 + 18 * 3600e3 - t); left -= can; t += can; if(left > 0) t = day0 + DAYMS + 6 * 3600e3; }
-            else t = (dow >= 1 && dow <= 5 && h < 6) ? day0 + 6 * 3600e3 : day0 + DAYMS + 6 * 3600e3;
-        }
-        return t;
-    };
+    const PL = require("./plan.js"), plannedEnd = (startMs, left) => PL.plannedEnd(startMs, left);
     const fmtShort = ms => new Date(ms).toLocaleString("ru-RU", {timeZone: "Europe/Moscow", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"});
     const JST = {wait: "Запланирована", run: "Идёт", pause: "На паузе", done: "Завершена", stop: "Отменена"};
     const progress = mail && jobs.length ? `<div class="panel"><h3>Рассылка</h3>${jobs.map(j => {
         const sentN = Number(j.sent), failN = Number(j.failed), total = Number(j.total || 0), pct = total ? Math.round((sentN + failN) / total * 100) : 0, left = Math.max(0, total - sentN - failN);
-        const startMs = Date.parse(j.started_at || j.start_at), endMs = plannedEnd(startMs), late = j.status === "wait" && Date.parse(j.start_at) < Date.now();
+        const act = total ? PL.activeMs(total) : 10 * 3600e3, startMs = Date.parse(j.started_at || j.start_at), endMs = plannedEnd(startMs, act), late = j.status === "wait" && Date.parse(j.start_at) < Date.now();
         const notStarted = !j.started_at && ["wait", "pause"].includes(j.status), active = ["wait", "run", "pause"].includes(j.status);
         const why = j.status === "wait" ? (!o.email_ok ? "Рассылка не начнётся, пока вы не подтвердите e-mail — нажмите кнопку в письме, которое мы отправили на " + o.email + "." : resPending ? "Рассылка начнётся после того, как вы проверите и подтвердите готовое резюме (блок выше)." : Number(o.cover) && !o.cover_ok ? "Рассылка начнётся после подтверждения персонального письма." : "") : "";
         const badge = j.status === "wait" && why ? "⏳ Ждёт подтверждения" : j.status === "wait" ? `🕒 Запланирована на ${fmtShort(Date.parse(j.start_at))}` : JST[j.status] || j.status;
@@ -243,7 +235,7 @@ ${o.status === "new" ? `<div style="margin-top:18px"><button class="btn gold" id
         if(notStarted) btns.push(`<button class="btn sm jline jtime" data-j="${esc(j.id)}" type="button">🕒 Изменить время</button>`);
         if(active) btns.push(`<button class="btn sm jbtn jred" data-j="${esc(j.id)}" data-a="cancel" type="button">✖ Отменить рассылку</button>`);
         return `<div class="jc2"><div class="jh"><b>Рассылка №${j.m}</b><span class="jst ${j.status}">${badge}</span></div>
-${active && j.status !== "pause" ? `<div class="chips"><span>🕒 ${fmtShort(startMs)} – ${fmtShort(endMs)} МСК</span><span class="dk">10 ч</span></div>` : ""}
+${active && j.status !== "pause" ? `<div class="chips"><span>🕒 ${fmtShort(startMs)} – ${fmtShort(endMs)} МСК</span><span class="dk">${Math.round(act / 3600e3)} ч</span></div>` : ""}
 <div class="bigp"><div class="bgn">${pct}<small>%</small></div><div class="bgr"><div class="bar"><i style="width:${pct}%"></i></div>
 <div>${total ? `Отправлено: <b>${sentN}</b> из ${total.toLocaleString("ru-RU")} адресов` : "Отправлено: <b>0</b> · адреса подберём перед стартом"}${failN ? `, не доставлено ${failN}` : ""}</div>
 ${active ? `<span class="hint">Старт: ${fmtShort(startMs)} МСК · плановое окончание: ${fmtShort(endMs)} МСК</span>` : ""}</div></div>
