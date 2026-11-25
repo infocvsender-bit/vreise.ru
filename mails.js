@@ -12,7 +12,9 @@ const TGL = () => digits() ? `https://t.me/+${digits()}` : "";
 
 function layout(title, body, btn, url){
     const site = siteUrl(), host = site.replace(/^https?:\/\//, "");
-    const A = "text-decoration:none;color:#ffffff";
+    const A = "text-decoration:none;color:#ffffff", mailTo = String(env("SYS_SMTP_FROM") || env("SYS_SMTP_USER") || "").replace(/^.*<([^>]+)>.*$/, "$1").trim();
+    const pill = (href, ico, label, bg) => href ? `<td style="padding:0 8px 0 0"><a href="${esc(href)}" style="display:inline-block;background:${bg};color:#ffffff;text-decoration:none;font-weight:bold;font-size:13px;padding:8px 14px 8px 10px;border-radius:999px"><img src="${esc(site)}/static/mail-${ico}.png" width="18" height="18" alt="" style="vertical-align:middle;border:0;margin-right:6px">${label}</a></td>` : "";
+    const pills = pill(WA(), "wa", "WhatsApp", "#1f9d55") + pill(TGL(), "tg", "Telegram", "#2a8bd0") + pill(mailTo ? "mailto:" + mailTo : "", "mail", "Почта", "#0F4C5C");
     return `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"></head><body style="margin:0;background:#eef3f4;font-family:Arial,Helvetica,sans-serif;color:#10262c">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#eef3f4;padding:24px 12px"><tr><td align="center">
 <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#ffffff;border-radius:14px;overflow:hidden">
@@ -28,10 +30,10 @@ function layout(title, body, btn, url){
 <div style="font-size:15px;line-height:1.6">${body}</div>
 ${btn && url ? `<p style="margin:24px 0 4px"><a href="${esc(url)}" style="background:#F2B705;color:#1b1500;text-decoration:none;font-weight:bold;padding:13px 24px;border-radius:999px;display:inline-block">${esc(btn)}</a></p>` : ""}
 </td></tr>
-<tr><td style="padding:18px 28px;background:#f6f9fa;color:#5b727a;font-size:12.5px;line-height:1.6;border-top:1px solid #e3ebee">
+<tr><td style="padding:20px 28px 22px;background:#f6f9fa;color:#5b727a;font-size:12.5px;line-height:1.6;border-top:1px solid #e3ebee">
 <b style="color:#0A3340">Vreise.ru</b> — составление резюме и рассылка его в крюинговые компании.<br>
-Сайт: <a href="${esc(site)}" style="color:#0F4C5C;font-weight:bold;text-decoration:none">${esc(host)}</a>${phone() ? `<br>Вопросы — WhatsApp или Telegram: <b>${esc(phone())}</b>` : ""}<br>
-<span style="color:#8aa0a7">Это письмо отправлено автоматически, отвечать на него не нужно.</span></td></tr>
+Сайт: <a href="${esc(site)}" style="color:#0F4C5C;font-weight:bold;text-decoration:none">${esc(host)}</a>
+${pills ? `<table cellpadding="0" cellspacing="0" style="margin-top:14px"><tr>${pills}</tr></table>` : ""}</td></tr>
 </table></td></tr></table></body></html>`;
 }
 const strip = h => String(h).replace(/<br\s*\/?>/gi, "\n").replace(/<\/p>/gi, "\n\n").replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/\n{3,}/g, "\n\n").trim();
