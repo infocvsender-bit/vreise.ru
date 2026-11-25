@@ -46,6 +46,9 @@ body.vr-open .vr-fc,body.vr-open .vr-tease{display:none}\
 .vr-pc{display:block;width:100%;text-align:left;border:2px solid #dce6e8;border-radius:16px;background:#fff;padding:14px 16px;cursor:pointer;font:15px/1.45 Inter,Arial,sans-serif;color:#17303a;transition:border-color .15s,transform .15s}.vr-pc:hover{border-color:#F2B400;transform:translateY(-1px)}\
 .vr-pc b{display:block;font-size:17px;color:#0B3641;margin-bottom:4px}.vr-pc.rec{border-color:#F2B400;background:#fffbea}.vr-pc i{font-style:normal;display:inline-block;margin-top:6px;font-size:12.5px;font-weight:700;color:#0a7a3d}\
 .vr-box.pick .vr-pick{display:flex}.vr-box.pick .vr-tabs,.vr-box.pick .vr-m,.vr-box.pick .vr-f{display:none!important}\
+.vr-pre{display:none}.vr-box.mgr.pre .vr-pre{display:flex;flex-direction:column;gap:9px;padding:12px 14px 14px;background:#fff;border-top:1px solid #dce6e8}.vr-box.mgr.pre .vr-f.vr-cf{display:none!important}\
+.vr-pre p{margin:0;font-size:13.5px;color:#41566b}.vr-pre input{border:1px solid #cfdde0;border-radius:12px;padding:10px 12px;font:16px Inter,Arial,sans-serif;outline:none}.vr-pre input:focus{border-color:#0F4C5C}.vr-pre button{border:0;border-radius:12px;background:#F2B400;color:#0B3641;font:700 15px Inter,Arial,sans-serif;padding:11px;cursor:pointer}.vr-pre .e{color:#c0392b;font-size:13px;min-height:0}\
+.vr-sys{align-self:center;text-align:center;background:#e8f1f2;color:#41566b;border-radius:12px;padding:8px 14px;font-size:13.5px;max-width:92%}\
 .vr-who{font-size:11.5px;color:#7b9097;margin:0 4px -4px}.vr-who.r{align-self:flex-end}\
 .vr-fc .ai .dot{position:absolute;top:2px;right:2px;width:15px;height:15px;border-radius:50%;background:#e5484d;border:2px solid #fff;display:none}.vr-fc .ai .dot.on{display:block}\
 @media(max-width:700px){.vr-fc{right:10px;bottom:84px;gap:10px}.vr-fc a,.vr-fc button{width:48px;height:48px}.vr-fc .ai{width:52px;height:52px}.vr-fc [data-tip]:before{display:none}.vr-box{right:8px;left:8px;bottom:8px;width:auto;height:calc(100vh - 16px);height:calc(100dvh - 16px)}.vr-tease{right:72px;bottom:90px;max-width:170px}}';
@@ -64,6 +67,7 @@ box.innerHTML = '<div class="vr-h"><div class="t"><b>Чат Vreise.ru</b><small>
   '<div class="vr-m"><div class="vr-note">🤖 Я — онлайн-помощник Vreise.ru (бот). Отвечу на вопросы об услугах, ценах, оплате и сроках. Если нужен живой менеджер — откройте вкладку «Менеджер» и напишите там.</div><div class="vr-chips"></div></div>' +
   '<form class="vr-f"><textarea rows="1" maxlength="800" placeholder="Напишите вопрос…"></textarea><button type="submit">Отправить</button></form>' +
   '<div class="vr-m vr-cm"><div class="vr-note">👤 Чат с живым менеджером. Напишите вопрос — ответ появится здесь же. Если закроете страницу, ответ сохранится: загляните сюда позже.</div></div>' +
+  '<form class="vr-pre"><p>Представьтесь, пожалуйста — так менеджер сможет вам ответить.</p><input name="n" maxlength="80" placeholder="Ваше имя" autocomplete="name" required><input name="e" type="email" maxlength="120" placeholder="Ваш e-mail" autocomplete="email" required><div class="e"></div><button type="submit">Начать чат</button></form>' +
   '<form class="vr-f vr-cf"><textarea rows="1" maxlength="1000" placeholder="Сообщение менеджеру…"></textarea><button type="submit">Отправить</button></form>';
 document.body.appendChild(fc); document.body.appendChild(bg); document.body.appendChild(box);
 var $ = function(s){ return box.querySelector(s); };
@@ -89,11 +93,14 @@ function fresh(){ if(busy) return; H = []; save(); M.querySelectorAll(".vr-b,.vr
 
 /* ---------- вкладка «Менеджер»: живой чат ---------- */
 var CM = $(".vr-cm"), CF = $(".vr-cf"), CT = CF.querySelector("textarea"), CS = CF.querySelector("button"), TB = box.querySelectorAll(".vr-tabs button"), tdot = box.querySelector(".vr-tabs i"), fdot = fc.querySelector(".dot");
+var NAME = "", EMAIL = "", PRE = box.querySelector(".vr-pre");
+try { NAME = localStorage.getItem("vr_n") || ""; EMAIL = localStorage.getItem("vr_e") || ""; } catch(e){}
+var setPre = function(){ box.classList.toggle("pre", !(NAME && EMAIL)); };
 var curTab = "ai", SID = "", seenIds = {}, lastAt = "", poll = null, bgPoll = null, SEEN_AT = "";
 try { SID = localStorage.getItem("vr_sid") || ""; SEEN_AT = localStorage.getItem("vr_seen") || ""; } catch(e){}
 var newSid = function(){ var a = new Uint8Array(9), s = ""; (window.crypto || window.msCrypto).getRandomValues(a); for(var i = 0; i < a.length; i++) s += (a[i] % 36).toString(36); return "v" + s + Date.now().toString(36).slice(-4); };
 var ensureSid = function(){ if(!SID){ SID = newSid(); try { localStorage.setItem("vr_sid", SID); } catch(e){} } return SID; };
-var cadd = function(who, text, at){ var t = at ? new Date(at) : new Date(), hh = ("0" + t.getHours()).slice(-2) + ":" + ("0" + t.getMinutes()).slice(-2);
+var cadd = function(who, text, at){ if(who === "system"){ var sy = document.createElement("div"); sy.className = "vr-sys"; sy.textContent = text; CM.appendChild(sy); CM.scrollTop = CM.scrollHeight; return; } var t = at ? new Date(at) : new Date(), hh = ("0" + t.getHours()).slice(-2) + ":" + ("0" + t.getMinutes()).slice(-2);
   var l = document.createElement("div"); l.className = "vr-who" + (who === "user" ? " r" : ""); l.textContent = (who === "user" ? "Вы" : "Менеджер") + " · " + hh;
   var d = document.createElement("div"); d.className = "vr-b " + (who === "user" ? "vr-u" : "vr-a"); d.innerHTML = fmt(text); CM.appendChild(l); CM.appendChild(d); CM.scrollTop = CM.scrollHeight; };
 function pull(show){
@@ -115,17 +122,20 @@ var loaded = false;
 function showPick(){ stopPoll(); box.classList.remove("mgr"); box.classList.add("pick"); }
 function tabTo(w){
   box.classList.remove("pick"); curTab = w; box.classList.toggle("mgr", w === "mgr"); [].forEach.call(TB, function(b){ b.classList.toggle("on", b.getAttribute("data-tb") === w); });
-  if(w === "mgr"){ if(!loaded){ loaded = true; pull(true).then(function(){ CM.scrollTop = CM.scrollHeight; }); } else pull(true); unread(false); startPoll(); try { CT.focus(); } catch(e){} }
+  if(w === "mgr"){ setPre(); if(!loaded){ loaded = true; pull(true).then(function(){ CM.scrollTop = CM.scrollHeight; }); } else pull(true); unread(false); startPoll(); try { (NAME && EMAIL ? CT : PRE.querySelector("input")).focus(); } catch(e){} }
   else { stopPoll(); try { TA.focus(); } catch(e){} }
 }
 [].forEach.call(box.querySelectorAll(".vr-pc"), function(b){ b.onclick = function(){ tabTo(b.getAttribute("data-pk")); }; });
 [].forEach.call(TB, function(b){ b.onclick = function(){ tabTo(b.getAttribute("data-tb")); }; });
+PRE.onsubmit = function(e){ e.preventDefault(); var n = PRE.n.value.trim(), m = PRE.e.value.trim(), er = PRE.querySelector(".e");
+  if(n.length < 2){ er.textContent = "Укажите имя"; return; } if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(m)){ er.textContent = "Проверьте e-mail, например name@mail.ru"; return; }
+  er.textContent = ""; NAME = n; EMAIL = m; try { localStorage.setItem("vr_n", n); localStorage.setItem("vr_e", m); } catch(x){} setPre(); try { CT.focus(); } catch(x){} };
 CF.onsubmit = function(e){ e.preventDefault(); sendMgr(); };
 CT.addEventListener("keydown", function(e){ if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); sendMgr(); } });
 CT.addEventListener("input", function(){ CT.style.height = "42px"; CT.style.height = Math.min(96, CT.scrollHeight) + "px"; });
 function sendMgr(){
   var t = CT.value.trim(); if(!t || CS.disabled) return; ensureSid(); CS.disabled = true;
-  fetch("/api/chat", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({sid: SID, text: t})})
+  fetch("/api/chat", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({sid: SID, text: t, name: NAME, email: EMAIL})})
     .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(d){ if(!r.ok) throw new Error(d.error || "Не удалось отправить"); return d; }); })
     .then(function(d){ seenIds[d.id] = 1; if(d.at > lastAt) lastAt = d.at; cadd("user", t, d.at); CT.value = ""; CT.style.height = "42px"; })
     .catch(function(e){ var n = document.createElement("div"); n.className = "vr-note"; n.textContent = e.message || "Не удалось отправить, попробуйте ещё раз"; CM.appendChild(n); CM.scrollTop = CM.scrollHeight; })

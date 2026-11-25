@@ -214,14 +214,19 @@ function parseBase(text, defaultBase){
                 if(limited("chatget:" + ip, 90, 60e3)) return json(res, 429, {error: "Слишком часто"});
                 const sid = u.searchParams.get("sid"), after = String(u.searchParams.get("after") || ""); if(!okSid(sid)) return json(res, 200, {msgs: []});
                 const rows = await q(`SELECT id, who, text, at FROM chat_msgs WHERE sid = $1 AND at > $2 ORDER BY at LIMIT 100`, [sid, /^\d{4}-/.test(after) ? after : ""]);
-                return json(res, 200, {msgs: rows});
+                const inf = await one(`SELECT status FROM chat_info WHERE sid = $1`, [sid]);
+                return json(res, 200, {msgs: rows, closed: !!inf && inf.status === "closed"});
             }
             if(req.method === "POST"){
                 if(limited("chat:" + ip, 25, 600e3) || limited("chatd:" + ip, 200, 864e5)) return json(res, 429, {error: "Слишком много сообщений — подождите немного"});
-                const b = await body(req, 4000), sid = String(b.sid || ""), text = clean(b.text, 1000); if(!okSid(sid)) return json(res, 400, {error: "Обновите страницу"}); if(text.length < 1) return json(res, 400, {error: "Напишите сообщение"});
-                const last = await one(`SELECT at FROM chat_msgs WHERE sid = $1 ORDER BY at DESC LIMIT 1`, [sid]), fresh = !last || Date.now() - Date.parse(last.at) > 30 * 60e3;
+                const b = await body(req, 4000), sid = String(b.sid || ""), text = clean(b.text, 1000), name = clean(b.name, 80), email = clean(b.email, 120).toLowerCase();
+                if(!okSid(sid)) return json(res, 400, {error: "Обновите страницу"}); if(text.length < 1) return json(res, 400, {error: "Напишите сообщение"});
+                if(name.length < 2) return json(res, 400, {error: "Укажите ваше имя"}); if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return json(res, 400, {error: "Укажите e-mail, например name@mail.ru"});
+                const inf = await one(`SELECT status FROM chat_info WHERE sid = $1`, [sid]), reopened = !!inf && inf.status === "closed";
+                await q(`DELETE FROM chat_info WHERE sid = $1`, [sid]); await q(`INSERT INTO chat_info(sid, name, email, status, upd) VALUES($1, $2, $3, 'open', $4)`, [sid, name, email, now()]);
+                const last = await one(`SELECT at FROM chat_msgs WHERE sid = $1 ORDER BY at DESC LIMIT 1`, [sid]), fresh = reopened || !last || Date.now() - Date.parse(last.at) > 30 * 60e3;
                 const id = uuid(), at = now(); await q(`INSERT INTO chat_msgs(id, sid, who, text, at) VALUES($1, $2, 'user', $3, $4)`, [id, sid, text, at]);
-                const note = `💬 Чат с сайта · #${sid.slice(0, 8)}\n${text}\n\nОтветить: ответом из бота или CRM → «Чаты»`;
+                const note = `${reopened ? "🔄 Чат открыт снова" : "💬 Чат с сайта"} · ${name} (${email}) · #${sid.slice(0, 8)}\n${text}\n\nОтветить или закрыть чат — кнопками в боте или CRM → «Чаты»`;
                 (fresh ? Mail.owner(note, "chat:" + sid) : Mail.toBot(note, "chat:" + sid)).catch(() => {});
                 return json(res, 200, {ok: true, id, at});
             }
@@ -569,13 +574,22 @@ function parseBase(text, defaultBase){
         if(req.method === "GET" && p === "/chats"){
             const rows = await q(`SELECT sid, who, text, at FROM chat_msgs ORDER BY at DESC LIMIT 2000`), seen = new Map();
             for(const r of rows){ const c = seen.get(r.sid) || {sid: r.sid, last_who: r.who, last_text: String(r.text).slice(0, 120), last_at: r.at, n: 0}; c.n++; seen.set(r.sid, c); }
-            return json(res, 200, {chats: [...seen.values()].slice(0, 100)});
+            const inf = Object.fromEntries((await q(`SELECT sid, name, email, status FROM chat_info`)).map(x => [x.sid, x]));
+            return json(res, 200, {chats: [...seen.values()].slice(0, 100).map(c => ({...c, name: inf[c.sid]?.name || "", email: inf[c.sid]?.email || "", status: inf[c.sid]?.status || "open"}))});
         }
-        if(req.method === "GET" && (m = p.match(/^\/chats\/([a-z0-9]{10,24})$/))) return json(res, 200, {msgs: await q(`SELECT id, who, text, at FROM chat_msgs WHERE sid = $1 ORDER BY at LIMIT 300`, [m[1]])});
+        if(req.method === "GET" && (m = p.match(/^\/chats\/([a-z0-9]{10,24})$/))) return json(res, 200, {msgs: await q(`SELECT id, who, text, at FROM chat_msgs WHERE sid = $1 ORDER BY at LIMIT 300`, [m[1]]), info: await one(`SELECT name, email, status FROM chat_info WHERE sid = $1`, [m[1]])});
         if(req.method === "POST" && (m = p.match(/^\/chats\/([a-z0-9]{10,24})\/reply$/))){
             const sid = m[1], text = clean((await body(req, 4000)).text, 1500); if(text.length < 1) return json(res, 400, {error: "Напишите ответ"});
             if(!(await one(`SELECT 1 AS x FROM chat_msgs WHERE sid = $1 LIMIT 1`, [sid]))) return json(res, 404, {error: "Чат не найден"});
             await q(`INSERT INTO chat_msgs(id, sid, who, text, at) VALUES($1, $2, 'admin', $3, $4)`, [uuid(), sid, text, now()]);
+            await q(`UPDATE chat_info SET status = 'open', upd = $1 WHERE sid = $2`, [now(), sid]);
+            return json(res, 200, {ok: true});
+        }
+        if(req.method === "POST" && (m = p.match(/^\/chats\/([a-z0-9]{10,24})\/close$/))){          // «Спасибо за обращение, чат закрыт» — одной кнопкой; если моряк напишет снова, чат откроется
+            const sid = m[1]; if(!(await one(`SELECT 1 AS x FROM chat_msgs WHERE sid = $1 LIMIT 1`, [sid]))) return json(res, 404, {error: "Чат не найден"});
+            const inf = await one(`SELECT status FROM chat_info WHERE sid = $1`, [sid]); if(inf && inf.status === "closed") return json(res, 200, {ok: true, already: true});
+            await q(`INSERT INTO chat_msgs(id, sid, who, text, at) VALUES($1, $2, 'system', $3, $4)`, [uuid(), sid, "Спасибо за ваше обращение! Данный чат закрыт.", now()]);
+            if(inf) await q(`UPDATE chat_info SET status = 'closed', upd = $1 WHERE sid = $2`, [now(), sid]); else await q(`INSERT INTO chat_info(sid, name, email, status, upd) VALUES($1, '', '', 'closed', $2)`, [sid, now()]);
             return json(res, 200, {ok: true});
         }
         if(req.method === "POST" && p === "/settle"){
@@ -799,7 +813,7 @@ function parseBase(text, defaultBase){
                 const rest = u.pathname.slice("/api/hook".length);
                 if(req.method === "GET" && rest === "/crm-link") return json(res, 200, {link: SEC.link()});
                 if(req.method === "POST" && rest === "/crm-rotate"){ await SEC.rotate(true); return json(res, 200, {link: SEC.link()}); }
-                if(!/^\/(orders|orders\/[\w-]+|orders\/[\w-]+\/(confirm|cancel|note|reply|email-ok|cover-skip)|chats|chats\/[a-z0-9]{10,24}|chats\/[a-z0-9]{10,24}\/reply|jobs\/[\w-]+|jobs\/[\w-]+\/(pause|resume|stop|retry))$/.test(rest)) return json(res, 404, {error: "not found"});
+                if(!/^\/(orders|orders\/[\w-]+|orders\/[\w-]+\/(confirm|cancel|note|reply|email-ok|cover-skip)|chats|chats\/[a-z0-9]{10,24}|chats\/[a-z0-9]{10,24}\/(reply|close)|jobs\/[\w-]+|jobs\/[\w-]+\/(pause|resume|stop|retry))$/.test(rest)) return json(res, 404, {error: "not found"});
                 if(req.method === "GET" && /^\/jobs\/[\w-]+$/.test(rest)){ const j = await one(`SELECT id, order_id, m, status FROM jobs WHERE id = $1`, [rest.slice(6)]); return j ? json(res, 200, j) : json(res, 404, {error: "нет задания"}); }
                 const u2 = new URL(u); u2.pathname = "/crm/api" + rest; u2.viaBot = true;
                 return await crmApi(req, res, u2);
