@@ -14,14 +14,14 @@ const VESSELS = ["Офшорные суда", "Контейнеровозы", "�
 const ld = o => `<script type="application/ld+json">${JSON.stringify(o).replace(/</g, "\\u003c")}</script>`;
 const ORG = () => ({"@type": "Organization", "@id": siteUrl() + "/#org", name: "Vreise.ru", url: siteUrl() + "/", logo: {"@type": "ImageObject", url: siteUrl() + "/static/icon-192.png", width: 192, height: 192}, areaServed: "RU", availableLanguage: "ru"});
 /* Общая «шапка» страницы: title, description, keywords, canonical, hreflang, Open Graph, Twitter, JSON-LD (всё на русском). */
-function shell({title, desc, body, path = "/", hero = "", noindex = false, scripts = "", keywords = "", ogType = "website", published = "", modified = "", jsonld = []}){
-    const url = siteUrl() + path, img = siteUrl() + "/static/hero.jpg", alt = "Vreise.ru — рассылка резюме моряков в крюинговые компании";
+function shell({title, desc, body, path = "/", hero = "", noindex = false, scripts = "", keywords = "", ogType = "website", published = "", modified = "", jsonld = [], image = null}){
+    const url = siteUrl() + path, img = siteUrl() + (image ? image.src : "/static/hero.jpg"), alt = image ? image.alt : "Vreise.ru — рассылка резюме моряков в крюинговые компании", iw = image ? image.w : 1500, ih = image ? image.h : 1303;
     return `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)}</title><meta name="description" content="${esc(desc)}">${keywords ? `\n<meta name="keywords" content="${esc(keywords)}">` : ""}
 <meta name="author" content="Vreise.ru"><meta name="format-detection" content="telephone=no">
 ${noindex ? '<meta name="robots" content="noindex,nofollow">' : `<meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1"><link rel="canonical" href="${esc(url)}"><link rel="alternate" hreflang="ru" href="${esc(url)}"><link rel="alternate" hreflang="x-default" href="${esc(url)}">`}
 <meta property="og:type" content="${ogType}"><meta property="og:site_name" content="Vreise.ru"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(desc)}"><meta property="og:url" content="${esc(url)}"><meta property="og:locale" content="ru_RU">
-<meta property="og:image" content="${esc(img)}"><meta property="og:image:width" content="1500"><meta property="og:image:height" content="1303"><meta property="og:image:alt" content="${esc(alt)}">${published ? `<meta property="article:published_time" content="${esc(published)}"><meta property="article:modified_time" content="${esc(modified || published)}"><meta property="article:author" content="Vreise.ru"><meta property="article:section" content="Блог для моряков">` : ""}
+<meta property="og:image" content="${esc(img)}"><meta property="og:image:width" content="${iw}"><meta property="og:image:height" content="${ih}"><meta property="og:image:alt" content="${esc(alt)}">${published ? `<meta property="article:published_time" content="${esc(published)}"><meta property="article:modified_time" content="${esc(modified || published)}"><meta property="article:author" content="Vreise.ru"><meta property="article:section" content="Блог для моряков">` : ""}
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(desc)}"><meta name="twitter:image" content="${esc(img)}"><meta name="twitter:image:alt" content="${esc(alt)}">
 <link rel="icon" type="image/png" href="/static/favicon.png"><link rel="apple-touch-icon" href="/static/icon-192.png"><meta name="theme-color" content="#0A3340">
 <link rel="stylesheet" href="/static/style.css?v=${V}">${noindex ? "" : jsonld.map(ld).join("")}</head><body>
@@ -379,10 +379,10 @@ function blogArticle(slug){
     const body = `<div class="page blog">${crumbsHtml([["/", "Главная"], ["/blog", "Блог"], [null, a.h1]])}<h1>${esc(a.h1)}</h1><p class="sub">${esc(a.lead)}</p>
 <article class="prose">${a.html}${B.CTA}<div class="faq blog-faq"><h2>Частые вопросы</h2>${faq}</div><div class="also"><h2>Читайте также</h2>${also}</div></article></div>`;
     const url = siteUrl() + "/blog/" + slug;
-    return shell({title: a.t, desc: a.d, keywords: a.kw, path: "/blog/" + slug, ogType: "article", published: a.date, modified: a.date, hero: `<header class="hero short">${navTop(false)}</header>`, body, jsonld: [
+    return shell({title: a.t, desc: a.d, keywords: a.kw, path: "/blog/" + slug, ogType: "article", image: a.img || null, published: a.date, modified: a.date, hero: `<header class="hero short">${navTop(false)}</header>`, body, jsonld: [
         crumbLd([["/", "Главная"], ["/blog", "Блог"], ["/blog/" + slug, a.h1]]),
         {"@context": "https://schema.org", "@type": "Article", headline: a.h1, description: a.d, inLanguage: "ru-RU", datePublished: a.date, dateModified: a.date, mainEntityOfPage: {"@type": "WebPage", "@id": url}, url,
-            keywords: a.kw, image: [siteUrl() + "/static/hero.jpg"], author: {"@type": "Organization", name: "Vreise.ru", url: siteUrl() + "/"}, publisher: {"@type": "Organization", name: "Vreise.ru", logo: {"@type": "ImageObject", url: siteUrl() + "/static/icon-192.png"}}},
+            keywords: a.kw, image: [siteUrl() + (a.img ? a.img.src : "/static/hero.jpg")], author: {"@type": "Organization", name: "Vreise.ru", url: siteUrl() + "/"}, publisher: {"@type": "Organization", name: "Vreise.ru", logo: {"@type": "ImageObject", url: siteUrl() + "/static/icon-192.png"}}},
         {"@context": "https://schema.org", "@type": "FAQPage", mainEntity: a.faq.map(([q, an]) => ({"@type": "Question", name: q, acceptedAnswer: {"@type": "Answer", text: an}}))}]});
 }
 

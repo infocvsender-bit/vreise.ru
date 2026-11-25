@@ -226,6 +226,7 @@ function parseBase(text, defaultBase){
                 await q(`DELETE FROM chat_info WHERE sid = $1`, [sid]); await q(`INSERT INTO chat_info(sid, name, email, status, upd) VALUES($1, $2, $3, 'open', $4)`, [sid, name, email, now()]);
                 const last = await one(`SELECT at FROM chat_msgs WHERE sid = $1 ORDER BY at DESC LIMIT 1`, [sid]), fresh = reopened || !last || Date.now() - Date.parse(last.at) > 30 * 60e3;
                 const id = uuid(), at = now(); await q(`INSERT INTO chat_msgs(id, sid, who, text, at) VALUES($1, $2, 'user', $3, $4)`, [id, sid, text, at]);
+                await q(`INSERT INTO chat_contacts(email, name, first_at, last_at, chats, msgs, last_sid) VALUES($1, $2, $3, $3, 1, 1, $4) ON CONFLICT(email) DO UPDATE SET name = excluded.name, last_at = excluded.last_at, msgs = chat_contacts.msgs + 1, chats = chat_contacts.chats + $5, last_sid = excluded.last_sid`, [email, name, at, sid, last ? 0 : 1]).catch(e => console.error("chat_contacts:", e.message));
                 const note = `${reopened ? "🔄 Чат открыт снова" : "💬 Чат с сайта"} · ${name} (${email}) · #${sid.slice(0, 8)}\n${text}\n\nОтветить или закрыть чат — кнопками в боте или CRM → «Чаты»`;
                 (fresh ? Mail.owner(note, "chat:" + sid) : Mail.toBot(note, "chat:" + sid)).catch(() => {});
                 return json(res, 200, {ok: true, id, at});
@@ -577,6 +578,8 @@ function parseBase(text, defaultBase){
             const inf = Object.fromEntries((await q(`SELECT sid, name, email, status FROM chat_info`)).map(x => [x.sid, x]));
             return json(res, 200, {chats: [...seen.values()].slice(0, 100).map(c => ({...c, name: inf[c.sid]?.name || "", email: inf[c.sid]?.email || "", status: inf[c.sid]?.status || "open"}))});
         }
+        if(req.method === "GET" && p === "/chats/contacts") return json(res, 200, {contacts: await q(`SELECT email, name, first_at, last_at, chats, msgs, last_sid FROM chat_contacts ORDER BY last_at DESC LIMIT 5000`)});
+        if(req.method === "POST" && p === "/chats/contacts/delete"){ const em = clean((await body(req, 1000)).email, 120).toLowerCase(); await q(`DELETE FROM chat_contacts WHERE email = $1`, [em]); return json(res, 200, {ok: true}); }
         if(req.method === "GET" && (m = p.match(/^\/chats\/([a-z0-9]{10,24})$/))) return json(res, 200, {msgs: await q(`SELECT id, who, text, at FROM chat_msgs WHERE sid = $1 ORDER BY at LIMIT 300`, [m[1]]), info: await one(`SELECT name, email, status FROM chat_info WHERE sid = $1`, [m[1]])});
         if(req.method === "POST" && (m = p.match(/^\/chats\/([a-z0-9]{10,24})\/reply$/))){
             const sid = m[1], text = clean((await body(req, 4000)).text, 1500); if(text.length < 1) return json(res, 400, {error: "Напишите ответ"});

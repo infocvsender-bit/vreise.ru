@@ -115,7 +115,14 @@
         }
         if(js.length && o.total) b.push('<div class="kb-prog"><i style="width:' + pct + '%"></i></div>' + pill("", "📨 Отправлено <b>" + pct + "%</b> · " + o.sent.toLocaleString("ru-RU") + " из " + o.total.toLocaleString("ru-RU")));
         if(pause) b.push(pill("warn", "⏸ Рассылка на паузе"));
-        if(wait.length && !run.length) b.push(pill("", "📅 Старт: " + wait.map(function(j){ return dt(j.start_at); }).join(", ")));
+        if(o.base){   /* рассылки 1-2-3 прямо в карточке: дата и время старта, статус и % */
+            var n = Math.max(1, Math.min(3, Number(o.times) || 1)), L = "";
+            for(var m = 1; m <= n; m++){
+                var j = js.filter(function(x){ return x.m === m; })[0], st = !j ? "" : j.status === "run" ? " · идёт" + (j.total ? " " + Math.round((j.sent + j.failed) / j.total * 100) + "%" : "") : j.status === "pause" ? " · ⏸ пауза" : j.status === "done" ? " · ✅ готово" : j.status === "stop" ? " · остановлена" : j.status === "cancel" || j.status === "cancelled" ? " · отменена" : j.status === "wait" ? " · ждёт" : "";
+                L += '<div class="kb-m"><b>' + m + "</b> " + mailDate(o, m).replace(/^(\d+\.\d+)\.\d{4}/, "$1") + st + "</div>";
+            }
+            b.push('<div class="kb-ms"><span class="mut">Рассылки</span>' + L + "</div>");
+        }
         if(o.replies) b.push(pill("ok", "💬 Ответов компаний: " + o.replies));
         var ti = [o.position, o.vessel].filter(Boolean).join(" · ");
         return '<div class="kb-c" data-id="' + o.id + '"><button class="kb-del" data-del="' + o.id + '" data-num="' + o.num + '" title="Удалить заказ" type="button">🗑</button><div class="kb-h"><span>№' + o.num + (o.base ? " · 📨" : "") + (o.kind === "cv" ? " · 📄" : "") + "</span><b class=\"kb-pr\">" + rub(o.price) + "</b></div>" +
@@ -300,10 +307,30 @@
 
 
     /* ---------- чаты с моряками ---------- */
-    var chatSid = "";
+    var chatSid = "", chatView = "chats", cQ = "";
+    function csvCell(v){ v = String(v == null ? "" : v); return /[";\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+    function contactsTab(){
+        api("/chats/contacts").then(function(d){
+            var all = d.contacts, qq = cQ.toLowerCase(), rows = all.filter(function(c){ return !qq || (c.email + " " + (c.name || "")).toLowerCase().indexOf(qq) >= 0; });
+            view.innerHTML = chatSwitch() + '<div class="panel"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px"><input class="in" id="cq" placeholder="Поиск по имени или e-mail" value="' + esc(cQ) + '" style="max-width:320px"><span class="mut">Всего: ' + all.length + (qq ? " · найдено " + rows.length : "") + '</span><button class="btn gold sm" id="ccsv" type="button">⬇ Excel (CSV)</button></div>' +
+                (rows.length ? '<div style="overflow:auto"><table class="t"><thead><tr><th>Имя</th><th>E-mail</th><th>Первое обращение</th><th>Последнее</th><th>Чатов</th><th>Сообщ.</th><th></th></tr></thead><tbody>' + rows.map(function(c, i){ return '<tr><td><b>' + esc(c.name || "—") + '</b></td><td>' + esc(c.email) + '</td><td>' + dt(c.first_at) + '</td><td>' + dt(c.last_at) + '</td><td>' + c.chats + '</td><td>' + c.msgs + '</td><td style="white-space:nowrap"><button class="btn sm" data-o="' + i + '" type="button">Открыть чат</button> <button class="btn sm" data-d="' + i + '" type="button" title="Удалить из списка">🗑</button></td></tr>'; }).join("") + '</tbody></table></div>' : '<p class="mut">Контактов пока нет: имя и e-mail попадают сюда, когда моряк пишет в чат.</p>') + '</div>';
+            bindSwitch();
+            var qi = document.getElementById("cq"); qi.oninput = function(){ cQ = qi.value; clearTimeout(contactsTab.t); contactsTab.t = setTimeout(function(){ contactsTab(); var n = document.getElementById("cq"); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 300); };
+            [].forEach.call(view.querySelectorAll("[data-o]"), function(b){ b.onclick = function(){ chatSid = rows[+b.getAttribute("data-o")].last_sid || ""; chatView = "chats"; chatsTab(); }; });
+            [].forEach.call(view.querySelectorAll("[data-d]"), function(b){ b.onclick = function(){ var c = rows[+b.getAttribute("data-d")]; if(confirm("Удалить контакт " + c.email + " из списка? Сами чаты останутся.")) api("/chats/contacts/delete", {body: {email: c.email}}).then(contactsTab).catch(alertErr); }; });
+            document.getElementById("ccsv").onclick = function(){
+                var csv = ["Имя;E-mail;Первое обращение;Последнее обращение;Чатов;Сообщений"].concat(all.map(function(c){ return [c.name, c.email, c.first_at, c.last_at, c.chats, c.msgs].map(csvCell).join(";"); })).join("\r\n");
+                var a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["\ufeff" + csv], {type: "text/csv;charset=utf-8"})); a.download = "kontakty-chat-vreise-" + new Date().toISOString().slice(0, 10) + ".csv"; a.click();
+            };
+        }).catch(alertErr);
+    }
+    function chatSwitch(){ return '<div style="display:flex;gap:8px;margin-bottom:12px"><button class="btn sm' + (chatView === "chats" ? " gold" : "") + '" data-cv="chats" type="button">💬 Чаты</button><button class="btn sm' + (chatView === "contacts" ? " gold" : "") + '" data-cv="contacts" type="button">👥 Контакты (имя и e-mail)</button></div>'; }
+    function bindSwitch(){ [].forEach.call(view.querySelectorAll("[data-cv]"), function(b){ b.onclick = function(){ chatView = b.getAttribute("data-cv"); chatView === "contacts" ? contactsTab() : chatsTab(); }; }); }
     function chatsTab(){
+        if(chatView === "contacts") return contactsTab();
         api("/chats").then(function(d){
-            view.innerHTML = '<div class="chs"><div class="chl">' + (d.chats.length ? d.chats.map(function(c){ return '<div class="chi' + (c.sid === chatSid ? " on" : "") + (c.last_who === "user" ? " w" : "") + '" data-s="' + c.sid + '"><b>' + esc(c.name || "#" + c.sid.slice(0, 8)) + " · " + dt(c.last_at) + (c.status === "closed" ? " · ✅ закрыт" : c.last_who === "user" ? " · ждёт ответа" : "") + "</b><span>" + esc((c.last_who === "user" ? "" : c.last_who === "admin" ? "Вы: " : "") + c.last_text) + "</span></div>"; }).join("") : '<div class="mut" style="padding:14px">Чатов пока нет</div>') + '</div><div class="panel" id="chv"><p class="mut">Выберите чат слева</p></div></div>';
+            view.innerHTML = chatSwitch() + '<div class="chs"><div class="chl">' + (d.chats.length ? d.chats.map(function(c){ return '<div class="chi' + (c.sid === chatSid ? " on" : "") + (c.last_who === "user" ? " w" : "") + '" data-s="' + c.sid + '"><b>' + esc(c.name || "#" + c.sid.slice(0, 8)) + " · " + dt(c.last_at) + (c.status === "closed" ? " · ✅ закрыт" : c.last_who === "user" ? " · ждёт ответа" : "") + "</b><span>" + esc((c.last_who === "user" ? "" : c.last_who === "admin" ? "Вы: " : "") + c.last_text) + "</span></div>"; }).join("") : '<div class="mut" style="padding:14px">Чатов пока нет</div>') + '</div><div class="panel" id="chv"><p class="mut">Выберите чат слева</p></div></div>';
+            bindSwitch();
             [].forEach.call(view.querySelectorAll(".chi"), function(r){ r.onclick = function(){ chatSid = r.getAttribute("data-s"); chatsTab(); }; });
             if(!chatSid) return;
             api("/chats/" + chatSid).then(function(m){
@@ -334,6 +361,6 @@
     [].forEach.call(document.querySelectorAll("#tabs button"), function(b){ b.onclick = function(){
         tab = b.getAttribute("data-t"); [].forEach.call(document.querySelectorAll("#tabs button"), function(x){ x.classList.toggle("on", x === b); }); show(); }; });
     show();
-    setInterval(function(){ if(tab === "chats" && document.activeElement && document.activeElement.tagName !== "TEXTAREA") chatsTab(); }, 20000);
+    setInterval(function(){ if(tab === "chats" && chatView === "chats" && document.activeElement && document.activeElement.tagName !== "TEXTAREA") chatsTab(); }, 20000);
     setInterval(function(){ if(tab === "orders" && document.activeElement && document.activeElement.id !== "q" && view.querySelector(".flt")) orders(); }, 60000);
 })();

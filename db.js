@@ -53,11 +53,13 @@ module.exports = async function openDb(){
         `CREATE TABLE IF NOT EXISTS chat_msgs(id TEXT PRIMARY KEY, sid TEXT NOT NULL, who TEXT NOT NULL, text TEXT NOT NULL, at TEXT NOT NULL)`,
         `CREATE INDEX IF NOT EXISTS idx_chat_sid ON chat_msgs(sid, at)`,
         `CREATE TABLE IF NOT EXISTS chat_info(sid TEXT PRIMARY KEY, name TEXT, email TEXT, status TEXT NOT NULL DEFAULT 'open', upd TEXT NOT NULL)`,
+        `CREATE TABLE IF NOT EXISTS chat_contacts(email TEXT PRIMARY KEY, name TEXT, first_at TEXT NOT NULL, last_at TEXT NOT NULL, chats INTEGER NOT NULL DEFAULT 1, msgs INTEGER NOT NULL DEFAULT 1, last_sid TEXT)`,
         `CREATE TABLE IF NOT EXISTS reply_fwd(reply_id TEXT PRIMARY KEY, order_id TEXT NOT NULL, comment TEXT, at TEXT NOT NULL)`,
         `CREATE TABLE IF NOT EXISTS mail_log(id TEXT PRIMARY KEY, at TEXT NOT NULL, to_email TEXT, subject TEXT, ok INTEGER NOT NULL, error TEXT)`
     ]) await db.query(s);
     for(const c of ["subject TEXT", "letter_ok TEXT", "email_ok TEXT", "details TEXT", "extra_base TEXT", "cover INTEGER DEFAULT 0", "cover_ok TEXT", "draft_subject TEXT", "draft_letter TEXT", "schedule TEXT", "reply_to TEXT", "res_ok TEXT"]) await db.query(`ALTER TABLE orders ADD COLUMN ${c}`).catch(() => {});
     try { await db.query(`ALTER TABLE replies ADD COLUMN notified TEXT`); await db.query(`UPDATE replies SET notified = created_at`); } catch(e){}     // при первом добавлении колонки старые письма считаем уже показанными
+    await db.query(`INSERT INTO chat_contacts(email, name, first_at, last_at, chats, msgs, last_sid) SELECT i.email, i.name, i.upd, i.upd, 1, 1, i.sid FROM chat_info i WHERE i.email <> '' AND NOT EXISTS (SELECT 1 FROM chat_contacts c WHERE c.email = i.email) GROUP BY i.email`).catch(() => {});     // контакты из уже существующих чатов
     await db.query(`ALTER TABLE jobs ADD COLUMN notif_pct INTEGER NOT NULL DEFAULT 0`).catch(() => {});
     return db;
 };

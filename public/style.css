@@ -233,3 +233,5 @@ textarea.in{font-weight:400}
 .blog-faq{margin-top:30px}.blog-faq h2{margin-top:0}
 .also{margin-top:30px}.also a{display:block;padding:7px 0;color:var(--teal);text-decoration:none;font-weight:600}.also a:hover{text-decoration:underline}.also h2{margin-bottom:6px}
 #blog .bl-grid{margin-top:6px}
+
+.bfig{margin:26px 0;width:min(984px,calc(100vw - 56px));max-width:none}.bfig a{display:block;overflow-x:auto;border-radius:14px;border:1px solid #d9e4e7;box-shadow:0 10px 30px -16px rgba(10,51,64,.35);background:#fff}.bfig img{display:block;width:100%;height:auto;min-width:640px}.bfig figcaption{font-size:14px;color:var(--muted);margin-top:8px;line-height:1.4}
