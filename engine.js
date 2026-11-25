@@ -289,7 +289,7 @@ module.exports = function engine(db){
             finally { if(S) S.close(); }
             if(last >= 0){ await q(`DELETE FROM meta WHERE key = 'inbox_uid'`); await q(`INSERT INTO meta(key, value) VALUES('inbox_uid', $1)`, [String(last)]); }
             await q(`DELETE FROM meta WHERE key = 'inbox_state'`); await q(`INSERT INTO meta(key, value) VALUES('inbox_state', $1)`, [JSON.stringify({at: now(), error: err})]);
-            for(const r of fresh.slice(0, 5)) await Mail.owner(`✉️ Новое письмо на ${env("SYS_SMTP_USER")}\nОт: ${r.name ? r.name + " " : ""}<${r.fromRaw || r.from}>\nТема: ${r.subject || "(без темы)"}\n\n${String(r.text || "").slice(0, 600)}\n\nОтветить — в CRM → «Письма».`).catch(() => {});
+            if(fresh.length) await Mail.owner(`✉️ ${fresh.length > 1 ? "Новые письма (" + fresh.length + ")" : "Новое письмо"} на ${env("SYS_SMTP_USER")} — откройте CRM → «Письма».${fresh.length === 1 ? "\nОт: " + (fresh[0].name || fresh[0].fromRaw || fresh[0].from) : ""}`).catch(() => {});
         } catch(e){ console.error("inbox:", e); } finally { inboxBusy = false; }
     }
     const REPLY_MS = () => { const m = Number(env("REPLY_MIN")); return (m > 0 ? m : 5) * 60e3; };
