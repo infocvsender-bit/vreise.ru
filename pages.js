@@ -1,7 +1,7 @@
 "use strict";
 /* Страницы сайта (HTML на сервере). Только русский язык. */
 const C = require("./catalog.js");
-const {esc, siteUrl, phone, WA, TGL, rub} = require("./mails.js");
+const {esc, siteUrl, phone, WA, TGL, MAXL, rub} = require("./mails.js");
 const V = (String(process.env.RAILWAY_GIT_COMMIT_SHA || "").slice(0, 8)) || String(Date.now());
 const env = k => String(process.env[k] || "").trim();
 
@@ -20,7 +20,7 @@ ${noindex ? '<meta name="robots" content="noindex,nofollow">' : `<link rel="cano
 <link rel="stylesheet" href="/static/style.css?v=${V}"></head><body>
 ${hero}${body}
 <footer class="f"><div class="c"><span>© Vreise.ru</span><span><a href="/policy">Политика конфиденциальности</a><a href="/offer">Публичная оферта</a></span></div></footer>
-<script>window.__vr=${JSON.stringify({wa: WA(), tg: TGL(), phone: phone()}).replace(/</g, "\\u003c")}</script><script src="/static/assistant.js?v=${V}" defer></script>
+<script>window.__vr=${JSON.stringify({wa: WA(), tg: TGL(), mx: MAXL(), phone: phone()}).replace(/</g, "\\u003c")}</script><script src="/static/assistant.js?v=${V}" defer></script>
 ${scripts}</body></html>`;
 }
 
@@ -75,8 +75,8 @@ function home(counts){
 <details><summary>Как быстро начнётся рассылка?</summary><p>Сразу после подтверждения оплаты. Письма уходят постепенно в течение нескольких часов, чтобы не попасть в спам.</p></details>
 <details><summary>Что нужно для резюме «Стандарт»?</summary><p>Заполните форму с вашими данными и приложите документы или старое резюме. Готовое резюме придёт на почту и появится на странице заказа в течение 6 часов после оплаты.</p></details>
 </div></div></section>
-<section class="sec" id="contacts"><div class="c"><div class="contacts"><div><h2>Остались вопросы?</h2><p>Напишите нам — ответим в WhatsApp или Telegram.</p>${phone() ? `<div class="tel">${esc(phone())}</div>` : ""}</div>
-<div class="btns">${WA() ? `<a class="btn gold" href="${WA()}" target="_blank" rel="noopener">WhatsApp</a>` : ""}${TGL() ? `<a class="btn line" href="${TGL()}" target="_blank" rel="noopener">Telegram</a>` : ""}</div></div></div></section>`;
+<section class="sec" id="contacts"><div class="c"><div class="contacts"><div><h2>Остались вопросы?</h2><p>Напишите нам — ответим в WhatsApp, Telegram или Max.</p>${phone() ? `<div class="tel">${esc(phone())}</div>` : ""}</div>
+<div class="btns">${WA() ? `<a class="btn gold" href="${WA()}" target="_blank" rel="noopener">WhatsApp</a>` : ""}${TGL() ? `<a class="btn line" href="${TGL()}" target="_blank" rel="noopener">Telegram</a>` : ""}${MAXL() ? `<a class="btn line" href="${esc(MAXL())}" target="_blank" rel="noopener">Max</a>` : ""}</div></div></div></section>`;
     const scripts = `<script src="/static/site.js?v=${V}" defer></script>`;
     return shell({title: "Vreise.ru — рассылка резюме моряков в крюинговые компании", desc: "Рассылка резюме моряков по базам: Россия, Европа, Офшор, Мир. Резюме «Стандарт» с нуля. Оплата картой в рублях.", hero, body, scripts});
 }

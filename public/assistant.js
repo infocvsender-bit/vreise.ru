@@ -2,7 +2,7 @@
 (function(){
 "use strict";
 if(window.__vrAsst) return; window.__vrAsst = 1;
-var X = window.__vr || {}, WA = X.wa || "", TG = X.tg || "";
+var X = window.__vr || {}, WA = X.wa || "", TG = X.tg || "", MX = X.mx || "";
 var esc = function(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, function(c){ return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]; }); };
 var fmt = function(s){ return esc(s).replace(/(https?:\/\/[^\s<]+[^\s<.,;:!?)])/g, '<a href="$1" target="_blank" rel="noopener">$1</a>').replace(/\n/g, "<br>"); };
 var KEY = "vr_asst", H = [];
@@ -11,6 +11,7 @@ var save = function(){ try { sessionStorage.setItem(KEY, JSON.stringify(H.slice(
 var ICO = {
   wa: '<svg viewBox="0 0 32 32" width="28" height="28" fill="#fff"><path d="M16 3a13 13 0 0 0-11.2 19.6L3 29l6.6-1.7A13 13 0 1 0 16 3zm0 23.7a10.7 10.7 0 0 1-5.5-1.5l-.4-.2-3.9 1 1-3.8-.3-.4A10.7 10.7 0 1 1 16 26.7zm5.9-8c-.3-.2-1.9-.9-2.2-1s-.5-.2-.7.2-.8 1-1 1.2-.4.2-.7.1a8.8 8.8 0 0 1-4.4-3.8c-.3-.6.3-.5 1-1.7.1-.2 0-.4 0-.5l-1-2.4c-.3-.6-.5-.5-.7-.5h-.6a1.2 1.2 0 0 0-.9.4 3.6 3.6 0 0 0-1.1 2.7c0 1.6 1.2 3.2 1.3 3.4s2.300 3.700 5.700 5.100c2.100.9 2.900.9 3.400.8.500-.1 1.900-.8 2.200-1.500s.3-1.400.2-1.500-.3-.2-.6-.4z"/></svg>',
   tg: '<svg viewBox="0 0 32 32" width="26" height="26" fill="#fff"><path d="M26.7 6.3 3.9 15.1c-1.6.6-1.5 1.5-.3 1.9l5.8 1.8 2.2 6.9c.3.8.5 1.1 1 1.1s.7-.2 1-.5l2.8-2.7 5.8 4.3c1.1.6 1.8.3 2.1-1l3.8-17.9c.4-1.6-.6-2.3-1.4-1.7zM12.4 19.1l11.5-7.3c.6-.3.5.1.3.3l-9.7 8.8-.4 4.2-1.7-6z"/></svg>',
+  mx: '<svg viewBox="0 0 32 32" width="26" height="26" fill="#fff"><path d="M16 3C8.8 3 3 8.2 3 15c0 3.6 1.6 6.6 4.2 8.7-.1 1.5-.6 2.9-1.6 4.1 2.2-.1 4-.9 5.4-2 1.6.5 3.3.8 5 .8 7.2 0 13-5.2 13-12S23.2 3 16 3zm-5 16.5V11h2l3 4.6 3-4.6h2v8.5h-2v-5l-3 4.5-3-4.5v5z"/></svg>',
   ai: '<svg viewBox="0 0 32 32" width="26" height="26" fill="none" stroke="#0B3641" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8h20a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3H15l-6 5v-5H6a3 3 0 0 1-3-3v-9a3 3 0 0 1 3-3z"/><circle cx="11" cy="15.5" r="1" fill="#0B3641"/><circle cx="16" cy="15.5" r="1" fill="#0B3641"/><circle cx="21" cy="15.5" r="1" fill="#0B3641"/></svg>'
 };
 var CHIPS = ["Сколько стоит рассылка?", "Как работает рассылка резюме?", "Как оплатить?", "Что такое персональное письмо?"];
@@ -19,7 +20,7 @@ st.textContent = '\
 .vr-fc{position:fixed;right:16px;bottom:22px;z-index:60;display:flex;flex-direction:column;gap:12px;align-items:center}\
 .vr-fc a,.vr-fc button{width:56px;height:56px;border-radius:50%;border:0;display:grid;place-items:center;cursor:pointer;box-shadow:0 10px 26px rgba(7,32,40,.32);transition:transform .18s;text-decoration:none;position:relative}\
 .vr-fc a:hover,.vr-fc button:hover{transform:translateY(-3px) scale(1.04)}\
-.vr-fc .wa{background:#25d366}.vr-fc .tg{background:#229ed9}.vr-fc .ai{background:#F2B400;width:62px;height:62px}\
+.vr-fc .wa{background:#25d366}.vr-fc .tg{background:#229ed9}.vr-fc .mx{background:linear-gradient(135deg,#3b7cff,#8a4bff)}.vr-fc .ai{background:#F2B400;width:62px;height:62px}\
 .vr-fc .ai:after{content:"";position:absolute;inset:-5px;border-radius:50%;border:2px solid rgba(242,180,0,.55);animation:vrp 2.4s ease-out infinite}\
 @keyframes vrp{0%{transform:scale(.92);opacity:.9}100%{transform:scale(1.25);opacity:0}}\
 .vr-fc [data-tip]:before{content:attr(data-tip);position:absolute;right:calc(100% + 10px);top:50%;transform:translateY(-50%);background:#fff;color:#0B3641;box-shadow:0 6px 18px rgba(7,32,40,.3);font:700 13px/1 Inter,Arial,sans-serif;padding:9px 12px;border-radius:9px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .15s}\
@@ -42,19 +43,20 @@ st.textContent = '\
 .vr-f button{border:0;border-radius:12px;background:#F2B400;color:#0B3641;font:700 14px Inter,Arial,sans-serif;padding:0 15px;cursor:pointer}.vr-f button:disabled{opacity:.5;cursor:default}\
 .vr-tease{position:fixed;right:88px;bottom:30px;z-index:62;max-width:220px;background:#fff;color:#17303a;border-radius:14px 14px 4px 14px;padding:11px 28px 11px 13px;font:600 13.5px/1.35 Inter,Arial,sans-serif;box-shadow:0 10px 30px rgba(7,32,40,.3);cursor:pointer;animation:vrup .25s ease-out}.vr-tease u{position:absolute;right:7px;top:3px;text-decoration:none;font-size:18px;color:#8aa0a7;padding:2px 4px}\
 body.vr-open .vr-fc,body.vr-open .vr-tease{display:none}\
-@media(max-width:700px){.vr-fc .wa,.vr-fc .tg{display:none}.vr-fc{right:10px;bottom:84px;gap:10px}.vr-fc a,.vr-fc button{width:48px;height:48px}.vr-fc .ai{width:52px;height:52px}.vr-fc [data-tip]:before{display:none}.vr-box{right:8px;left:8px;bottom:8px;width:auto;height:calc(100vh - 16px);height:calc(100dvh - 16px)}.vr-tease{right:72px;bottom:90px;max-width:170px}}';
+@media(max-width:700px){.vr-fc .wa,.vr-fc .tg,.vr-fc .mx{display:none}.vr-fc{right:10px;bottom:84px;gap:10px}.vr-fc a,.vr-fc button{width:48px;height:48px}.vr-fc .ai{width:52px;height:52px}.vr-fc [data-tip]:before{display:none}.vr-box{right:8px;left:8px;bottom:8px;width:auto;height:calc(100vh - 16px);height:calc(100dvh - 16px)}.vr-tease{right:72px;bottom:90px;max-width:170px}}';
 document.head.appendChild(st);
 
 var fc = document.createElement("div"); fc.className = "vr-fc";
 fc.innerHTML = (WA ? '<a class="wa" href="' + esc(WA) + '" target="_blank" rel="noopener" aria-label="WhatsApp" data-tip="WhatsApp — менеджер">' + ICO.wa + '</a>' : "") +
   (TG ? '<a class="tg" href="' + esc(TG) + '" target="_blank" rel="noopener" aria-label="Telegram" data-tip="Telegram — менеджер">' + ICO.tg + '</a>' : "") +
+  (MX ? '<a class="mx" href="' + esc(MX) + '" target="_blank" rel="noopener" aria-label="Max" data-tip="Max — менеджер">' + ICO.mx + '</a>' : "") +
   '<button class="ai" type="button" aria-label="Онлайн-помощник" data-tip="Онлайн-помощник">' + ICO.ai + '</button>';
 var bg = document.createElement("div"); bg.className = "vr-bg";
 var box = document.createElement("div"); box.className = "vr-box"; box.setAttribute("role", "dialog"); box.setAttribute("aria-label", "Онлайн-помощник Vreise.ru");
 box.innerHTML = '<div class="vr-h"><div class="t"><b>Онлайн-помощник</b><small>отвечает сразу · 24/7</small></div>' +
   '<button class="vr-ib new" type="button" aria-label="Новый диалог" title="Новый диалог">↺</button><button class="vr-ib x" type="button" aria-label="Закрыть" title="Закрыть">×</button></div>' +
-  '<div class="vr-m"><div class="vr-note">🤖 Я — онлайн-помощник Vreise.ru (бот). Отвечу на вопросы об услугах, ценах, оплате и сроках. Если хотите поговорить с живым менеджером — напишите в WhatsApp или Telegram.</div><div class="vr-chips"></div></div>' +
-  '<div class="vr-mg"><span>Живой менеджер:</span>' + (WA ? '<a class="w" href="' + esc(WA) + '" target="_blank" rel="noopener">WhatsApp</a>' : "") + (TG ? '<a class="g" href="' + esc(TG) + '" target="_blank" rel="noopener">Telegram</a>' : "") + '</div>' +
+  '<div class="vr-m"><div class="vr-note">🤖 Я — онлайн-помощник Vreise.ru (бот). Отвечу на вопросы об услугах, ценах, оплате и сроках. Если хотите поговорить с живым менеджером — напишите в WhatsApp, Telegram или Max.</div><div class="vr-chips"></div></div>' +
+  '<div class="vr-mg"><span>Живой менеджер:</span>' + (WA ? '<a class="w" href="' + esc(WA) + '" target="_blank" rel="noopener">WhatsApp</a>' : "") + (TG ? '<a class="g" href="' + esc(TG) + '" target="_blank" rel="noopener">Telegram</a>' : "") + (MX ? '<a class="g" href="' + esc(MX) + '" target="_blank" rel="noopener">Max</a>' : "") + '</div>' +
   '<form class="vr-f"><textarea rows="1" maxlength="800" placeholder="Напишите вопрос…"></textarea><button type="submit">Отправить</button></form>';
 document.body.appendChild(fc); document.body.appendChild(bg); document.body.appendChild(box);
 var $ = function(s){ return box.querySelector(s); };
