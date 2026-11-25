@@ -26,12 +26,23 @@ ${noindex ? '<meta name="robots" content="noindex,nofollow">' : `<meta name="rob
 <link rel="icon" type="image/png" href="/static/favicon.png"><link rel="apple-touch-icon" href="/static/icon-192.png"><meta name="theme-color" content="#0A3340">
 <link rel="stylesheet" href="/static/style.css?v=${V}">${noindex ? "" : jsonld.map(ld).join("")}</head><body>
 ${hero}${body}
-<footer class="f"><div class="c"><span>© Vreise.ru</span><span><a href="/blog">Блог</a><a href="/policy">Политика конфиденциальности</a><a href="/offer">Публичная оферта</a></span></div></footer>
+${footer()}
 <script>window.__vr=${JSON.stringify({}).replace(/</g, "\\u003c")}</script><script src="/static/assistant.js?v=${V}" defer></script>
 ${scripts}</body></html>`;
 }
 
 const logo = `<a class="brand" href="/"><img src="/static/logo.svg" alt="" width="44" height="44"><span>Vreise<i>.ru</i></span></a>`;
+/* Нижняя часть сайта: описание, разделы, статьи блога, документы и чат. Без телефонов, мессенджеров и ФИО владельца. */
+const FOOT_BLOG = [["kak-sostavit-rezyume-moryaka", "Как собрать резюме по шагам"], ["soprovoditelnoe-pismo-moryaka", "Сопроводительное письмо: три шаблона"], ["kak-napisat-v-kryuing", "Письмо в крюинг: тема и вложение"], ["gde-iskat-rabotu-moryaku", "План поиска работы на 4 недели"]];
+const footer = () => `<footer class="f"><div class="c">
+<div class="fg">
+<div class="fb">${logo}<p>Рассылка резюме моряков в крюинговые компании и резюме «Стандарт». Вы выбираете базу, дату и время старта, а ход рассылки смотрите в личном кабинете.</p><ul class="fchips"><li>Без регистрации и паролей</li><li>Оплата картой в рублях</li></ul></div>
+<div><h4>Сервис</h4><ul><li><a href="/#services">Услуги и цены</a></li><li><a href="/#how">Как это работает</a></li><li><a href="/#pay">Оплата</a></li><li><a href="/order?s=reziume-standart">Резюме «Стандарт»</a></li><li><a href="/#contacts">Контакты</a></li></ul></div>
+<div><h4>Блог</h4><ul>${FOOT_BLOG.filter(([sl]) => B.A[sl]).map(([sl, t]) => `<li><a href="/blog/${sl}">${esc(t)}</a></li>`).join("")}<li><a class="all" href="/blog">Все статьи →</a></li></ul></div>
+<div><h4>Документы и помощь</h4><ul><li><a href="/policy">Политика конфиденциальности</a></li><li><a href="/offer">Публичная оферта</a></li><li><a href="/offer#refund">Условия возврата</a></li></ul><div class="fbtn"><button class="btn gold sm" type="button" onclick="window.VRAsst&&VRAsst.open()">Открыть чат</button><button class="btn line sm" type="button" onclick="window.VRAsst&&VRAsst.open('mgr')">Менеджеру</button></div></div>
+</div>
+<div class="fl"><span>© ${new Date().getFullYear()} Vreise.ru</span><span class="fnote">Мы доставляем резюме компаниям, но не гарантируем трудоустройство и ответы: решение принимает работодатель.</span><a href="#" onclick="window.scrollTo({top:0,behavior:'smooth'});return false">Наверх ↑</a></div>
+</div></footer>`;
 const navTop = (full = true) => `<nav class="top">${logo}<span class="sp"></span>${full ? `<a class="l" href="/#services">Услуги</a><a class="l" href="/#how">Как это работает</a><a class="l" href="/#pay">Оплата</a><a class="l" href="/blog">Блог</a><a class="l" href="/#contacts">Контакты</a>`  : ""}${full ? `<a class="btn gold sm" href="/order">Заказать рассылку</a>` : `<a class="btn gold sm" href="/#services">← Главное меню</a>`}</nav>`;
 
 /* ---------- главная ---------- */
@@ -349,7 +360,7 @@ function legal(kind){
 <h2>2. Стоимость и оплата</h2><p>Стоимость указана на сайте в рублях. Оплата — переводом на банковскую карту по реквизитам, указанным на странице заказа. Заказ принимается в работу после подтверждения поступления платежа: после перевода нажмите на странице заказа кнопку «Я оплатил(а)», мы проверим поступление и подтвердим оплату, обычно в течение нескольких часов. Условия возврата — в разделе 5.</p>
 <h2>3. Порядок оказания услуг</h2><ul><li>Рассылка начинается после подтверждения оплаты. Письма отправляются постепенно в течение нескольких часов.</li><li>Ход рассылки и список компаний доступны Заказчику на странице заказа.</li><li>Резюме «Стандарт» готовится в течение 6 часов после подтверждения оплаты и направляется на e-mail Заказчика.</li></ul>
 <h2>4. Ограничение ответственности</h2><p>Исполнитель обязуется отправить резюме по выбранной базе, но не гарантирует ответ компаний, приглашение на собеседование или трудоустройство: решения принимают работодатели. Исполнитель не отвечает за недоставку писем по причинам на стороне получателя (неактуальный адрес, спам-фильтры, переполненный ящик). Заказчик отвечает за достоверность своих данных и за право распространять предоставленные документы.</p>
-<h2>5. Возврат средств</h2>
+<h2 id="refund">5. Возврат средств</h2>
 <p><b>Главное правило.</b> Деньги можно вернуть только до старта услуги. Любой старт — это начало оказания услуги: после него возврат не производится.</p>
 <ul>
 <li><b>До старта — полный возврат.</b> Рассылка ещё не стартовала (первое письмо не отправлено) и работа над резюме или письмом не начата — Заказчик может отказаться от заказа и получить всю сумму.</li>
