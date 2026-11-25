@@ -112,6 +112,7 @@ function parseBase(text, defaultBase){
 (async () => {
     const db = await openDb(), engine = makeEngine(db), q = (s, p) => db.query(s, p), one = (s, p) => db.one(s, p);
     let counts = null, countsAt = 0;
+    const askAssistant = require("./assistant.js")({json, body, limited, ipOf, getCounts: () => getCounts()});
     const getCounts = async () => { if(!counts || Date.now() - countsAt > 300e3){ counts = await engine.baseCounts(); countsAt = Date.now(); } return counts; };
     const byToken = t => one(`SELECT * FROM orders WHERE token = $1`, [clean(t, 80)]);
     const ORDER_LIST = `id, num, email_ok, token, kind, slug, title, base, times, price, status, first_name, last_name, email, phone, position, vessel, created_at, claimed_at, paid_at, done_at, cv_name, res_name, cover`;
@@ -162,6 +163,7 @@ function parseBase(text, defaultBase){
     /* ---------- публичные API ---------- */
     async function publicApi(req, res, u){
         const p = u.pathname;
+        if(req.method === "POST" && p === "/api/assistant") return askAssistant(req, res);
         if(req.method === "POST" && p === "/api/order"){
             const ip = ipOf(req);
             if(limited("order:" + ip, 6, 3600e3)) return json(res, 429, {error: "Слишком много заказов с вашего адреса. Попробуйте позже или напишите нам в WhatsApp."});

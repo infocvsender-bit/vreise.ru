@@ -19,6 +19,7 @@ ${noindex ? '<meta name="robots" content="noindex,nofollow">' : `<link rel="cano
 <link rel="stylesheet" href="/static/style.css?v=${V}"></head><body>
 ${hero}${body}
 <footer class="f"><div class="c"><span>© Vreise.ru${env("LEGAL_NAME") ? " · " + esc(env("LEGAL_NAME")) : ""}</span><span><a href="/policy">Политика конфиденциальности</a><a href="/offer">Публичная оферта</a></span></div></footer>
+<script>window.__vr=${JSON.stringify({wa: WA(), tg: TGL(), phone: phone()}).replace(/</g, "\\u003c")}</script><script src="/static/assistant.js?v=${V}" defer></script>
 ${scripts}</body></html>`;
 }
 
