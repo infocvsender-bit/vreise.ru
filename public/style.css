@@ -82,8 +82,8 @@ nav.top .sp{flex:1}
 
 /* как это работает */
 .steps{list-style:none;padding:0;display:grid;grid-template-columns:repeat(4,1fr);gap:0;counter-reset:s;border-top:2px solid var(--line)}
-.steps li{position:relative;padding:34px 26px 0 0;counter-increment:s}
-.steps li:before{content:counter(s);position:absolute;top:-19px;left:0;width:36px;height:36px;border-radius:50%;background:var(--deep);color:var(--gold);font-weight:800;display:grid;place-items:center}
+#how .c{text-align:center}#how .sub{margin-left:auto;margin-right:auto}.steps li{position:relative;padding:34px 20px 0;counter-increment:s;text-align:center}
+.steps li:before{content:counter(s);position:absolute;top:-19px;left:50%;margin-left:-18px;width:36px;height:36px;border-radius:50%;background:var(--deep);color:var(--gold);font-weight:800;display:grid;place-items:center}
 .steps b{display:block;font-size:18px;color:var(--deep);margin-bottom:6px}
 .steps span{font-size:15px;color:var(--muted)}
 
@@ -149,8 +149,8 @@ table.t th{font-size:12.5px;text-transform:uppercase;letter-spacing:.06em;color:
  .sec{padding:56px 0}.sec h2{font-size:30px}
  .pcs{grid-template-columns:1fr 1fr;gap:12px}.pc{padding:22px 16px 18px}.pc h4{font-size:17px}.pc-cnt b{font-size:26px}.pc-price{font-size:23px}.pc-note{min-height:0}
  .strip{padding:24px 22px}
- .steps{grid-template-columns:1fr;border-top:0;border-left:2px solid var(--line);padding-left:24px}
- .steps li{padding:0 0 26px 14px}.steps li:before{top:0;left:-43px}
+ .steps{grid-template-columns:1fr;border-top:0;border-left:0;padding-left:0}
+ .steps li{padding:0 6px 28px}.steps li:before{position:static;margin:0 auto 10px}
  .pay{grid-template-columns:1fr}
  .contacts{padding:30px 24px}
  .grid2{grid-template-columns:1fr}
