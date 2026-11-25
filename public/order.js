@@ -17,6 +17,14 @@
         });
     });
 
+    /* выбор банка (Сбербанк / Тинькофф) */
+    [].forEach.call(document.querySelectorAll("[data-bank]"), function(b){
+        b.addEventListener("click", function(){
+            [].forEach.call(document.querySelectorAll("[data-bank]"), function(x){ x.classList.toggle("on", x === b); });
+            [].forEach.call(document.querySelectorAll("[data-bankcard]"), function(c){ c.hidden = c.getAttribute("data-bankcard") !== b.getAttribute("data-bank"); });
+        });
+    });
+
     /* «Я оплатил(а)» */
     var claim = $("claim");
     if(claim) claim.addEventListener("click", function(){

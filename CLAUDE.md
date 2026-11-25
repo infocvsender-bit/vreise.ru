@@ -11,7 +11,7 @@
 - Коммиты заканчиваются строками `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>` и `Claude-Session: https://claude.ai/code/session_01Xx5ytnGpxXoDAkpLc6BSDX`.
 
 ## Переменные окружения (Railway)
-`DATABASE_URL`, `SITE_URL`, `CRM_PASSWORD`, `CRM_SECRET`, `MAILBOX_KEY`, `CONTACT_PHONE`, `PAY_CARD`, `PAY_BANK`, `PAY_HOLDER` (необязательно),
+`DATABASE_URL`, `SITE_URL`, `CRM_PASSWORD`, `CRM_SECRET`, `MAILBOX_KEY`, `CONTACT_PHONE`, `PAY_CARD`, `PAY_BANK`, `PAY_CARD_2`, `PAY_BANK_2` (вторая карта, необязательно; на странице заказа показываются обе), `PAY_HOLDER` (необязательно, один получатель на все карты),
 `HESTIA_N_URL/KEY/USER/DOMAIN` (N=1…4) — почтовые серверы рассылки,
 `SYS_SMTP_HOST/PORT/USER/PASS/FROM` — ящик для писем клиентам, `OWNER_EMAIL` — куда слать уведомления о заказах,
 `ADMIN_HOOK_URL` (адрес приёма уведомлений в админ-боте, оканчивается на /api/ext/vreise), `ADMIN_HOOK_KEY` (общий секретный ключ, ≥16 символов), `SEND_GAP_SEC` (по умолчанию 20), `COMBO_DISC` (скидка на рассылку к резюме, по умолчанию 15), `EXTRA_DISC` (скидка на вторую базу в рассылке, по умолчанию 20), `REPLY_MIN` (как часто читать ответы компаний, по умолчанию 5 мин), `HESTIA_N_IMAP_HOST/IMAP_PORT` (по умолчанию как SMTP-хост, порт 993), `LEGAL_NAME`, `LEGAL_INN` — реквизиты для оферты, `ASSISTANT_API_KEY` (ключ Anthropic; по решению владельца 25.11 используется тот же ключ, что на другом его сайте — единственное исключение из правила про чужие ключи; без ключа онлайн-помощник отвечает заготовками), `ASSISTANT_MODEL`, `ASSISTANT=0` (выключить), `PRICE_cover` (цена персонального письма).

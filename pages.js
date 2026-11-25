@@ -190,11 +190,13 @@ const STATUS = {new: "Ожидает оплаты", claimed: "Проверяем
 const fmtCard = c => String(c).replace(/\s+/g, "").replace(/(\d{4})(?=\d)/g, "$1 ");
 function orderPage(o, jobs, sent, msgs = [], std = null, replies = []){
     const cv = o.kind === "cv", mail = !!o.base, pay = o.status === "new" || o.status === "claimed";
-    const card = env("PAY_CARD");
+    const cards = [["PAY_CARD", "PAY_BANK"], ["PAY_CARD_2", "PAY_BANK_2"]].map(([c, b]) => ({card: String(env(c) || "").replace(/\s+/g, ""), bank: env(b) || ""})).filter(x => x.card);
+    const cardsHtml = (cards.length > 1 ? `<div class="seg" style="margin-top:12px">${cards.map((x, i) => `<button type="button" class="${i ? "" : "on"}" data-bank="${i}">${esc(x.bank || "Карта " + (i + 1))}</button>`).join("")}</div>` : "")
+        + cards.map((x, i) => `<div data-bankcard="${i}" style="margin-top:6px"${i ? " hidden" : ""}><div><span class="card-num">${esc(fmtCard(x.card))}</span><button class="copy" type="button" data-copy="${esc(x.card)}">Скопировать</button></div></div>`).join("");
     const payBlock = pay ? `<div class="panel"><h3>Оплата картой в рублях</h3>
 ${o.status === "claimed" ? `<div class="ok">Спасибо! Мы проверяем ваш платёж — как только увидим перевод, заказ будет подтверждён, и вы получите письмо.</div>` : ""}
 <p>Сумма к оплате: <b style="font-size:22px">${rub(o.price)}</b></p>
-${card ? `<p style="margin-top:12px">Переведите на карту${env("PAY_BANK") ? " " + esc(env("PAY_BANK")) : ""}:</p><div><span class="card-num" id="card">${esc(fmtCard(card))}</span><button class="copy" type="button" data-copy="${esc(card.replace(/\s+/g, ""))}">Скопировать</button></div>${env("PAY_HOLDER") ? `<p class="hint">Получатель: ${esc(env("PAY_HOLDER"))}</p>` : ""}`
+${cards.length ? `<p style="margin-top:12px;margin-bottom:0">${cards.length > 1 ? "Выберите банк и переведите на карту" : "Переведите на карту" + (cards[0].bank ? " " + esc(cards[0].bank) : "")}:</p>${cardsHtml}${env("PAY_HOLDER") ? `<p class="hint">Получатель: ${esc(env("PAY_HOLDER"))}</p>` : ""}`
  : `<div class="err">Реквизиты для оплаты пока не заданы. Напишите нам в WhatsApp или Telegram${phone() ? ": " + esc(phone()) : ""}.</div>`}
 <p class="hint" style="margin-top:14px">В комментарии к платежу, если есть такая возможность, укажите номер заказа <b>№${o.num}</b>. Переводите точную сумму.</p>
 ${o.status === "new" ? `<div style="margin-top:18px"><button class="btn gold" id="claim" type="button">Я оплатил(а)</button></div>` : ""}</div>` : "";
