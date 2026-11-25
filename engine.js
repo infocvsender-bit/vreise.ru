@@ -46,8 +46,8 @@ module.exports = function engine(db){
     }
     function letterFor(o){
         const ru = o.base === "rossiya", name = [o.first_name, o.last_name].filter(Boolean).join(" ");
-        const subject = ru ? `Резюме: ${o.position || "моряк"} — ${name}` : `Application: ${o.position || "Seafarer"} — ${latin(name)}`;
-        return {subject, text: String(o.letter || "").trim() || defaultLetter(o, ru)};
+        const std = ru ? `Резюме: ${o.position || "моряк"} — ${name}` : `Application: ${o.position || "Seafarer"} — ${latin(name)}`;
+        return {subject: String(o.subject || "").trim() || std, text: String(o.letter || "").trim() || defaultLetter(o, ru)};
     }
 
     /* ---------- ящики ---------- */

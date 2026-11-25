@@ -42,5 +42,6 @@ module.exports = async function openDb(){
         `CREATE TABLE IF NOT EXISTS names(name_key TEXT NOT NULL, local TEXT NOT NULL, at TEXT NOT NULL)`,
         `CREATE TABLE IF NOT EXISTS mail_log(id TEXT PRIMARY KEY, at TEXT NOT NULL, to_email TEXT, subject TEXT, ok INTEGER NOT NULL, error TEXT)`
     ]) await db.query(s);
+    for(const c of ["subject TEXT", "letter_ok TEXT"]) await db.query(`ALTER TABLE orders ADD COLUMN ${c}`).catch(() => {});
     return db;
 };

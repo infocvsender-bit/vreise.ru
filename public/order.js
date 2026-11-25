@@ -19,6 +19,22 @@
         fetch("/api/o/" + window.__tok + "/claim", {method: "POST"}).then(function(r){ return r.json(); }).then(function(){ location.reload(); }).catch(function(){ claim.disabled = false; });
     });
 
+    /* тема и письмо */
+    var lf = $("lf");
+    if(lf){
+        var std = {}; try { std = JSON.parse($("lstd").textContent); } catch(e){}
+        var lmsg = function(t){ $("lmsg").textContent = t; };
+        var post = function(body){
+            lmsg("Сохраняем…");
+            return fetch("/api/o/" + window.__tok + "/letter", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)})
+                .then(function(r){ return r.json().then(function(j){ return {ok: r.ok, j: j}; }); })
+                .then(function(x){ if(!x.ok) throw new Error(x.j.error || "Не удалось сохранить"); lmsg("✅ Сохранено"); })
+                .catch(function(e){ lmsg("❌ " + e.message); });
+        };
+        lf.addEventListener("submit", function(ev){ ev.preventDefault(); post({subject: $("lsub").value, text: $("ltxt").value}); });
+        var rs = $("lreset"); if(rs) rs.addEventListener("click", function(){ $("lsub").value = std.subject || ""; $("ltxt").value = std.text || ""; post({reset: true}); });
+    }
+
     /* сообщение менеджеру */
     var mf = $("msgf");
     if(mf) mf.addEventListener("submit", function(ev){

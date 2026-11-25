@@ -104,7 +104,7 @@ function parseBase(text, defaultBase){
             return send(res, 200, fs.readFileSync(f), MIME[path.extname(f).toLowerCase()] || "application/octet-stream", {"Cache-Control": "public, max-age=86400"});
         }
         if(p === "/") return send(res, 200, P.home(await getCounts().catch(() => null)));
-        if(p === "/order") return send(res, 200, P.orderForm(u.searchParams.get("s") || ""));
+        if(p === "/order") return send(res, 200, P.orderForm(u.searchParams.get("s") || "", await getCounts().catch(() => null)));
         if(p === "/policy" || p === "/offer") return send(res, 200, P.legal(p.slice(1)));
 
         let m = p.match(/^\/o\/([A-Za-z0-9_-]{10,80})(\/file)?$/);
@@ -118,7 +118,8 @@ function parseBase(text, defaultBase){
             const jobs = await q(`SELECT * FROM jobs WHERE order_id = $1 ORDER BY m`, [o.id]);
             const msgs = await q(`SELECT at, author, text FROM notes WHERE order_id = $1 AND author IN ('Сообщение клиента', 'Ответ менеджера') ORDER BY at`, [o.id]);
             const sent = jobs.length ? await q(`SELECT qu.company, qu.email, qu.sent_at FROM queue qu JOIN jobs j ON j.id = qu.job_id WHERE j.order_id = $1 AND qu.status = 'sent' ORDER BY qu.sent_at DESC LIMIT 200`, [o.id]) : [];
-            return send(res, 200, P.orderPage(o, jobs, sent, msgs), "text/html; charset=utf-8", {"Cache-Control": "no-store"});
+            const std = o.kind === "mailing" ? {cur: engine.letterFor(o), def: engine.letterFor({...o, letter: "", subject: ""})} : null;
+            return send(res, 200, P.orderPage(o, jobs, sent, msgs, std), "text/html; charset=utf-8", {"Cache-Control": "no-store"});
         }
         return send(res, 404, P.notFound());
     }
@@ -169,6 +170,21 @@ function parseBase(text, defaultBase){
             await q(`UPDATE orders SET status = 'claimed', claimed_at = $1 WHERE id = $2 AND status = 'new'`, [now(), o.id]);
             await engine.note(o.id, "Клиент нажал «Я оплатил(а)»", "Клиент");
             Mail.owner(`💳 Клиент сообщил об оплате\nЗаказ №${o.num} · ${Mail.rub(o.price)}\n${o.first_name || ""} ${o.last_name || ""} · ${o.email}\nПроверьте карту и подтвердите в CRM: ${Mail.siteUrl()}/crm`);
+            return json(res, 200, {ok: true});
+        }
+        m = p.match(/^\/api\/o\/([A-Za-z0-9_-]{10,80})\/letter$/);
+        if(req.method === "POST" && m){
+            if(limited("letter:" + m[1], 30, 3600e3)) return json(res, 429, {error: "Слишком много изменений, попробуйте позже"});
+            const o = await byToken(m[1]); if(!o || o.kind !== "mailing") return json(res, 404, {error: "Заказ не найден"});
+            if(o.status === "cancelled") return json(res, 400, {error: "Заказ отменён"});
+            if(await one(`SELECT id FROM jobs WHERE order_id = $1 AND status = 'run'`, [o.id])) return json(res, 400, {error: "Рассылка идёт — письмо можно изменить после её окончания, для следующих рассылок."});
+            const b = await body(req, 40000), std = engine.letterFor({...o, letter: "", subject: ""});
+            let subject = clean(b.subject, 200).replace(/[\r\n]+/g, " "), text = String(b.text ?? "").replace(/\r/g, "").trim().slice(0, 4000);
+            if(b.reset){ subject = ""; text = ""; }
+            else { if(text.length < 20) return json(res, 400, {error: "Письмо слишком короткое — напишите хотя бы пару предложений"}); if(!subject) return json(res, 400, {error: "Укажите тему письма"});
+                if(text.replace(/\s+/g, " ") === std.text.replace(/\s+/g, " ")) text = ""; if(subject === std.subject) subject = ""; }
+            await q(`UPDATE orders SET letter = $1, subject = $2, letter_ok = $3 WHERE id = $4`, [text, subject, now(), o.id]);
+            await engine.note(o.id, b.reset ? "Клиент вернул стандартное письмо" : "Клиент изменил тему и текст письма", "Клиент");
             return json(res, 200, {ok: true});
         }
         m = p.match(/^\/api\/o\/([A-Za-z0-9_-]{10,80})\/message$/);
