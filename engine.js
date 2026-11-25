@@ -15,7 +15,7 @@ module.exports = function engine(db){
     const note = (orderId, text, author = "Система") => q(`INSERT INTO notes(id, order_id, at, author, text) VALUES($1,$2,$3,$4,$5)`, [uuid(), orderId, now(), author, text]);
 
     /* ---------- выбор адресов ---------- */
-    const PARTS = {"ofsor-evropa": ["ofsor", "evropa"], "mir-ofsor": ["mir", "ofsor"]};
+    const PARTS = {evropa: ["evropa", "rossiya"], "ofsor-evropa": ["ofsor", "evropa", "rossiya"], "mir-ofsor": ["mir", "ofsor"]};
     const hasBase = (r, key) => key === "tanker" ? /tanker|gas|lng|lpg/i.test(r.fleets || "") : (PARTS[key] || [key]).concat(key).some(k => String(r.bases || "").split(/[;,\s]+/).includes(k));
     const parseExclude = t => String(t || "").split(/[\n,;]+/).map(x => x.trim().toLowerCase()).filter(x => x.length >= 3);
     function excluded(r, tokens){
