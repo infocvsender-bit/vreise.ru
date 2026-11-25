@@ -377,11 +377,11 @@ function parseBase(text, defaultBase){
         }
         if(req.method === "GET" && p === "/bases"){
             counts = null; const c = await getCounts();
-            return json(res, 200, {total: c.total, byBase: c.byBase, bases: C.BASES.filter(b => b.key !== "tanker-rossiya").map(b => ({key: b.key, name: b.name}))});
+            return json(res, 200, {total: c.total, byBase: c.byBase, bases: C.BASES.map(b => ({key: b.key, name: b.name}))});
         }
         if(req.method === "POST" && p === "/bases/import"){
             const b = await body(req), def = clean(b.base, 40), rows = parseBase(b.text, def);
-            if(def && (!C.baseOf(def) || def === "tanker-rossiya") && def !== "tanker") return json(res, 400, {error: "Неизвестная база"});
+            if(def && !C.baseOf(def) && def !== "tanker") return json(res, 400, {error: "Неизвестная база"});
             if(!rows.length) return json(res, 400, {error: "Не нашёл ни одного адреса. Нужен список e-mail (по одному в строке) или CSV с колонкой email и выбранная база."});
             let added = 0, updated = 0;
             for(const r of rows){
