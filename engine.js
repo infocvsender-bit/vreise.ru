@@ -306,8 +306,8 @@ module.exports = function engine(db){
     }
 
     /* тестовое письмо: временный ящик на первом сервере → письмо на адрес владельца */
-    async function testSend(to){
-        const c = M.sendCfgs()[0]; if(!c) throw new Error("не настроены почтовые серверы");
+    async function testSend(to, domain){
+        const c = domain ? M.sendCfgs().find(x => x.domain === domain) : M.sendCfgs()[0]; if(!c) throw new Error("не настроены почтовые серверы");
         const acc = "test" + crypto.randomBytes(3).toString("hex"), pass = M.newPass(), email = `${acc}@${c.domain}`;
         await M.hestia(c, "v-add-mail-account", [c.user, c.domain, acc, pass, c.quota]);
         try {

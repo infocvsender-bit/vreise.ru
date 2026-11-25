@@ -170,13 +170,13 @@
         api("/servers").then(function(d){
             var yes = function(b){ return b ? "✅" : "⚠️ не задано"; };
             view.innerHTML = '<div class="panel"><h3>Серверы рассылки (Hestia)</h3>' + (d.servers.length ? '<table class="t"><thead><tr><th>Домен</th><th>SMTP</th><th>Ящиков</th><th></th></tr></thead><tbody>' + d.servers.map(function(s){ return "<tr><td>" + esc(s.domain) + "</td><td>" + esc(s.host) + ":" + s.port + "</td><td>" + s.boxes + "</td><td>" + (s.skipped ? "не используется" : "в работе") + "</td></tr>"; }).join("") + "</tbody></table>" : '<div class="err">Серверы не подключены: добавьте HESTIA_1_URL / KEY / USER / DOMAIN в Railway.</div>') +
-                '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"><input class="in" id="tt" placeholder="Ваш e-mail для теста" style="max-width:280px"><button class="btn gold sm" id="tgo">Тест рассылочного сервера</button><button class="btn sm line" style="color:var(--deep);border-color:#9fb6bb" id="tsys">Тест системной почты</button></div><p id="tmsg" class="mut" style="margin-top:10px"></p></div>' +
+                '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"><input class="in" id="tt" placeholder="Ваш e-mail для теста" style="max-width:280px"><button class="btn gold sm" id="tgo">Тест всех серверов рассылки</button><button class="btn sm line" style="color:var(--deep);border-color:#9fb6bb" id="tsys">Тест системной почты</button></div><p id="tmsg" class="mut" style="margin-top:10px"></p></div>' +
                 '<div class="panel"><h3>Настройки</h3><div class="kv"><b>Системная почта</b><span>' + yes(d.system) + " (SYS_SMTP_*)</span><b>Почта владельца</b><span>" + yes(d.owner) + " (OWNER_EMAIL)</span><b>Карта для оплаты</b><span>" + yes(d.pay) + " (PAY_CARD)</span><b>Телефон</b><span>" + yes(d.phone) + " (CONTACT_PHONE)</span><b>Пауза между письмами</b><span>" + d.gap + " с (SEND_GAP_SEC)</span></div></div>";
             var $ = function(i){ return document.getElementById(i); }, run = function(path, label){
                 $("tmsg").textContent = "Отправляю…";
-                api(path, {body: {to: $("tt").value}}).then(function(r){ $("tmsg").textContent = "✅ " + label + (r.domain ? " (" + r.domain + ")" : "") + " — проверьте почту"; }).catch(function(e){ $("tmsg").textContent = "❌ " + e.message; });
+                api(path, {body: {to: $("tt").value}}).then(function(r){ $("tmsg").textContent = "✅ " + label + (r.domain ? " (" + r.domain + ")" : "") + " — проверьте почту"; }).catch(function(e){ $("tmsg").textContent = (/^✅|^❌/.test(e.message) ? "" : "❌ ") + e.message; });
             };
-            $("tgo").onclick = function(){ run("/servers/test", "Тестовое письмо отправлено"); };
+            $("tgo").onclick = function(){ run("/servers/test", "Тест пройден, писем придёт по одному с каждого сервера"); };
             $("tsys").onclick = function(){ run("/servers/test-system", "Системное письмо отправлено"); };
         }).catch(alertErr);
     }
