@@ -63,6 +63,41 @@ function cvDetails(b, first, last){
     return {d: o};
 }
 
+/* полное уведомление владельцу о новом заказе (письмо на OWNER_EMAIL + копия в админ-бот) */
+function ownerOrderText(o){
+    const J = (s, def) => { try { return JSON.parse(s || "null") || def; } catch(e){ return def; } };
+    const d = J(o.details, {}), sch = J(o.schedule, []), digits = String(o.phone || "").replace(/\D/g, "");
+    const fdt = s => { const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}:\d{2})/.exec(String(s)); return m ? `${m[3]}.${m[2]}.${m[1]} ${m[4]}` : String(s); };
+    const L = [`🆕 Новый заказ №${o.num} · ${Mail.rub(o.price)}`, o.title, "",
+        `👤 ${[o.first_name, o.last_name].filter(Boolean).join(" ")}`];
+    if(o.position) L.push(`⚓ Должность: ${o.position}`);
+    if(o.vessel) L.push(`🚢 Суда: ${o.vessel}`);
+    L.push(`📧 ${o.email}`);
+    if(o.phone) L.push(`📞 ${o.phone}`);
+    if(digits.length >= 9) L.push(`💬 WhatsApp: https://wa.me/${digits}`, `✈️ Telegram: https://t.me/+${digits}`);
+    if(o.base){
+        const b1 = C.baseOf(o.base), b2 = o.extra_base ? C.baseOf(o.extra_base) : null;
+        L.push("", `📮 Рассылка: ${C.TIMES[Number(o.times) - 1] || o.times} · база «${b1 ? b1.name : o.base}»${b2 ? ` + «${b2.name}»` : ""}`);
+        if(sch.length) L.push(`📅 Старт (МСК): ${sch.map(fdt).join("; ")}`);
+        L.push(Number(o.cover) ? "💌 Письмо: персональное (заказано, пишем в CRM)" : o.letter ? "💌 Письмо: своё, текст ниже" : "💌 Письмо: стандартное");
+        if(o.exclude) L.push(`🚫 Исключить компании: ${o.exclude.replace(/\s*\n+\s*/g, ", ")}`);
+    }
+    if(o.cv_name) L.push(`📎 ${o.kind === "cv" ? "Старое резюме" : "Резюме"}: ${o.cv_name} (${Math.max(1, Math.round((o.cv_b64 || "").length * 0.75 / 1024))} КБ)`);
+    else if(o.kind === "mailing") L.push("📎 Резюме не приложено");
+    if(o.kind === "cv"){
+        L.push("", "📝 Анкета для резюме:");
+        const rows = [["Местонахождение", d.location], ["Дата рождения", d.dob], ["Английский", d.english], ["Желаемая зарплата", d.minSalary], ["Учебное заведение", d.school], ["Опыт на судах", d.vesselExp],
+            ["Двигатели", d.engines], ["LinkedIn", d.linkedin], ["Мессенджеры на номере", (d.messengers || []).join(", ")],
+            ["Глаза / рост / вес", [d.eyes, d.height && d.height + " см", d.weight && d.weight + " кг"].filter(Boolean).join(" / ")], ["Роба / обувь", [d.overall, d.shoe].filter(Boolean).join(" / ")],
+            ["Родственник", [d.nokName, d.nokRel, d.nokPhone].filter(Boolean).join(", ")]];
+        for(const [k, v] of rows) if(v) L.push(`• ${k}: ${v}`);
+        if(o.comment) L.push("", "💬 О себе и опыте:", o.comment);
+    }
+    if(o.letter) L.push("", "✉️ Текст письма клиента:", o.letter);
+    L.push("", "💳 Оплата: картой, ждём перевод и «Я оплатил(а)»", `🔗 CRM: ${Mail.siteUrl()}/crm`);
+    return L.join("\n");
+}
+
 /* ---------- CRM: вход по паролю, cookie с подписью ---------- */
 const secret = () => env("CRM_SECRET") || env("CRM_PASSWORD") + "|vreise";
 const sign = v => crypto.createHmac("sha256", secret()).update(v).digest("hex");
@@ -232,7 +267,7 @@ function parseBase(text, defaultBase){
             }
             if(!o) return json(res, 500, {error: "Не удалось создать заказ, попробуйте ещё раз"});
             Mail.T.confirm(o).catch(() => {});
-            Mail.owner(`🆕 Новый заказ №${o.num}\n${o.title} · ${Mail.rub(o.price)}\n${first} ${last} · ${email}${o.phone ? " · " + o.phone : ""}`, o.id);
+            Mail.owner(ownerOrderText(o), o.id);
             return json(res, 200, {url: "/o/" + o.token, id: o.id, token: o.token});
         }
         let m = p.match(/^\/api\/order\/([\w-]{10,60})\/doc$/);
