@@ -124,13 +124,27 @@
 
     /* ---------- серверы ---------- */
     function letter(){
-        api("/letters").then(function(d){
-            view.innerHTML = '<div class="panel"><h3>Написать письмо</h3><p class="mut" style="margin-top:0">Любое письмо — тема и текст ваши, можно приложить файл. Уйдёт в фирменном оформлении Vreise.ru' + (d.from ? " от " + esc(d.from) : "") + '. Ответы придут на эту почту.</p>' +
+        Promise.all([api("/letters"), api("/inbox")]).then(function(rr){
+            var d = rr[0], ib = rr[1], kn = {reply: "", auto: " · автоответ", bounce: " · не доставлено"};
+            view.innerHTML = '<div class="panel"><h3>Входящие' + (ib.unread ? ' <span style="background:#c0392b;color:#fff;border-radius:999px;padding:1px 9px;font-size:13px">' + ib.unread + " нов.</span>" : "") + "</h3>" +
+                '<p class="mut" style="margin-top:0">Письма, которые пришли на ' + esc(ib.box || "почту сайта") + (ib.state ? " · проверено " + dt(ib.state.at) + (ib.state.error ? ' · <span style="color:#c0392b">ошибка: ' + esc(ib.state.error) + "</span>" : "") : " · проверка идёт каждые несколько минут") + ' <button class="btn sm line" id="ibr" style="margin-left:8px">Проверить сейчас</button></p>' +
+                (ib.inbox.length ? ib.inbox.map(function(m){
+                    return '<div style="border-top:1px solid #e3ebee;padding:10px 0"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><b>' + (Number(m.seen) || m.kind !== "reply" ? "" : "🆕 ") + esc(m.from_name ? m.from_name + " " : "") + "&lt;" + esc(m.from_email) + "&gt;</b><span class=\"mut\">" + dt(m.at) + (kn[m.kind] || "") + "</span></div>" +
+                        '<div style="margin:3px 0"><b>' + esc(m.subject || "(без темы)") + '</b></div><div style="white-space:pre-wrap;font-size:14px">' + esc(String(m.text || "").slice(0, 1500)) + '</div>' +
+                        (m.kind === "bounce" ? "" : '<div class="acts"><button class="btn sm gold" data-re="' + esc(m.id) + '">Ответить</button></div>') + "</div>"; }).join("") : '<p class="mut">Пока писем нет</p>') + "</div>" +
+                '<div class="panel" id="wr"><h3>Написать письмо</h3><p class="mut" style="margin-top:0">Любое письмо — тема и текст ваши, можно приложить файл. Уйдёт в фирменном оформлении Vreise.ru' + (d.from ? " от " + esc(d.from) : "") + '. Ответы придут на эту почту.</p>' +
                 '<input class="in" id="lto" type="email" placeholder="Кому (e-mail)" style="margin-bottom:8px"><input class="in" id="lsu" placeholder="Тема" style="margin-bottom:8px"><textarea class="in" id="ltx" placeholder="Текст письма" style="min-height:180px"></textarea>' +
                 '<input type="file" id="lfl" class="in" style="margin-top:8px"><p class="mut" style="margin:4px 0 0">Вложение — до 8 МБ.</p><div class="acts"><button class="btn gold" id="lgo">Отправить письмо</button> <span class="mut" id="lmg"></span></div></div>' +
                 '<div class="panel"><h3>Отправленные письма</h3>' + (d.letters.length ? '<table class="t"><thead><tr><th>Когда</th><th>Кому</th><th>Тема</th><th>Файл</th><th></th></tr></thead><tbody>' + d.letters.map(function(l){
                     return "<tr><td>" + dt(l.at) + "</td><td>" + esc(l.to_email) + "</td><td>" + esc(l.subject) + "</td><td>" + esc(l.file_name || "") + "</td><td>" + (l.ok ? "✅" : '<span style="color:#c0392b" title="' + esc(l.error || "") + '">❌ не ушло</span>') + "</td></tr>"; }).join("") + "</tbody></table>" : '<p class="mut">Пока ничего не отправляли</p>') + "</div>";
             var $ = function(i){ return document.getElementById(i); };
+            if(ib.unread) api("/inbox/read", {body: {}}).catch(function(){});
+            $("ibr").onclick = function(){ $("ibr").disabled = true; $("ibr").textContent = "Проверяю…"; api("/inbox/refresh", {body: {}}).then(letter).catch(function(e){ alertErr(e); letter(); }); };
+            [].forEach.call(document.querySelectorAll("[data-re]"), function(b){ b.onclick = function(){
+                var m = ib.inbox.filter(function(x){ return x.id === b.getAttribute("data-re"); })[0]; if(!m) return;
+                $("lto").value = m.from_email; $("lsu").value = /^re:/i.test(m.subject || "") ? m.subject : "Re: " + (m.subject || "");
+                $("ltx").value = "\n\n— — —\n" + String(m.text || "").split("\n").map(function(l){ return "> " + l; }).join("\n").slice(0, 1500);
+                $("wr").scrollIntoView({behavior: "smooth"}); $("ltx").focus(); $("ltx").setSelectionRange(0, 0); }; });
             $("lgo").onclick = function(){
                 if(!$("lto").value.trim() || !$("lsu").value.trim() || !$("ltx").value.trim()) return alert("Заполните: кому, тему и текст письма");
                 if(!confirm("Отправить письмо на " + $("lto").value.trim() + "?")) return;

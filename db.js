@@ -47,6 +47,8 @@ module.exports = async function openDb(){
         `CREATE INDEX IF NOT EXISTS idx_replies_order ON replies(order_id, at)`,
         `CREATE TABLE IF NOT EXISTS imap_state(box_id TEXT PRIMARY KEY, last_uid INTEGER NOT NULL DEFAULT 0, checked_at TEXT, error TEXT)`,
         `CREATE TABLE IF NOT EXISTS crm_letters(id TEXT PRIMARY KEY, at TEXT NOT NULL, to_email TEXT NOT NULL, subject TEXT, body TEXT, file_name TEXT, ok INTEGER NOT NULL, error TEXT)`,
+        `CREATE TABLE IF NOT EXISTS inbox(id TEXT PRIMARY KEY, uid INTEGER NOT NULL, from_email TEXT, from_name TEXT, subject TEXT, text TEXT, kind TEXT NOT NULL, at TEXT NOT NULL, created_at TEXT NOT NULL, seen INTEGER NOT NULL DEFAULT 0)`,
+        `CREATE INDEX IF NOT EXISTS idx_inbox_at ON inbox(at)`,
         `CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT)`,
         `CREATE TABLE IF NOT EXISTS mail_log(id TEXT PRIMARY KEY, at TEXT NOT NULL, to_email TEXT, subject TEXT, ok INTEGER NOT NULL, error TEXT)`
     ]) await db.query(s);

@@ -487,6 +487,13 @@ function parseBase(text, defaultBase){
             if(!EMAIL.test(to)) return json(res, 400, {error: "Укажите e-mail для теста"});
             try { return json(res, 200, {ok: true, domain: await engine.testSend(to)}); } catch(e){ return json(res, 500, {error: e.message}); }
         }
+        if(req.method === "GET" && p === "/inbox"){
+            const st = await one(`SELECT value FROM meta WHERE key = 'inbox_state'`); let state = null; try { state = JSON.parse(st?.value || "null"); } catch(e){}
+            const rows = await q(`SELECT id, from_email, from_name, subject, text, kind, at, seen FROM inbox ORDER BY at DESC LIMIT 100`);
+            return json(res, 200, {inbox: rows, unread: rows.filter(r => !Number(r.seen) && r.kind === "reply").length, state, box: env("SYS_SMTP_USER") || ""});
+        }
+        if(req.method === "POST" && p === "/inbox/read"){ await q(`UPDATE inbox SET seen = 1 WHERE seen = 0`); return json(res, 200, {ok: true}); }
+        if(req.method === "POST" && p === "/inbox/refresh"){ await engine.pollInbox(); return json(res, 200, {ok: true}); }
         if(req.method === "GET" && p === "/letters"){
             return json(res, 200, {letters: await q(`SELECT id, at, to_email, subject, file_name, ok, error FROM crm_letters ORDER BY at DESC LIMIT 100`), from: env("SYS_SMTP_FROM") || env("SYS_SMTP_USER") || ""});
         }

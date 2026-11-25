@@ -260,8 +260,37 @@ module.exports = function engine(db){
             }
         } catch(e){ console.error("replies:", e); } finally { replyBusy = false; }
     }
+    /* ---------- входящие на системную почту (info@…): читаем по IMAP, показываем в CRM → «Письма» ---------- */
+    let inboxBusy = false;
+    async function pollInbox(){
+        if(inboxBusy || !M.sysOn()) return; inboxBusy = true;
+        try {
+            const IM = require("./imap.js"), host = env("SYS_IMAP_HOST") || env("SYS_SMTP_HOST"), port = Number(env("SYS_IMAP_PORT")) || 993;
+            const st = await one(`SELECT value FROM meta WHERE key = 'inbox_uid'`); let last = st ? Number(st.value) || 0 : -1, err = null, fresh = [];
+            let S = null;
+            try {
+                S = await IM.session({host, port, user: env("SYS_SMTP_USER"), pass: env("SYS_SMTP_PASS"), insecure: env("SYS_SMTP_INSECURE") === "1"});
+                await S.login(); await S.select("INBOX");
+                let uids = last < 0 ? (await S.search("ALL")).slice(-30) : (await S.search(`UID ${last + 1}:*`)).filter(u => u > last).slice(0, 60);
+                for(const {uid, data} of await S.fetchMany(uids)){
+                    last = Math.max(last, uid);
+                    if(!data || !data.length) continue;
+                    const r = IM.parseMail(data);
+                    if(await one(`SELECT id FROM inbox WHERE uid = $1`, [uid])) continue;
+                    await q(`INSERT INTO inbox(id, uid, from_email, from_name, subject, text, kind, at, created_at, seen) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,0)`,
+                        [uuid(), uid, r.fromRaw || r.from, String(r.name || "").slice(0, 200), r.subject, r.text, r.kind, new Date(r.date).toISOString(), now()]);
+                    if(r.kind === "reply" && Date.now() - r.date < 3 * 864e5) fresh.push(r);
+                }
+                if(last < 0) last = 0;
+            } catch(e){ err = String(e.message || e).slice(0, 300); console.error("inbox:", err); }
+            finally { if(S) S.close(); }
+            if(last >= 0){ await q(`DELETE FROM meta WHERE key = 'inbox_uid'`); await q(`INSERT INTO meta(key, value) VALUES('inbox_uid', $1)`, [String(last)]); }
+            await q(`DELETE FROM meta WHERE key = 'inbox_state'`); await q(`INSERT INTO meta(key, value) VALUES('inbox_state', $1)`, [JSON.stringify({at: now(), error: err})]);
+            for(const r of fresh.slice(0, 5)) await Mail.owner(`✉️ Новое письмо на ${env("SYS_SMTP_USER")}\nОт: ${r.name ? r.name + " " : ""}<${r.fromRaw || r.from}>\nТема: ${r.subject || "(без темы)"}\n\n${String(r.text || "").slice(0, 600)}\n\nОтветить — в CRM → «Письма».`).catch(() => {});
+        } catch(e){ console.error("inbox:", e); } finally { inboxBusy = false; }
+    }
     const REPLY_MS = () => { const m = Number(env("REPLY_MIN")); return (m > 0 ? m : 5) * 60e3; };
-    const start = () => { if(!timer) timer = setInterval(() => { tick().catch(() => {}); if(Date.now() - replyAt > REPLY_MS()){ replyAt = Date.now(); pollReplies().catch(() => {}); } }, 5000); };
+    const start = () => { if(!timer) timer = setInterval(() => { tick().catch(() => {}); if(Date.now() - replyAt > REPLY_MS()){ replyAt = Date.now(); pollReplies().catch(() => {}); pollInbox().catch(() => {}); } }, 5000); };
 
     async function jobCtl(job, action, who){
         const o = await one(`SELECT * FROM orders WHERE id = $1`, [job.order_id]);
@@ -286,5 +315,5 @@ module.exports = function engine(db){
         return c.domain;
     }
 
-    return {pollReplies, startOrder, tick, start, jobCtl, note, pick, baseCounts, testSend, letterFor, hasBase, parseExclude, deleteBox};
+    return {pollReplies, pollInbox, startOrder, tick, start, jobCtl, note, pick, baseCounts, testSend, letterFor, hasBase, parseExclude, deleteBox};
 };
