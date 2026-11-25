@@ -8,6 +8,8 @@
 - Не делать: вакансии, Premium, подбор услуги, абонемент, «безлимит до рейса», другие языки.
 - Адресные базы (email компаний) и секреты — НЕ в репозитории (он может быть публичным). Базы загружаются через CRM, секреты — переменные Railway.
 - Адреса страниц (`/`, `/order`, `/o/<token>`, `/o/<token>/confirm`, `/policy`, `/offer`) после запуска не менять.
+- Блог (`/blog`, `/blog/<slug>`): статьи лежат в `blog.js` (на русском, тексты пишутся вручную; другие сайты не упоминаем, трудоустройство не обещаем). Slug статьи после публикации НИКОГДА не менять — адреса в Google; меняется текст — адрес остаётся. Новые статьи добавлять в конец `blog.js` и в `seo-urls.json`; переименовать можно только через `moved`. Перед коммитом: `node tools/check-urls.js` (должно быть «✅»).
+- SEO-мета на всех страницах задаёт `shell()` в `pages.js`: title, description, keywords, canonical, hreflang ru, Open Graph, Twitter, JSON-LD (Organization, WebSite, Service, FAQPage, BreadcrumbList, Article/Blog). Sitemap и robots — в `server.js` (`/sitemap.xml`, `/robots.txt`). Менять `canonical` и структуру адресов — только по просьбе владельца.
 - Коммиты заканчиваются строками `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>` и `Claude-Session: https://claude.ai/code/session_01Xx5ytnGpxXoDAkpLc6BSDX`.
 
 ## Переменные окружения (Railway)

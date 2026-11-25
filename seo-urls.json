@@ -1,0 +1,22 @@
+{
+  "_comment": "ПОСТОЯННЫЕ АДРЕСА (уже в индексе Google). Не менять и не удалять. Переименовать — только через moved (301).",
+  "pages": [
+    "/",
+    "/blog",
+    "/policy",
+    "/offer"
+  ],
+  "blog": [
+    "kak-sostavit-rezyume-moryaka",
+    "soprovoditelnoe-pismo-moryaka",
+    "kak-napisat-v-kryuing",
+    "gde-iskat-rabotu-moryaku",
+    "kak-rekruter-chitaet-rezyume-moryaka",
+    "oshibki-v-rezyume-moryaka",
+    "dokumenty-i-sertifikaty-moryaka",
+    "rassylka-rezyume-v-kryuing",
+    "rezyume-moryaka-na-angliyskom",
+    "rabota-na-offshore-sudah"
+  ],
+  "moved": {}
+}

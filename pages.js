@@ -2,6 +2,7 @@
 /* Страницы сайта (HTML на сервере). Только русский язык. */
 const C = require("./catalog.js");
 const {esc, siteUrl, rub} = require("./mails.js");
+const B = require("./blog.js");
 const V = (String(process.env.RAILWAY_GIT_COMMIT_SHA || "").slice(0, 8)) || String(Date.now());
 const env = k => String(process.env[k] || "").trim();
 
@@ -10,22 +11,28 @@ const POSITIONS = ["Master", "Chief Officer", "Second Officer", "Third Officer",
 const SCHED_NOTE = "Время московское. Старт — с 06:00 до 18:00. Рассылка идёт по будням с 06:00 до 18:00 и занимает не менее 10 часов: если она началась, например, в 15:00, то с 15:00 до 18:00 уйдёт часть писем, остальные — на следующий рабочий день с 06:00. В выходные письма не отправляются — всё переносится на понедельник. Дата — не раньше завтрашнего дня.";
 const VESSELS = ["Офшорные суда", "Контейнеровозы", "Танкеры (нефть, продукты, химия)", "Газовозы (LPG / LNG)", "Балкеры", "Генеральные грузы", "Ро-ро / паромы", "Пассажирские суда", "Яхты", "Любые суда"];
 
-function shell({title, desc, body, path = "/", hero = "", noindex = false, scripts = ""}){
-    const url = siteUrl() + path, img = siteUrl() + "/static/hero.jpg";
+const ld = o => `<script type="application/ld+json">${JSON.stringify(o).replace(/</g, "\\u003c")}</script>`;
+const ORG = () => ({"@type": "Organization", "@id": siteUrl() + "/#org", name: "Vreise.ru", url: siteUrl() + "/", logo: {"@type": "ImageObject", url: siteUrl() + "/static/icon-192.png", width: 192, height: 192}, areaServed: "RU", availableLanguage: "ru"});
+/* Общая «шапка» страницы: title, description, keywords, canonical, hreflang, Open Graph, Twitter, JSON-LD (всё на русском). */
+function shell({title, desc, body, path = "/", hero = "", noindex = false, scripts = "", keywords = "", ogType = "website", published = "", modified = "", jsonld = []}){
+    const url = siteUrl() + path, img = siteUrl() + "/static/hero.jpg", alt = "Vreise.ru — рассылка резюме моряков в крюинговые компании";
     return `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${esc(title)}</title><meta name="description" content="${esc(desc)}">
-${noindex ? '<meta name="robots" content="noindex,nofollow">' : `<link rel="canonical" href="${esc(url)}">`}
-<meta property="og:type" content="website"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(desc)}"><meta property="og:url" content="${esc(url)}"><meta property="og:image" content="${esc(img)}"><meta property="og:locale" content="ru_RU">
+<title>${esc(title)}</title><meta name="description" content="${esc(desc)}">${keywords ? `\n<meta name="keywords" content="${esc(keywords)}">` : ""}
+<meta name="author" content="Vreise.ru"><meta name="format-detection" content="telephone=no">
+${noindex ? '<meta name="robots" content="noindex,nofollow">' : `<meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1"><link rel="canonical" href="${esc(url)}"><link rel="alternate" hreflang="ru" href="${esc(url)}"><link rel="alternate" hreflang="x-default" href="${esc(url)}">`}
+<meta property="og:type" content="${ogType}"><meta property="og:site_name" content="Vreise.ru"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(desc)}"><meta property="og:url" content="${esc(url)}"><meta property="og:locale" content="ru_RU">
+<meta property="og:image" content="${esc(img)}"><meta property="og:image:width" content="1500"><meta property="og:image:height" content="1303"><meta property="og:image:alt" content="${esc(alt)}">${published ? `<meta property="article:published_time" content="${esc(published)}"><meta property="article:modified_time" content="${esc(modified || published)}"><meta property="article:author" content="Vreise.ru"><meta property="article:section" content="Блог для моряков">` : ""}
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(desc)}"><meta name="twitter:image" content="${esc(img)}"><meta name="twitter:image:alt" content="${esc(alt)}">
 <link rel="icon" type="image/png" href="/static/favicon.png"><link rel="apple-touch-icon" href="/static/icon-192.png"><meta name="theme-color" content="#0A3340">
-<link rel="stylesheet" href="/static/style.css?v=${V}"></head><body>
+<link rel="stylesheet" href="/static/style.css?v=${V}">${noindex ? "" : jsonld.map(ld).join("")}</head><body>
 ${hero}${body}
-<footer class="f"><div class="c"><span>© Vreise.ru</span><span><a href="/policy">Политика конфиденциальности</a><a href="/offer">Публичная оферта</a></span></div></footer>
+<footer class="f"><div class="c"><span>© Vreise.ru</span><span><a href="/blog">Блог</a><a href="/policy">Политика конфиденциальности</a><a href="/offer">Публичная оферта</a></span></div></footer>
 <script>window.__vr=${JSON.stringify({}).replace(/</g, "\\u003c")}</script><script src="/static/assistant.js?v=${V}" defer></script>
 ${scripts}</body></html>`;
 }
 
 const logo = `<a class="brand" href="/"><img src="/static/logo.svg" alt="" width="44" height="44"><span>Vreise<i>.ru</i></span></a>`;
-const navTop = (full = true) => `<nav class="top">${logo}<span class="sp"></span>${full ? `<a class="l" href="/#services">Услуги</a><a class="l" href="/#how">Как это работает</a><a class="l" href="/#pay">Оплата</a><a class="l" href="/#contacts">Контакты</a>`  : ""}${full ? `<a class="btn gold sm" href="/order">Заказать рассылку</a>` : `<a class="btn gold sm" href="/#services">← Главное меню</a>`}</nav>`;
+const navTop = (full = true) => `<nav class="top">${logo}<span class="sp"></span>${full ? `<a class="l" href="/#services">Услуги</a><a class="l" href="/#how">Как это работает</a><a class="l" href="/#pay">Оплата</a><a class="l" href="/blog">Блог</a><a class="l" href="/#contacts">Контакты</a>`  : ""}${full ? `<a class="btn gold sm" href="/order">Заказать рассылку</a>` : `<a class="btn gold sm" href="/#services">← Главное меню</a>`}</nav>`;
 
 /* ---------- главная ---------- */
 const plAddr = n => { const a = n % 10, b = n % 100; return (a === 1 && b !== 11) ? "адрес" : (a >= 2 && a <= 4 && (b < 12 || b > 14)) ? "адреса" : "адресов"; };
@@ -33,6 +40,18 @@ const numFmt = n => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, "\u00
 const addrCount = n => n > 0 ? `${numFmt(n)}\u00a0${plAddr(n)}` : "";
 function home(counts){
     const n = counts && counts.byBase || {};
+    const minP = Math.min(...C.BASES.map(b => C.priceOf(b, 1)));
+    const faqList = [
+        ["Сколько стоит рассылка резюме моряка?", `Цена зависит от базы и количества рассылок: разовая рассылка стоит от ${rub(minP)}. Актуальные цены по каждой базе указаны в разделе «Услуги» выше. Оплата картой в рублях.`],
+        ["Куда приходят ответы компаний?", "На ту почту, которую вы указали в заказе. В письме компании видят ваше имя, а ответ уходит прямо вам."],
+        ["Можно ли исключить некоторые компании?", "Да. При оформлении заказа впишите названия компаний или домены — мы не будем им писать."],
+        ["Какое сопроводительное письмо уйдёт?", "Стандартное письмо уже готово: оно составляется по вашим данным — на русском для российской базы и на английском для остальных. В личном кабинете вы видите его целиком и можете переписать тему и текст как угодно до старта рассылки. Пока вы ничего не меняли, уйдёт стандартное письмо."],
+        ["Что есть в личном кабинете?", "Страница вашего заказа по личной ссылке, без регистрации и пароля. На ней: оплата и статус заказа; ход каждой рассылки; список компаний, куда уже ушло письмо; тема и сопроводительное письмо, которые можно поправить; для резюме — готовый файл; и чат с менеджером, если что-то непонятно."],
+        ["Как быстро начнётся рассылка?", "В выбранные вами дату и время, но не раньше подтверждения оплаты. Письма уходят постепенно по будням с 06:00 до 18:00 по Москве, рассылка занимает не менее 10 часов — так письма не попадают в спам."],
+        ["Что нужно для резюме «Стандарт»?", "Заполните форму с вашими данными и приложите документы или старое резюме. Готовое резюме придёт на почту и появится на странице заказа в течение 6 часов после оплаты."],
+        ["Гарантируете ли вы трудоустройство?", "Нет. Мы доставляем ваше резюме компаниям, которые набирают экипажи, но решение о найме принимает работодатель, и ответы компаний не гарантируются."],
+        ["Как оплатить заказ?", "Переводом на банковскую карту в рублях. После оформления заказа вы увидите сумму и реквизиты, платёж проверяем вручную и запускаем работу."]
+    ];
     const rows = C.BASES.map((b, i) => `<li class="pc a${i % 4}" data-p="${b.prices.map((_, k) => C.priceOf(b, k + 1)).join(",")}" data-b="${b.key}">
       <h4>${esc(b.name)}</h4><p class="pc-note">${esc(b.note)}</p>
       ${n[b.key] > 0 ? `<div class="pc-cnt"><b>${numFmt(n[b.key])}</b><span>Адресов в базе</span></div>` : `<div class="pc-cnt"></div>`}
@@ -68,17 +87,24 @@ function home(counts){
 <div class="note"><p><b>Что входит в стоимость.</b> Рассылка по выбранной базе, сопроводительное письмо, статистика и статус рассылки в личном кабинете.</p>
 <p style="margin-top:10px"><b>Даты рассылок.</b> Дату и время старта каждой рассылки вы выбираете при оформлении заказа: не раньше завтрашнего дня, старт с 06:00 до 18:00 по Москве. Письма уходят по будням с 06:00 до 18:00, рассылка занимает не менее 10 часов, в выходные перерыв — продолжение в понедельник.</p></div></div></div></section>
 <section class="sec alt"><div class="c faq"><div class="kick">Вопросы</div><h2>Коротко о главном</h2><div style="margin-top:20px">
-<details><summary>Куда приходят ответы компаний?</summary><p>На ту почту, которую вы указали в заказе. В письме компании видят ваше имя, а ответ уходит прямо вам.</p></details>
-<details><summary>Можно ли исключить некоторые компании?</summary><p>Да. При оформлении заказа впишите названия компаний или домены — мы не будем им писать.</p></details>
-<details><summary>Какое сопроводительное письмо уйдёт?</summary><p>Стандартное письмо уже готово: оно составляется по вашим данным — на русском для российской базы и на английском для остальных. В личном кабинете вы видите его целиком и можете переписать тему и текст как угодно до старта рассылки. Пока вы ничего не меняли, уйдёт стандартное письмо.</p></details>
-<details><summary>Что есть в личном кабинете?</summary><p>Страница вашего заказа по личной ссылке, без регистрации и пароля. На ней: оплата и статус заказа; ход каждой рассылки; список компаний, куда уже ушло письмо; тема и сопроводительное письмо, которые можно поправить; для резюме — готовый файл; и чат с менеджером, если что-то непонятно.</p></details>
-<details><summary>Как быстро начнётся рассылка?</summary><p>Сразу после подтверждения оплаты. Письма уходят постепенно в течение нескольких часов, чтобы не попасть в спам.</p></details>
-<details><summary>Что нужно для резюме «Стандарт»?</summary><p>Заполните форму с вашими данными и приложите документы или старое резюме. Готовое резюме придёт на почту и появится на странице заказа в течение 6 часов после оплаты.</p></details>
+${faqList.map(([q, a]) => `<details><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join("\n")}
 </div></div></section>
+<section class="sec" id="blog"><div class="c"><div class="kick">Блог для моряков</div><h2>Полезное перед отправкой резюме</h2><p class="sub">Как составить резюме, написать в крюинг и не наделать ошибок — короткие практические статьи.</p>
+<div class="bl-grid">${B.SLUGS.slice(0, 3).map(sl => `<a class="bl-card" href="/blog/${sl}"><h3>${esc(B.A[sl].h1)}</h3><p>${esc(B.A[sl].lead)}</p><b>Читать →</b></a>`).join("")}</div>
+<p style="margin-top:22px"><a class="btn ghost" href="/blog">Все статьи блога →</a></p></div></section>
 <section class="sec" id="contacts"><div class="c"><div class="contacts"><div><h2>Остались вопросы?</h2><p>Спросите онлайн-помощника — он ответит сразу, а живой менеджер ответит прямо в этом же чате.</p></div>
 <div class="btns"><button class="btn gold" type="button" onclick="window.VRAsst&&VRAsst.open()">Открыть чат</button><button class="btn line" type="button" onclick="window.VRAsst&&VRAsst.open('mgr')">Написать менеджеру</button></div></div></div></section>`;
     const scripts = `<script src="/static/site.js?v=${V}" defer></script>`;
-    return shell({title: "Vreise.ru — рассылка резюме моряков в крюинговые компании", desc: "Рассылка резюме моряков по базам: Россия, Европа, Офшор, Мир. Резюме «Стандарт» с нуля. Оплата картой в рублях.", hero, body, scripts});
+    const offers = C.BASES.map(b => ({"@type": "Offer", name: `Рассылка резюме · база «${b.name}»`, description: b.note, price: String(C.priceOf(b, 1)), priceCurrency: "RUB", availability: "https://schema.org/InStock", url: siteUrl() + "/order?s=" + C.SERVICES.find(x => x.base === b.key && x.times === 1).slug}));
+    return shell({title: "Рассылка резюме моряков в крюинговые компании — Vreise.ru",
+        desc: "Рассылка резюме моряков по базам крюингов и судовладельцев: Россия, Европа, Офшор, Мир. Сопроводительное письмо, отчёт и ответы компаний в личном кабинете. Резюме «Стандарт» с нуля. Оплата картой в рублях.",
+        keywords: "рассылка резюме моряков, резюме моряка, крюинговые компании, работа для моряков, рассылка резюме в крюинг, отправить резюме в крюинг, база крюингов, сопроводительное письмо моряка, составление резюме моряка, офшор, танкеры, работа на судне",
+        hero, body, scripts, jsonld: [
+            {"@context": "https://schema.org", "@graph": [ORG(), {"@type": "WebSite", "@id": siteUrl() + "/#site", url: siteUrl() + "/", name: "Vreise.ru", inLanguage: "ru-RU", publisher: {"@id": siteUrl() + "/#org"}}]},
+            {"@context": "https://schema.org", "@type": "Service", name: "Рассылка резюме моряков в крюинговые компании", serviceType: "Рассылка резюме", provider: {"@id": siteUrl() + "/#org"}, areaServed: "RU", audience: {"@type": "Audience", audienceType: "Моряки"}, offers,
+                description: "Рассылка резюме и сопроводительного письма по базам крюинговых компаний и судовладельцев: Россия, Европа, Офшор, Мир. Отчёт и ответы компаний — в личном кабинете."},
+            {"@context": "https://schema.org", "@type": "Service", name: "Составление резюме моряка «Стандарт»", serviceType: "Составление резюме", provider: {"@id": siteUrl() + "/#org"}, areaServed: "RU", offers: {"@type": "Offer", price: String(C.cvPrice()), priceCurrency: "RUB", availability: "https://schema.org/InStock", url: siteUrl() + "/order?s=" + C.CV.slug}},
+            {"@context": "https://schema.org", "@type": "FAQPage", mainEntity: faqList.map(([q, a]) => ({"@type": "Question", name: q, acceptedAnswer: {"@type": "Answer", text: a}}))}]});
 }
 
 /* ---------- форма заказа ---------- */
@@ -324,11 +350,43 @@ function legal(kind){
 <h2>4. Ограничение ответственности</h2><p>Исполнитель обязуется отправить резюме по выбранной базе, но не гарантирует ответ компаний, приглашение на собеседование или трудоустройство: решения принимают работодатели. Исполнитель не отвечает за недоставку писем по причинам на стороне получателя (неактуальный адрес, спам-фильтры, переполненный ящик). Заказчик отвечает за достоверность своих данных и за право распространять предоставленные документы.</p>
 <h2>5. Возврат</h2><p>Если услуга не начата, Исполнитель возвращает оплату по обращению Заказчика. После начала рассылки или составления резюме возврат осуществляется по соглашению сторон, если услуга оказана не в полном объёме по вине Исполнителя.</p>
 <h2>6. Контакты и реквизиты</h2><p>${esc(who())}${env("LEGAL_INN") ? `, ИНН ${esc(env("LEGAL_INN"))}` : ""}. Связь: ${contact}.</p>`;
-    return shell({title: (kind === "policy" ? "Политика конфиденциальности" : "Публичная оферта") + " — Vreise.ru", desc: kind === "policy" ? "Политика конфиденциальности Vreise.ru" : "Публичная оферта Vreise.ru", path: "/" + kind,
+    return shell({title: (kind === "policy" ? "Политика конфиденциальности" : "Публичная оферта") + " — Vreise.ru", desc: kind === "policy" ? "Политика конфиденциальности Vreise.ru: какие данные мы собираем при оформлении заказа, как их храним и защищаем, сроки хранения и ваши права." : "Публичная оферта Vreise.ru: условия оказания услуг по рассылке резюме моряков и составлению резюме, стоимость, порядок оплаты, возврат и ответственность.", path: "/" + kind,
         hero: `<header class="hero short">${navTop(false)}</header>`, body: `<div class="legal">${kind === "policy" ? policy : offer}</div>`});
+}
+
+
+/* ---------- блог ---------- */
+const crumbsHtml = items => `<nav class="crumbs" aria-label="Навигация">${items.map(([h, t]) => h ? `<a href="${h}">${esc(t)}</a>` : `<span>${esc(t)}</span>`).join(" / ")}</nav>`;
+const crumbLd = items => ({"@context": "https://schema.org", "@type": "BreadcrumbList", itemListElement: items.map(([path, name], i) => ({"@type": "ListItem", position: i + 1, name, item: siteUrl() + path}))});
+const BLOG_TITLE = "Блог для моряков: резюме, сопроводительное письмо, поиск работы — Vreise.ru";
+const BLOG_DESC = "Практические статьи для моряков: как составить резюме, написать сопроводительное письмо и письмо в крюинг, собрать документы и найти работу на судне. Советы по офшору, танкерам и рассылке резюме.";
+const BLOG_KW = "блог для моряков, резюме моряка, сопроводительное письмо моряка, как написать в крюинг, где искать работу моряку, документы моряка, работа на офшорных судах, рассылка резюме";
+function blogIndex(){
+    const cards = B.SLUGS.map(sl => `<a class="bl-card" href="/blog/${sl}"><h2>${esc(B.A[sl].h1)}</h2><p>${esc(B.A[sl].lead)}</p><b>Читать →</b></a>`).join("");
+    const body = `<div class="page blog">${crumbsHtml([["/", "Главная"], [null, "Блог"]])}<h1>Блог для моряков</h1>
+<p class="sub">Как составить резюме, написать в крюинг и найти работу на судне — практические советы без воды.</p>
+<div class="bl-grid">${cards}</div>${B.CTA}</div>`;
+    return shell({title: BLOG_TITLE, desc: BLOG_DESC, keywords: BLOG_KW, path: "/blog", hero: `<header class="hero short">${navTop(false)}</header>`, body, jsonld: [
+        crumbLd([["/", "Главная"], ["/blog", "Блог"]]),
+        {"@context": "https://schema.org", "@type": "Blog", "@id": siteUrl() + "/blog#blog", name: "Блог для моряков — Vreise.ru", description: BLOG_DESC, url: siteUrl() + "/blog", inLanguage: "ru-RU", publisher: {"@id": siteUrl() + "/#org"},
+            blogPost: B.SLUGS.map(sl => ({"@type": "BlogPosting", headline: B.A[sl].h1, url: siteUrl() + "/blog/" + sl, datePublished: B.A[sl].date}))},
+        {"@context": "https://schema.org", ...ORG()}]});
+}
+function blogArticle(slug){
+    const a = B.A[slug]; if(!a) return null;
+    const faq = a.faq.map(([q, an]) => `<details><summary>${esc(q)}</summary><p>${esc(an)}</p></details>`).join("");
+    const also = B.SLUGS.filter(x => x !== slug).slice(0, 5).map(x => `<a href="/blog/${x}">${esc(B.A[x].h1)}</a>`).join("");
+    const body = `<div class="page blog">${crumbsHtml([["/", "Главная"], ["/blog", "Блог"], [null, a.h1]])}<h1>${esc(a.h1)}</h1><p class="sub">${esc(a.lead)}</p>
+<article class="prose">${a.html}${B.CTA}<div class="faq blog-faq"><h2>Частые вопросы</h2>${faq}</div><div class="also"><h2>Читайте также</h2>${also}</div></article></div>`;
+    const url = siteUrl() + "/blog/" + slug;
+    return shell({title: a.t, desc: a.d, keywords: a.kw, path: "/blog/" + slug, ogType: "article", published: a.date, modified: a.date, hero: `<header class="hero short">${navTop(false)}</header>`, body, jsonld: [
+        crumbLd([["/", "Главная"], ["/blog", "Блог"], ["/blog/" + slug, a.h1]]),
+        {"@context": "https://schema.org", "@type": "Article", headline: a.h1, description: a.d, inLanguage: "ru-RU", datePublished: a.date, dateModified: a.date, mainEntityOfPage: {"@type": "WebPage", "@id": url}, url,
+            keywords: a.kw, image: [siteUrl() + "/static/hero.jpg"], author: {"@type": "Organization", name: "Vreise.ru", url: siteUrl() + "/"}, publisher: {"@type": "Organization", name: "Vreise.ru", logo: {"@type": "ImageObject", url: siteUrl() + "/static/icon-192.png"}}},
+        {"@context": "https://schema.org", "@type": "FAQPage", mainEntity: a.faq.map(([q, an]) => ({"@type": "Question", name: q, acceptedAnswer: {"@type": "Answer", text: an}}))}]});
 }
 
 const notFound = () => shell({title: "Страница не найдена — Vreise.ru", desc: "", noindex: true, hero: `<header class="hero short">${navTop(false)}</header>`,
     body: `<div class="page"><h1>Страница не найдена</h1><p class="sub">Такой страницы нет. <a href="/">Перейти на главную</a></p></div>`});
 
-module.exports = {home, orderForm, orderPage, legal, notFound, shell};
+module.exports = {home, orderForm, orderPage, legal, notFound, shell, blogIndex, blogArticle};

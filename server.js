@@ -20,7 +20,7 @@ function limited(key, max, ms){
 setInterval(() => { const t = Date.now(); for(const [k, a] of hits) if(!a.some(x => t - x < 3600e3)) hits.delete(k); }, 600e3).unref();
 
 const send = (res, code, body, type = "text/html; charset=utf-8", extra = {}) => {
-    res.writeHead(code, {"Content-Type": type, "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer", ...extra});
+    res.writeHead(code, {"Content-Type": type, "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer", ...(String(type).startsWith("text/html") ? {"Cache-Control": "no-cache"} : {}), ...extra});
     res.end(body);
 };
 const json = (res, code, obj) => send(res, code, JSON.stringify(obj), "application/json; charset=utf-8", {"Cache-Control": "no-store"});
@@ -159,9 +159,11 @@ function parseBase(text, defaultBase){
     async function site(req, res, u){
         const p = u.pathname.replace(/\/+$/, "") || "/";
         if(p === "/health") return send(res, 200, "ok", "text/plain");
-        if(p === "/robots.txt") return send(res, 200, `User-agent: *\nDisallow: /crm\nDisallow: /o/\nDisallow: /api/\nDisallow: /order\nSitemap: ${Mail.siteUrl()}/sitemap.xml\n`, "text/plain; charset=utf-8");
+        if(p === "/robots.txt") return send(res, 200, `User-agent: *\nAllow: /\nDisallow: /crm\nDisallow: /o/\nDisallow: /api/\nDisallow: /order\nSitemap: ${Mail.siteUrl()}/sitemap.xml\n`, "text/plain; charset=utf-8");
         if(p === "/sitemap.xml"){
-            const s = Mail.siteUrl(), urls = ["/", "/policy", "/offer"].map(x => `<url><loc>${s}${x === "/" ? "" : x}</loc></url>`).join("");
+            const s = Mail.siteUrl(), B = require("./blog.js"), last = B.SLUGS.map(x => B.A[x].date).sort().pop();
+            const rows = [["/", "weekly", "1.0", last], ["/blog", "weekly", "0.8", last], ...B.SLUGS.map(x => ["/blog/" + x, "monthly", "0.7", B.A[x].date]), ["/policy", "yearly", "0.2", ""], ["/offer", "yearly", "0.2", ""]];
+            const urls = rows.map(([x, cf, pr, lm]) => `<url><loc>${s}${x === "/" ? "/" : x}</loc>${lm ? `<lastmod>${lm}</lastmod>` : ""}<changefreq>${cf}</changefreq><priority>${pr}</priority></url>`).join("");
             return send(res, 200, `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`, "application/xml; charset=utf-8");
         }
         if(p === "/sw.js") return send(res, 200, fs.readFileSync(path.join(PUB, "sw.js")), "text/javascript; charset=utf-8", {"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"});
@@ -174,6 +176,8 @@ function parseBase(text, defaultBase){
         if(p === "/") return send(res, 200, P.home(await getCounts().catch(() => null)));
         if(p === "/order") return send(res, 200, P.orderForm(u.searchParams.get("s") || "", await getCounts().catch(() => null)));
         if(p === "/policy" || p === "/offer") return send(res, 200, P.legal(p.slice(1)));
+        if(p === "/blog") return send(res, 200, P.blogIndex());
+        { const bm = p.match(/^\/blog\/([a-z0-9-]{3,80})$/); if(bm){ const pg = P.blogArticle(bm[1]); return pg ? send(res, 200, pg) : send(res, 404, P.notFound()); } }
 
         let m = p.match(/^\/o\/([A-Za-z0-9_-]{10,80})\/confirm$/);
         if(m){

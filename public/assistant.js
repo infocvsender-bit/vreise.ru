@@ -42,6 +42,10 @@ body.vr-open .vr-fc,body.vr-open .vr-tease{display:none}\
 .vr-tabs{display:flex;background:#fff;border-bottom:1px solid #dce6e8}.vr-tabs button{flex:1;border:0;background:none;padding:11px 8px;font:700 14px Inter,Arial,sans-serif;color:#6b8189;cursor:pointer;border-bottom:3px solid transparent;position:relative}.vr-tabs button.on{color:#0B3641;border-bottom-color:#F2B400}\
 .vr-tabs i{position:absolute;top:8px;margin-left:4px;width:9px;height:9px;border-radius:50%;background:#e5484d;display:none}.vr-tabs i.on{display:inline-block}\
 .vr-cm,.vr-cf{display:none!important}.vr-box.mgr .vr-m.vr-cm{display:flex!important}.vr-box.mgr .vr-f.vr-cf{display:flex!important}.vr-box.mgr .vr-m:not(.vr-cm),.vr-box.mgr .vr-f:not(.vr-cf){display:none!important}\
+.vr-pick{display:none;flex:1;flex-direction:column;gap:12px;padding:16px;background:#f3f8f8;overflow:auto}.vr-pick h4{margin:0;font:800 17px/1.3 Inter,Arial,sans-serif;color:#0B3641}\
+.vr-pc{display:block;width:100%;text-align:left;border:2px solid #dce6e8;border-radius:16px;background:#fff;padding:14px 16px;cursor:pointer;font:15px/1.45 Inter,Arial,sans-serif;color:#17303a;transition:border-color .15s,transform .15s}.vr-pc:hover{border-color:#F2B400;transform:translateY(-1px)}\
+.vr-pc b{display:block;font-size:17px;color:#0B3641;margin-bottom:4px}.vr-pc.rec{border-color:#F2B400;background:#fffbea}.vr-pc i{font-style:normal;display:inline-block;margin-top:6px;font-size:12.5px;font-weight:700;color:#0a7a3d}\
+.vr-box.pick .vr-pick{display:flex}.vr-box.pick .vr-tabs,.vr-box.pick .vr-m,.vr-box.pick .vr-f{display:none!important}\
 .vr-who{font-size:11.5px;color:#7b9097;margin:0 4px -4px}.vr-who.r{align-self:flex-end}\
 .vr-fc .ai .dot{position:absolute;top:2px;right:2px;width:15px;height:15px;border-radius:50%;background:#e5484d;border:2px solid #fff;display:none}.vr-fc .ai .dot.on{display:block}\
 @media(max-width:700px){.vr-fc{right:10px;bottom:84px;gap:10px}.vr-fc a,.vr-fc button{width:48px;height:48px}.vr-fc .ai{width:52px;height:52px}.vr-fc [data-tip]:before{display:none}.vr-box{right:8px;left:8px;bottom:8px;width:auto;height:calc(100vh - 16px);height:calc(100dvh - 16px)}.vr-tease{right:72px;bottom:90px;max-width:170px}}';
@@ -53,6 +57,9 @@ var bg = document.createElement("div"); bg.className = "vr-bg";
 var box = document.createElement("div"); box.className = "vr-box"; box.setAttribute("role", "dialog"); box.setAttribute("aria-label", "Онлайн-помощник Vreise.ru");
 box.innerHTML = '<div class="vr-h"><div class="t"><b>Чат Vreise.ru</b><small>помощник и живой менеджер</small></div>' +
   '<button class="vr-ib new" type="button" aria-label="Новый диалог" title="Новый диалог с помощником">↺</button><button class="vr-ib x" type="button" aria-label="Закрыть" title="Закрыть">×</button></div>' +
+  '<div class="vr-pick"><h4>Кому вы хотите написать?</h4>' +
+  '<button type="button" class="vr-pc rec" data-pk="ai"><b>🤖 Онлайн-помощник</b>Знает ответы на все ваши вопросы: цены и сроки рассылки, оплата, резюме, письмо, личный кабинет. Отвечает сразу, 24/7.<br><i>✓ быстрее всего</i></button>' +
+  '<button type="button" class="vr-pc" data-pk="mgr"><b>👤 Менеджер</b>Живой человек: поможет по вашему заказу, платежу или нестандартному вопросу. Ответ придёт прямо в этот чат.</button></div>' +
   '<div class="vr-tabs"><button type="button" data-tb="ai" class="on">🤖 Помощник</button><button type="button" data-tb="mgr">👤 Менеджер<i></i></button></div>' +
   '<div class="vr-m"><div class="vr-note">🤖 Я — онлайн-помощник Vreise.ru (бот). Отвечу на вопросы об услугах, ценах, оплате и сроках. Если нужен живой менеджер — откройте вкладку «Менеджер» и напишите там.</div><div class="vr-chips"></div></div>' +
   '<form class="vr-f"><textarea rows="1" maxlength="800" placeholder="Напишите вопрос…"></textarea><button type="submit">Отправить</button></form>' +
@@ -105,11 +112,13 @@ function unread(on){ tdot.classList.toggle("on", !!on); fdot.classList.toggle("o
 function startPoll(){ stopPoll(); poll = setInterval(function(){ pull(true); }, 4000); }
 function stopPoll(){ if(poll){ clearInterval(poll); poll = null; } }
 var loaded = false;
+function showPick(){ stopPoll(); box.classList.remove("mgr"); box.classList.add("pick"); }
 function tabTo(w){
-  curTab = w; box.classList.toggle("mgr", w === "mgr"); [].forEach.call(TB, function(b){ b.classList.toggle("on", b.getAttribute("data-tb") === w); });
+  box.classList.remove("pick"); curTab = w; box.classList.toggle("mgr", w === "mgr"); [].forEach.call(TB, function(b){ b.classList.toggle("on", b.getAttribute("data-tb") === w); });
   if(w === "mgr"){ if(!loaded){ loaded = true; pull(true).then(function(){ CM.scrollTop = CM.scrollHeight; }); } else pull(true); unread(false); startPoll(); try { CT.focus(); } catch(e){} }
   else { stopPoll(); try { TA.focus(); } catch(e){} }
 }
+[].forEach.call(box.querySelectorAll(".vr-pc"), function(b){ b.onclick = function(){ tabTo(b.getAttribute("data-pk")); }; });
 [].forEach.call(TB, function(b){ b.onclick = function(){ tabTo(b.getAttribute("data-tb")); }; });
 CF.onsubmit = function(e){ e.preventDefault(); sendMgr(); };
 CT.addEventListener("keydown", function(e){ if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); sendMgr(); } });
@@ -126,7 +135,7 @@ bgPoll = setInterval(function(){ if(!box.classList.contains("on") || curTab !== 
 var teaser = null, hideTease = function(){ if(teaser){ teaser.remove(); teaser = null; } };
 function open(on, which){
   hideTease(); document.body.classList.toggle("vr-open", !!on); box.classList.toggle("on", on); bg.classList.toggle("on", on);
-  if(on){ tabTo(which === "mgr" ? "mgr" : which === "ai" ? "ai" : curTab); setTimeout(function(){ try { (curTab === "mgr" ? CT : TA).focus(); } catch(e){} }, 80); }
+  if(on){ if(which === "mgr" || which === "ai") tabTo(which); else showPick(); setTimeout(function(){ try { if(!box.classList.contains("pick")) (curTab === "mgr" ? CT : TA).focus(); } catch(e){} }, 80); }
   else stopPoll();
 }
 fc.querySelector(".ai").onclick = function(){ open(true); };
@@ -140,7 +149,7 @@ setTimeout(function(){
   var seen = false; try { seen = sessionStorage.getItem("vr_asst_tease") === "1"; } catch(e){}
   if(seen || box.classList.contains("on")) return;
   try { sessionStorage.setItem("vr_asst_tease", "1"); } catch(e){}
-  teaser = document.createElement("div"); teaser.className = "vr-tease"; teaser.innerHTML = "Есть вопросы? Онлайн-помощник ответит сразу 👇<u>×</u>";
+  teaser = document.createElement("div"); teaser.className = "vr-tease"; teaser.innerHTML = "Есть вопросы? Онлайн-помощник знает ответы — спросите 👇<u>×</u>";
   teaser.onclick = function(ev){ if(ev.target.tagName === "U") hideTease(); else open(true); };
   document.body.appendChild(teaser); setTimeout(hideTease, 9000);
 }, 8000);
