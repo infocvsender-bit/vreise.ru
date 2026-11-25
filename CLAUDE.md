@@ -14,7 +14,7 @@
 `DATABASE_URL`, `SITE_URL`, `CRM_PASSWORD`, `CRM_SECRET`, `MAILBOX_KEY`, `CONTACT_PHONE`, `PAY_CARD`, `PAY_BANK`, `PAY_HOLDER` (необязательно),
 `HESTIA_N_URL/KEY/USER/DOMAIN` (N=1…4) — почтовые серверы рассылки,
 `SYS_SMTP_HOST/PORT/USER/PASS/FROM` — ящик для писем клиентам, `OWNER_EMAIL` — куда слать уведомления о заказах,
-`SEND_GAP_SEC` (по умолчанию 20), `COMBO_DISC` (скидка на рассылку к резюме и на вторую базу, по умолчанию 15), `REPLY_MIN` (как часто читать ответы компаний, по умолчанию 5 мин), `HESTIA_N_IMAP_HOST/IMAP_PORT` (по умолчанию как SMTP-хост, порт 993), `LEGAL_NAME`, `LEGAL_INN` — реквизиты для оферты.
+`SEND_GAP_SEC` (по умолчанию 20), `COMBO_DISC` (скидка на рассылку к резюме, по умолчанию 15), `EXTRA_DISC` (скидка на вторую базу в рассылке, по умолчанию 20), `REPLY_MIN` (как часто читать ответы компаний, по умолчанию 5 мин), `HESTIA_N_IMAP_HOST/IMAP_PORT` (по умолчанию как SMTP-хост, порт 993), `LEGAL_NAME`, `LEGAL_INN` — реквизиты для оферты.
 
 ## Личная страница заказа
 - Названия и e-mail компаний клиенту показываются только частично (`mask.js`), копировать нельзя; в CRM — полностью.

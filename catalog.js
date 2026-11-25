@@ -28,8 +28,12 @@ const baseOf = key => BASES.find(b => b.key === key);
 const priceOf = (b, n) => envPrice(mailSlug(b.key, n)) || b.prices[n - 1];
 const fmt = n => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " ₽";
 
-/* скидка на рассылку, добавленную к резюме, и на вторую базу в рассылке: 15% (меняется переменной COMBO_DISC) */
+/* скидка на рассылку, добавленную к резюме: 15% (меняется переменной COMBO_DISC) */
 const discPct = () => { const v = String(process.env.COMBO_DISC ?? "").trim(); return v !== "" && Number(v) >= 0 && Number(v) < 90 ? Number(v) : 15; };
 const addonPrice = full => Math.max(1, Math.round(full * (100 - discPct()) / 100 / 10) * 10 - 1);
 
-module.exports = {discPct, addonPrice, BASES, TIMES, CV, SERVICES, bySlug, baseOf, priceOf, fmt, cvPrice: () => envPrice(CV.slug) || CV.price};
+/* скидка на вторую (любую) базу в рассылке: 20% (меняется переменной EXTRA_DISC) */
+const extraDiscPct = () => { const v = String(process.env.EXTRA_DISC ?? "").trim(); return v !== "" && Number(v) >= 0 && Number(v) < 90 ? Number(v) : 20; };
+const extraPrice = full => Math.max(1, Math.round(full * (100 - extraDiscPct()) / 100 / 10) * 10 - 1);
+
+module.exports = {discPct, addonPrice, extraDiscPct, extraPrice, BASES, TIMES, CV, SERVICES, bySlug, baseOf, priceOf, fmt, cvPrice: () => envPrice(CV.slug) || CV.price};

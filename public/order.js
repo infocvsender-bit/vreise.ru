@@ -95,6 +95,7 @@
                 if(extra.value){ var eo = extra.options[extra.selectedIndex]; if(eo.disabled){ extra.value = ""; } else sum += Number((eo.getAttribute("data-p") || "").split(",")[timesOf() - 1]) || 0; }
             }
         }
+        var ttl = $("ttl"); if(ttl && sel && !isCv){ var so = sel.options[sel.selectedIndex]; if(so) ttl.textContent = "«" + so.getAttribute("data-name") + "»"; }
         if(total) total.textContent = fmt(sum);
     }
     if(sel && !isCv) sel.addEventListener("change", function(){ recalc(); history.replaceState(null, "", "/order?s=" + sel.value); });

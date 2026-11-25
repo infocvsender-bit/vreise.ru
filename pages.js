@@ -134,15 +134,17 @@ function orderForm(slug, counts){
     if(slug === C.CV.slug) return orderFormCv(counts);
     const sv = C.bySlug(slug) || C.SERVICES.find(s => s.base === "rossiya" && s.times === 1), cv = sv.kind === "cv";
     const cnt = counts && counts.byBase || {};
-    const opts = C.BASES.map(b => `<optgroup label="${esc(b.name)}${cnt[b.key] > 0 ? " · " + addrCount(cnt[b.key]) : ""}">${[1, 2, 3].map(n => `<option value="${C.SERVICES.find(s => s.base === b.key && s.times === n).slug}" data-price="${C.priceOf(b, n)}"${sv.base === b.key && sv.times === n ? " selected" : ""}>${esc(b.name)} — ${n === 1 ? "1 рассылка" : n + " рассылки"} · ${rub(C.priceOf(b, n))}</option>`).join("")}</optgroup>`).join("");
+    const opts = C.BASES.map(b => `<optgroup label="${esc(b.name)}${cnt[b.key] > 0 ? " · " + addrCount(cnt[b.key]) : ""}">${[1, 2, 3].map(n => `<option value="${C.SERVICES.find(s => s.base === b.key && s.times === n).slug}" data-name="${esc(b.name)}" data-price="${C.priceOf(b, n)}"${sv.base === b.key && sv.times === n ? " selected" : ""}>${esc(b.name)} — ${n === 1 ? "1 рассылка" : n + " рассылки"} · ${rub(C.priceOf(b, n))}</option>`).join("")}</optgroup>`).join("");
     const pick = cv ? `<input type="hidden" id="slug" value="${C.CV.slug}" data-price="${C.cvPrice()}">` :
-        `<label class="f">База и количество рассылок<select class="in" id="slug">${opts}</select></label>
-<label class="f" style="margin-top:16px">Добавить ещё одну базу в те же рассылки <b style="color:#b9770e">−${C.discPct()}%</b><small> — например, к базе «Мир» добавить «Офшор». Адреса не повторяются</small>
-<select class="in" id="extra"><option value="">Не нужна</option>${C.BASES.map(b => `<option value="${b.key}" data-p="${[1, 2, 3].map(n => C.addonPrice(C.priceOf(b, n))).join(",")}">${esc(b.name)}${cnt[b.key] > 0 ? " · " + addrCount(cnt[b.key]) : ""}</option>`).join("")}</select></label>`;
-    const body = `<div class="page"><h1>${cv ? "Заказ резюме «Стандарт»" : "Заказ рассылки"}</h1>
+        `<label class="f">База и количество рассылок<select class="in" id="slug">${opts}</select></label>`;
+    const extraPanel = cv ? "" : `<div class="panel addon"><h3>➕ Добавить ещё одну базу <span class="badge">−${C.extraDiscPct()}%</span></h3>
+<p class="hint" style="margin-top:0">Любую базу можно добавить в те же рассылки на ${C.extraDiscPct()}% дешевле — например, к базе «Россия» добавить «Танкеры и газовозы». Адреса не повторяются.</p>
+<label class="f">Дополнительная база<select class="in" id="extra"><option value="">Не нужна</option>${C.BASES.map(b => `<option value="${b.key}" data-p="${[1, 2, 3].map(n => C.extraPrice(C.priceOf(b, n))).join(",")}">${esc(b.name)}${cnt[b.key] > 0 ? " · " + addrCount(cnt[b.key]) : ""}</option>`).join("")}</select></label></div>`;
+    const body = `<div class="page"><h1>${cv ? "Заказ резюме «Стандарт»" : `Оформление заказа на базу <span id="ttl">«${esc(C.baseOf(sv.base).name)}»</span>`}</h1>
 <p class="sub">${cv ? "Заполните данные — мы подготовим резюме по международному образцу." : "Заполните форму и загрузите резюме. Оплата — на следующем шаге."}</p>
 <form id="f" novalidate><div class="err" id="err" hidden></div>
 <div class="panel"><h3>${cv ? "Услуга" : "Что отправляем"}</h3>${pick}${cv ? `<p class="hint" style="margin-top:0">${esc(C.CV.title)} · <b>${rub(C.cvPrice())}</b></p>` : ""}</div>
+${extraPanel}
 <div class="panel"><h3>О вас</h3><div class="grid2">
 <label class="f">Имя<input class="in" id="first" autocomplete="given-name" required></label>
 <label class="f">Фамилия<input class="in" id="last" autocomplete="family-name" required></label>

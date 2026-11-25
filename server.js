@@ -191,8 +191,8 @@ function parseBase(text, defaultBase){
                 }
             } else if(b.extra){
                 const eb = C.baseOf(clean(b.extra, 40)); if(!eb || eb.key === sv.base) return json(res, 400, {error: "Выберите дополнительную базу"});
-                extra = eb.key; price = sv.price + C.addonPrice(C.priceOf(eb, sv.times));
-                title = `${sv.title} + «${eb.name}» (доп. база −${C.discPct()}%)`;
+                extra = eb.key; price = sv.price + C.extraPrice(C.priceOf(eb, sv.times));
+                title = `${sv.title} + «${eb.name}» (доп. база −${C.extraDiscPct()}%)`;
             }
             const id = uuid(), token = crypto.randomBytes(18).toString("base64url");
             let o;
