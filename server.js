@@ -531,6 +531,18 @@ function parseBase(text, defaultBase){
             Mail.T.coverDraft(o2, subj, text).catch(() => {});
             return json(res, 200, {ok: true});
         }
+        if(req.method === "POST" && (m = p.match(/^\/orders\/([\w-]+)\/delete$/))){
+            const o = await one(`SELECT id, num FROM orders WHERE id = $1`, [m[1]]); if(!o) return json(res, 404, {error: "нет заказа"});
+            await q(`UPDATE jobs SET status = 'stop', finished_at = $1 WHERE order_id = $2 AND status IN ('wait','run','pause')`, [now(), o.id]);
+            const errs = [];
+            for(const b of await q(`SELECT * FROM boxes WHERE order_id = $1 AND deleted_at IS NULL`, [o.id])) try { await engine.deleteBox(b); } catch(e){ errs.push(`${b.email}: ${e.message}`); }
+            for(const b of await q(`SELECT id FROM boxes WHERE order_id = $1`, [o.id])) await q(`DELETE FROM imap_state WHERE box_id = $1`, [b.id]);
+            await q(`DELETE FROM queue WHERE job_id IN (SELECT id FROM jobs WHERE order_id = $1)`, [o.id]);
+            for(const t of ["jobs", "boxes", "replies", "reply_fwd", "notes", "order_docs"]) await q(`DELETE FROM ${t} WHERE order_id = $1`, [o.id]);
+            await q(`DELETE FROM orders WHERE id = $1`, [o.id]);
+            console.log(`🗑 Заказ №${o.num} удалён из CRM (${who})`);
+            return json(res, 200, {ok: true, warn: errs.length ? "Ящики не удалились на почтовом сервере (удалите вручную): " + errs.join("; ") : ""});
+        }
         if(req.method === "POST" && (m = p.match(/^\/orders\/([\w-]+)\/res-skip$/))){
             const o = await one(`SELECT * FROM orders WHERE id = $1`, [m[1]]); if(!o) return json(res, 404, {error: "нет заказа"});
             await q(`UPDATE orders SET res_ok = $1 WHERE id = $2`, [now(), o.id]);
