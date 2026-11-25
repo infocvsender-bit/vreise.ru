@@ -23,7 +23,7 @@ ${scripts}</body></html>`;
 }
 
 const logo = `<a class="brand" href="/"><img src="/static/logo.svg" alt="" width="44" height="44"><span>Vreise<i>.ru</i></span></a>`;
-const navTop = (full = true) => `<nav class="top">${logo}<span class="sp"></span>${full ? `<a class="l" href="/#services">Услуги</a><a class="l" href="/#how">Как это работает</a><a class="l" href="/#pay">Оплата</a><a class="l" href="/#contacts">Контакты</a>` : ""}<a class="btn gold sm" href="/order">Заказать рассылку</a></nav>`;
+const navTop = (full = true) => `<nav class="top">${logo}<span class="sp"></span>${full ? `<a class="l" href="/#services">Услуги</a><a class="l" href="/#how">Как это работает</a><a class="l" href="/#pay">Оплата</a><a class="l" href="/#contacts">Контакты</a>` : `<a class="l" href="/">← На главную</a>`}<a class="btn gold sm" href="/order">Заказать рассылку</a></nav>`;
 
 /* ---------- главная ---------- */
 const plAddr = n => { const a = n % 10, b = n % 100; return (a === 1 && b !== 11) ? "адрес" : (a >= 2 && a <= 4 && (b < 12 || b > 14)) ? "адреса" : "адресов"; };
@@ -140,12 +140,12 @@ function orderForm(slug, counts){
         `<label class="f">База и количество рассылок<select class="in" id="slug">${opts}</select></label>`;
     const extraPanel = cv ? "" : `<div class="panel addon"><h3>➕ Добавить ещё одну базу <span class="badge">−${C.extraDiscPct()}%</span></h3>
 <p class="hint" style="margin-top:0">Любую базу можно добавить в те же рассылки на ${C.extraDiscPct()}% дешевле — например, к базе «Россия» добавить «Танкеры и газовозы». Адреса не повторяются.</p>
-<label class="f">Дополнительная база<select class="in" id="extra"><option value="">Не нужна</option>${C.BASES.map(b => `<option value="${b.key}" data-p="${[1, 2, 3].map(n => C.extraPrice(C.priceOf(b, n))).join(",")}">${esc(b.name)}${cnt[b.key] > 0 ? " · " + addrCount(cnt[b.key]) : ""}</option>`).join("")}</select></label></div>`;
+<label class="f">Дополнительная база<select class="in" id="extra"><option value="">Не нужна</option>${C.BASES.map(b => `<option value="${b.key}" data-p="${[1, 2, 3].map(n => C.extraPrice(C.priceOf(b, n))).join(",")}" data-f="${[1, 2, 3].map(n => C.priceOf(b, n)).join(",")}" data-t="${esc(b.name)}${cnt[b.key] > 0 ? " · " + addrCount(cnt[b.key]) : ""}">${esc(b.name)}${cnt[b.key] > 0 ? " · " + addrCount(cnt[b.key]) : ""}</option>`).join("")}</select></label>
+<div class="xnote" id="extraNote" hidden></div></div>`;
     const body = `<div class="page"><h1>${cv ? "Заказ резюме «Стандарт»" : `Оформление заказа на базу <span id="ttl">«${esc(C.baseOf(sv.base).name)}»</span>`}</h1>
 <p class="sub">${cv ? "Заполните данные — мы подготовим резюме по международному образцу." : "Заполните форму и загрузите резюме. Оплата — на следующем шаге."}</p>
 <form id="f" novalidate><div class="err" id="err" hidden></div>
-<div class="panel"><h3>${cv ? "Услуга" : "Что отправляем"}</h3>${pick}${cv ? `<p class="hint" style="margin-top:0">${esc(C.CV.title)} · <b>${rub(C.cvPrice())}</b></p>` : ""}</div>
-${extraPanel}
+<div class="panel">${cv ? "<h3>Услуга</h3>" : ""}${pick}${cv ? `<p class="hint" style="margin-top:0">${esc(C.CV.title)} · <b>${rub(C.cvPrice())}</b></p>` : ""}</div>
 <div class="panel"><h3>О вас</h3><div class="grid2">
 <label class="f">Имя<input class="in" id="first" autocomplete="given-name" required></label>
 <label class="f">Фамилия<input class="in" id="last" autocomplete="family-name" required></label>
@@ -162,6 +162,7 @@ ${cv ? `<div class="panel"><h3>Данные для резюме</h3>
 <label class="f">Ваше резюме<small> — PDF или Word, до 5 МБ</small><input class="in" type="file" id="file" accept=".pdf,.doc,.docx" required></label>
 <div style="margin-top:16px"><label class="f">Сопроводительное письмо<small> — по желанию</small><textarea class="in" id="letter" placeholder="Если оставить пустым, отправим стандартное письмо"></textarea></label></div>
 <div style="margin-top:16px"><label class="f">Исключить компании<small> — по желанию: названия или домены, по одному в строке</small><textarea class="in" id="exclude" style="min-height:80px"></textarea></label></div></div>`}
+${extraPanel}
 <div class="panel"><label class="check"><input type="checkbox" id="agree" required><span>Я принимаю условия <a href="/offer" target="_blank">публичной оферты</a> и согласен(на) на обработку персональных данных согласно <a href="/policy" target="_blank">политике конфиденциальности</a>.</span></label></div>
 <input type="text" id="hp" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true">
 <div class="sum"><div>К оплате<br><b id="total">${rub(cv ? C.cvPrice() : sv.price)}</b></div><button class="btn gold" id="go" type="submit">Оформить заказ</button></div></form></div>`;

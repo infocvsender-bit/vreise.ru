@@ -92,7 +92,15 @@
             var o = sel.options[sel.selectedIndex]; sum = Number(o.getAttribute("data-price")) || 0;
             if(extra){
                 [].forEach.call(extra.options, function(x){ x.disabled = !!x.value && sel.value === "rassylka-" + timesOf() + "-" + x.value; });
-                if(extra.value){ var eo = extra.options[extra.selectedIndex]; if(eo.disabled){ extra.value = ""; } else sum += Number((eo.getAttribute("data-p") || "").split(",")[timesOf() - 1]) || 0; }
+                var tn = timesOf() - 1;
+                [].forEach.call(extra.options, function(x){ if(!x.value) return; var f = Number((x.getAttribute("data-f") || "").split(",")[tn]), d = Number((x.getAttribute("data-p") || "").split(",")[tn]); x.textContent = x.getAttribute("data-t") + " — " + fmt(f) + " → " + fmt(d); });
+                var note = $("extraNote");
+                if(extra.value){ var eo = extra.options[extra.selectedIndex]; if(eo.disabled){ extra.value = ""; } else sum += Number((eo.getAttribute("data-p") || "").split(",")[tn]) || 0; }
+                if(note){
+                    if(extra.value){ var eo2 = extra.options[extra.selectedIndex], f2 = Number((eo2.getAttribute("data-f") || "").split(",")[tn]), d2 = Number((eo2.getAttribute("data-p") || "").split(",")[tn]);
+                        note.innerHTML = "Цена базы <s>" + fmt(f2) + "</s> — для вас <b>" + fmt(d2) + "</b>. Вы экономите " + fmt(f2 - d2) + "."; note.hidden = false; }
+                    else note.hidden = true;
+                }
             }
         }
         var ttl = $("ttl"); if(ttl && sel && !isCv){ var so = sel.options[sel.selectedIndex]; if(so) ttl.textContent = "«" + so.getAttribute("data-name") + "»"; }
