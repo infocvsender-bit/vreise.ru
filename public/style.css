@@ -58,7 +58,7 @@ nav.top .sp{flex:1}
 .seg button{border:0;background:transparent;color:var(--muted);font:inherit;font-weight:700;font-size:14.5px;padding:9px 20px;border-radius:999px;cursor:pointer}
 .seg button.on{background:var(--deep);color:#fff}
 .pcs{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
-.pc{position:relative;background:#fff;border:1px solid var(--line);border-radius:22px;padding:26px 22px 22px;display:flex;flex-direction:column;overflow:hidden;transition:transform .15s,box-shadow .15s}
+.pc{position:relative;background:#fff;border:1px solid var(--line);border-radius:22px;padding:26px 22px 22px;display:flex;flex-direction:column;text-align:center;overflow:hidden;transition:transform .15s,box-shadow .15s}
 .pc:before{content:"";position:absolute;left:0;right:0;top:0;height:5px;background:var(--teal)}
 .pc.a1:before{background:var(--gold)}.pc.a2:before{background:#2f9e8f}.pc.a3:before{background:#6b8fa3}
 .pc:hover{transform:translateY(-3px);box-shadow:0 18px 40px -22px rgba(7,34,43,.45)}
