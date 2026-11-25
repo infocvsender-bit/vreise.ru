@@ -1,6 +1,6 @@
 /* CRM Vreise.ru */
 (function(){
-    var view = document.getElementById("view"), tab = "orders", filter = "", search = "";
+    var view = document.getElementById("view"), tab = "orders", filter = "", search = "", mode = "board";
     var ST = {new: "Ждёт оплаты", claimed: "Клиент оплатил", paid: "Оплачен", in_progress: "В работе", done: "Выполнен", cancelled: "Отменён"};
     var JST = {wait: "ждёт", run: "идёт", pause: "пауза", done: "готово", stop: "остановлена"};
     function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){ return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]; }); }
@@ -19,16 +19,58 @@
 
     /* ---------- заказы ---------- */
     function orders(){
-        api("/orders?status=" + encodeURIComponent(filter) + "&q=" + encodeURIComponent(search)).then(function(d){
+        api("/orders?status=" + (mode === "board" ? "" : encodeURIComponent(filter)) + "&q=" + encodeURIComponent(search)).then(function(d){
+            if(mode === "board") return board(d);
             var s = d.summary, fl = [["", "Все"]].concat(Object.keys(ST).map(function(k){ return [k, ST[k] + (s[k] ? " · " + s[k] : "")]; }));
             view.innerHTML = '<div class="flt">' + fl.map(function(f){ return '<button data-f="' + f[0] + '"' + (f[0] === filter ? ' class="on"' : "") + ">" + esc(f[1]) + "</button>"; }).join("") +
                 '<input class="in" id="q" placeholder="Поиск: №, имя, e-mail" style="max-width:260px;padding:7px 12px" value="' + esc(search) + '"></div>' +
                 '<div class="panel" style="padding:8px 14px;overflow:auto"><table class="t"><thead><tr><th>№</th><th>Дата</th><th>Услуга</th><th>Клиент</th><th>Сумма</th><th>Рассылка</th><th>Статус</th></tr></thead><tbody>' +
                 (d.orders.length ? d.orders.map(function(o){ return '<tr class="click" data-id="' + o.id + '"><td><b>' + o.num + "</b></td><td>" + dt(o.created_at) + "</td><td>" + esc(o.title) + "</td><td>" + esc(o.first_name + " " + o.last_name) + '<br><span class="mut">' + esc(o.email) + '</span></td><td>' + rub(o.price) + '</td><td>' + (o.total ? o.sent + ' / ' + o.total + (o.failed ? ' <span class="mut">(ош. ' + o.failed + ')</span>' : '') : '<span class="mut">—</span>') + (o.email_ok ? '' : '<br><span class="mut" title="e-mail не подтверждён">⚠️ почта</span>') + '</td><td><span class="tag ' + o.status + '">' + esc(ST[o.status] || o.status) + "</span></td></tr>"; }).join("") : '<tr><td colspan="7" class="mut">Заказов пока нет</td></tr>') + "</tbody></table></div>";
+            view.insertAdjacentHTML("afterbegin", modeSwitch()); bindMode();
             [].forEach.call(view.querySelectorAll("[data-f]"), function(b){ b.onclick = function(){ filter = b.getAttribute("data-f"); orders(); }; });
             [].forEach.call(view.querySelectorAll("tr.click"), function(r){ r.onclick = function(){ order(r.getAttribute("data-id")); }; });
             var q = document.getElementById("q"); q.onkeydown = function(e){ if(e.key === "Enter"){ search = q.value; orders(); } };
         }).catch(alertErr);
+    }
+
+
+    /* ---------- доска заказов (канбан) ---------- */
+    function modeSwitch(){ return '<div class="flt" id="msw"><button data-m="board"' + (mode === "board" ? ' class="on"' : "") + '>🗂 Доска</button><button data-m="list"' + (mode === "list" ? ' class="on"' : "") + ">📋 Список</button></div>"; }
+    function bindMode(){ [].forEach.call(document.querySelectorAll("#msw [data-m]"), function(b){ b.onclick = function(){ mode = b.getAttribute("data-m"); orders(); }; }); }
+    var COLS = [["new", "🆕 Новый, ждёт оплаты", "#e0a030"], ["claimed", "💬 Сообщил об оплате", "#e05a2a"], ["paid", "💰 Оплачен", "#2f9e63"], ["work", "🛠 В работе", "#3b78c9"],
+        ["run", "📨 Рассылка идёт", "#6b4fd8"], ["done", "✅ Выполнен", "#0A3340"], ["cancelled", "✖ Отменён", "#a33"]];
+    var COLORS = ["#b04a3c", "#3f51b5", "#2f9e8f", "#8e5bb5", "#c77d1a", "#3a7ca5", "#6b8e23"];
+    function colOf(o){ if(o.status === "in_progress") return (o.jobs || []).some(function(j){ return j.status === "run"; }) ? "run" : "work"; return o.status; }
+    function initials(o){ return ((o.first_name || "?")[0] + (o.last_name || "")[0]).toUpperCase(); }
+    function pill(cls, t){ return '<div class="kb-p ' + cls + '">' + t + "</div>"; }
+    function card(o){
+        var js = o.jobs || [], run = js.filter(function(j){ return j.status === "run"; }), pause = js.some(function(j){ return j.status === "pause"; }), wait = js.filter(function(j){ return j.status === "wait"; });
+        var col = COLORS[(o.num || 0) % COLORS.length], pct = o.total ? Math.round((o.sent + o.failed) / o.total * 100) : 0, b = [];
+        b.push(o.email_ok ? pill("ok", "✉️ Почта: ✅ подтверждена") : pill("bad", "✉️ Почта: ⚠️ не подтверждена"));
+        if(o.base){
+            if(Number(o.cover)) b.push(o.cover_ok ? pill("ok", "💌 Персональное письмо: ✅ подтверждено") : pill("warn", "💌 Персональное письмо: ⏳ " + (o.status === "new" || o.status === "claimed" ? "после оплаты" : "нужно составить / подтвердить")));
+            else b.push(pill("", o.own_letter ? "📝 своё письмо" : "📝 стандартное письмо"));
+        }
+        if(js.length && o.total) b.push('<div class="kb-prog"><i style="width:' + pct + '%"></i></div>' + pill("", "📨 Отправлено <b>" + pct + "%</b> · " + o.sent.toLocaleString("ru-RU") + " из " + o.total.toLocaleString("ru-RU")));
+        if(pause) b.push(pill("warn", "⏸ Рассылка на паузе"));
+        if(wait.length && !run.length) b.push(pill("", "📅 Старт: " + wait.map(function(j){ return dt(j.start_at); }).join(", ")));
+        if(o.replies) b.push(pill("ok", "💬 Ответов компаний: " + o.replies));
+        var ti = [o.position, o.vessel].filter(Boolean).join(" · ");
+        return '<div class="kb-c" data-id="' + o.id + '"><div class="kb-h"><span>№' + o.num + (o.base ? " · 📨" : "") + (o.kind === "cv" ? " · 📄" : "") + "</span><span class=\"mut\">" + dt(o.created_at) + "</span></div>" +
+            '<div class="kb-who"><span class="kb-av" style="background:' + col + '">' + esc(initials(o)) + '</span><div class="kb-n"><b>' + esc(o.first_name + " " + o.last_name) + "</b><small>" + esc(ti) + "</small></div><b class=\"kb-pr\">" + rub(o.price) + "</b></div>" +
+            '<div class="kb-t">' + esc(o.title) + "</div>" + b.join("") + "</div>";
+    }
+    function board(d){
+        var by = {}; COLS.forEach(function(c){ by[c[0]] = []; }); d.orders.forEach(function(o){ (by[colOf(o)] || (by[colOf(o)] = [])).push(o); });
+        var h = modeSwitch() + '<div class="flt"><input class="in" id="q" placeholder="Поиск: №, имя, e-mail" style="max-width:260px;padding:7px 12px" value="' + esc(search) + '"></div><div class="kb">';
+        COLS.forEach(function(c){
+            var list = by[c[0]], sum = list.reduce(function(a, o){ return a + o.price; }, 0), cap = c[0] === "cancelled" ? 10 : c[0] === "done" ? 20 : 500;
+            h += '<div class="kb-col" style="border-top-color:' + c[2] + '"><div class="kb-ch"><span><i style="background:' + c[2] + '"></i>' + c[1] + '</span><b>' + list.length + "</b></div>" + (list.length ? '<div class="mut" style="margin:-4px 0 8px 2px">' + rub(sum) + "</div>" : "") +
+                (list.length ? list.slice(0, cap).map(card).join("") + (list.length > cap ? '<p class="mut" style="text-align:center">…ещё ' + (list.length - cap) + " (смотрите во вкладке «Список»)</p>" : "") : '<div class="kb-empty">Пусто</div>') + "</div>";
+        });
+        view.innerHTML = h + "</div>"; bindMode();
+        [].forEach.call(view.querySelectorAll(".kb-c"), function(c){ c.onclick = function(){ order(c.getAttribute("data-id")); }; });
+        var q = document.getElementById("q"); q.onkeydown = function(e){ if(e.key === "Enter"){ search = q.value; orders(); } };
     }
 
     function order(id){
@@ -172,6 +214,12 @@
             view.innerHTML = '<div class="panel"><h3>Серверы рассылки (Hestia)</h3>' + (d.servers.length ? '<table class="t"><thead><tr><th>Домен</th><th>SMTP</th><th>Ящиков</th><th></th></tr></thead><tbody>' + d.servers.map(function(s){ return "<tr><td>" + esc(s.domain) + "</td><td>" + esc(s.host) + ":" + s.port + "</td><td>" + s.boxes + "</td><td>" + (s.skipped ? "не используется" : "в работе") + "</td></tr>"; }).join("") + "</tbody></table>" : '<div class="err">Серверы не подключены: добавьте HESTIA_1_URL / KEY / USER / DOMAIN в Railway.</div>') +
                 '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"><input class="in" id="tt" placeholder="Ваш e-mail для теста" style="max-width:280px"><button class="btn gold sm" id="tgo">Тест всех серверов рассылки</button><button class="btn sm line" style="color:var(--deep);border-color:#9fb6bb" id="tsys">Тест системной почты</button></div><p id="tmsg" class="mut" style="margin-top:10px"></p></div>' +
                 '<div class="panel"><h3>Настройки</h3><div class="kv"><b>Системная почта</b><span>' + yes(d.system) + " (SYS_SMTP_*)</span><b>Почта владельца</b><span>" + yes(d.owner) + " (OWNER_EMAIL)</span><b>Карта для оплаты</b><span>" + yes(d.pay) + " (PAY_CARD)</span><b>Телефон</b><span>" + yes(d.phone) + " (CONTACT_PHONE)</span><b>Пауза между письмами</b><span>" + d.gap + " с (SEND_GAP_SEC)</span></div></div>";
+            var TPL = [["confirm", "Подтверждение e-mail (рассылка)"], ["confirm_cv", "Подтверждение e-mail (резюме)"], ["paid", "Оплата получена (рассылка)"], ["paid_cv", "Оплата получена (резюме)"], ["preview", "Как будет выглядеть рассылка"],
+                ["coverDraft", "Персональное письмо готово — подтвердите"], ["started", "Рассылка началась"], ["finished", "Рассылка завершена"], ["newReplies", "Пришёл ответ компании"], ["reply", "Ответ менеджера"], ["cvReady_cv", "Резюме готово"], ["owner_order", "Вам: новый заказ (полное уведомление)"]];
+            view.insertAdjacentHTML("beforeend", '<div class="panel"><h3>Тест писем клиенту</h3><p class="mut" style="margin-top:0">Отправит выбранное письмо на ваш адрес — так, как его получает клиент. Номер заказа не обязателен: без него берутся примерные данные.</p>' +
+                '<div style="display:flex;gap:8px;flex-wrap:wrap"><select class="in" id="mtpl" style="max-width:340px">' + TPL.map(function(t){ return '<option value="' + t[0] + '">' + esc(t[1]) + "</option>"; }).join("") + '</select><input class="in" id="mto" type="email" placeholder="Куда отправить" style="max-width:260px"><input class="in" id="mnum" placeholder="№ заказа (по желанию)" style="max-width:190px"><button class="btn gold sm" id="mgo">Отправить тест</button></div><p id="mmsg" class="mut" style="margin-top:10px"></p></div>');
+            document.getElementById("mgo").onclick = function(){ var m = document.getElementById("mmsg"); m.textContent = "Отправляю…";
+                api("/mail-test", {body: {tpl: document.getElementById("mtpl").value, to: document.getElementById("mto").value, num: document.getElementById("mnum").value}}).then(function(r){ m.textContent = "✅ Отправлено" + (r.demo ? " (на примерных данных)" : "") + " — проверьте почту"; }).catch(function(e){ m.textContent = "❌ " + e.message; }); };
             var $ = function(i){ return document.getElementById(i); }, run = function(path, label){
                 $("tmsg").textContent = "Отправляю…";
                 api(path, {body: {to: $("tt").value}}).then(function(r){ $("tmsg").textContent = "✅ " + label + (r.domain ? " (" + r.domain + ")" : "") + " — проверьте почту"; }).catch(function(e){ $("tmsg").textContent = (/^✅|^❌/.test(e.message) ? "" : "❌ ") + e.message; });
@@ -181,7 +229,21 @@
         }).catch(alertErr);
     }
 
-    function show(){ ({orders: orders, bases: bases, letter: letter, servers: servers})[tab](); }
+
+    /* ---------- ящики рассылки ---------- */
+    function boxesTab(){
+        api("/boxes").then(function(d){
+            var ST = {working: ["🟢 работает", "ok"], paused: ["⏸ рассылка на паузе", "warn"], ending: ["🕓 доживает срок", "warn"], deleted: ["удалён", ""]};
+            view.innerHTML = '<div class="panel"><h3>Ящики рассылки · сейчас живых: ' + d.live + "</h3>" +
+                '<p class="mut" style="margin-top:0">Ящик создаётся при старте каждой рассылки (на каждом сервере по одному) и удаляется через ' + d.hours + " ч после её окончания или отмены. Пока рассылка на паузе, ящики остаются — она считается незавершённой.</p>" +
+                (d.boxes.length ? '<div style="overflow:auto"><table class="t"><thead><tr><th>Ящик</th><th>Сервер</th><th>Заказ</th><th>Создан</th><th>Отправлено</th><th>Статус</th><th>Удалится</th></tr></thead><tbody>' +
+                d.boxes.map(function(b){ var st = ST[b.state] || ["", ""];
+                    return "<tr><td>" + esc(b.email) + (b.last_error ? '<br><span class="mut" style="color:#c0392b">' + esc(b.last_error) + "</span>" : "") + "</td><td>" + esc(b.domain) + "</td><td>" + (b.num ? "№" + b.num + " · " + esc((b.first_name || "") + " " + (b.last_name || "")) + (b.m ? " · рассылка " + b.m : "") : "—") + "</td><td>" + dt(b.created_at) + "</td><td>" + b.sent + "</td><td>" + st[0] + (Number(b.active) ? "" : " · выкл") + "</td><td>" +
+                    (b.deleted_at ? "удалён " + dt(b.deleted_at) : b.delete_at ? dt(b.delete_at) : "через " + d.hours + " ч после окончания") + "</td></tr>"; }).join("") + "</tbody></table></div>" : '<p class="mut">Ящиков пока нет — они появятся при старте первой рассылки.</p>') + "</div>";
+        }).catch(alertErr);
+    }
+
+    function show(){ ({orders: orders, boxes: boxesTab, bases: bases, letter: letter, servers: servers})[tab](); }
     [].forEach.call(document.querySelectorAll("#tabs button"), function(b){ b.onclick = function(){
         tab = b.getAttribute("data-t"); [].forEach.call(document.querySelectorAll("#tabs button"), function(x){ x.classList.toggle("on", x === b); }); show(); }; });
     show();

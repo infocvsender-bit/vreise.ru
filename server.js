@@ -434,11 +434,14 @@ function parseBase(text, defaultBase){
         let m;
         if(req.method === "GET" && p === "/orders"){
             const st = clean(u.searchParams.get("status"), 20), s = clean(u.searchParams.get("q"), 80).toLowerCase();
-            let rows = await q(`SELECT ${ORDER_LIST} FROM orders ORDER BY num DESC LIMIT 500`);
+            let rows = await q(`SELECT ${ORDER_LIST}, cover_ok, schedule, reply_to, CASE WHEN letter IS NOT NULL AND letter <> '' THEN 1 ELSE 0 END AS own_letter FROM orders ORDER BY num DESC LIMIT 500`);
             if(st) rows = rows.filter(r => r.status === st);
             if(s) rows = rows.filter(r => [r.num, r.email, r.first_name, r.last_name, r.phone].join(" ").toLowerCase().includes(s));
             const pr = await q(`SELECT order_id, SUM(sent) AS s, SUM(total) AS t, SUM(failed) AS f FROM jobs GROUP BY order_id`), pm = Object.fromEntries(pr.map(r => [r.order_id, r]));
-            for(const r of rows){ const x = pm[r.id]; r.sent = x ? Number(x.s) : 0; r.total = x ? Number(x.t) : 0; r.failed = x ? Number(x.f) : 0; }
+            const jb = await q(`SELECT order_id, m, status, sent, total, failed, start_at, last_error FROM jobs ORDER BY m`), jm = {};
+            for(const j of jb) (jm[j.order_id] = jm[j.order_id] || []).push({m: j.m, status: j.status, sent: Number(j.sent), total: Number(j.total), failed: Number(j.failed), start_at: j.start_at, err: !!j.last_error});
+            const rp = await q(`SELECT order_id, COUNT(*) AS n FROM replies WHERE kind = 'reply' GROUP BY order_id`), rm = Object.fromEntries(rp.map(x => [x.order_id, Number(x.n)]));
+            for(const r of rows){ const x = pm[r.id]; r.sent = x ? Number(x.s) : 0; r.total = x ? Number(x.t) : 0; r.failed = x ? Number(x.f) : 0; r.jobs = jm[r.id] || []; r.replies = rm[r.id] || 0; }
             const sum = await q(`SELECT status, COUNT(*) AS n FROM orders GROUP BY status`);
             return json(res, 200, {orders: rows, summary: Object.fromEntries(sum.map(r => [r.status, Number(r.n)]))});
         }
@@ -575,6 +578,39 @@ function parseBase(text, defaultBase){
         if(req.method === "POST" && p === "/bases/clear"){
             const b = await body(req); if(b.confirm !== "очистить") return json(res, 400, {error: "Для очистки введите слово «очистить»"});
             await q(`DELETE FROM base_rows`); counts = null; return json(res, 200, {ok: true});
+        }
+        /* ящики рассылки: где созданы и когда удалятся */
+        if(req.method === "GET" && p === "/boxes"){
+            const h = Number(env("BOX_DELETE_H")), hours = Number.isFinite(h) && h >= 0 && env("BOX_DELETE_H") !== "" ? h : 24;
+            const rows = await q(`SELECT b.id, b.email, b.domain, b.host, b.active, b.sent, b.created_at, b.deleted_at, b.last_error, j.m, j.status AS jstatus, j.finished_at, j.start_at, o.num, o.first_name, o.last_name
+                FROM boxes b LEFT JOIN jobs j ON j.id = b.job_id LEFT JOIN orders o ON o.id = b.order_id ORDER BY b.created_at DESC LIMIT 300`);
+            for(const r of rows){
+                r.delete_at = r.deleted_at ? null : (r.finished_at ? new Date(Date.parse(r.finished_at) + hours * 3600e3).toISOString() : null);
+                r.state = r.deleted_at ? "deleted" : r.finished_at ? "ending" : r.jstatus === "pause" ? "paused" : "working";
+            }
+            return json(res, 200, {boxes: rows, hours, live: rows.filter(r => !r.deleted_at).length});
+        }
+        /* тест любого письма, которое получает клиент (и уведомления владельцу) */
+        if(req.method === "POST" && p === "/mail-test"){
+            const b = await body(req), to = clean(b.to, 120), tpl = clean(b.tpl, 30);
+            if(!EMAIL.test(to)) return json(res, 400, {error: "Укажите e-mail, куда отправить тест"});
+            let o = null; const num = Number(b.num);
+            if(num) o = await one(`SELECT * FROM orders WHERE num = $1`, [num]);
+            if(num && !o) return json(res, 404, {error: "Заказ №" + num + " не найден"});
+            const cvT = tpl.endsWith("_cv"), name = tpl.replace(/_cv$/, "");
+            const demo = {id: "demo", num: 9999, token: "demo-token-0000000", kind: cvT ? "cv" : "mailing", slug: "demo", title: cvT ? "Резюме «Стандарт»" : "Рассылка разовая · Россия", base: cvT ? null : "rossiya", times: 1, price: 1439,
+                status: "paid", first_name: "Иван", last_name: "Петров", email: to, position: "Второй помощник", vessel: "Танкеры, Балкеры", phone: "+7 900 123 45 67", cv_name: "cv.pdf", created_at: now(), schedule: JSON.stringify([new Date(Date.now() + 864e5).toISOString().slice(0, 10) + "T09:00"])};
+            const ord = o ? {...o, email: to} : demo, job = {m: 1, total: 3703, sent: 3698, failed: 5};
+            const L = engine.letterFor(ord);
+            const map = {
+                confirm: () => Mail.T.confirm(ord), paid: () => Mail.T.paid(ord), started: () => Mail.T.started(ord, job), finished: () => Mail.T.finished(ord, job),
+                reply: () => Mail.T.reply(ord, "Здравствуйте! Это пример ответа менеджера по вашему заказу.", "", null), newReplies: () => Mail.T.newReplies(ord, 2),
+                coverDraft: () => Mail.T.coverDraft(ord, L.subject, L.text), preview: () => Mail.T.preview(ord, L, ord.cv_name), cvReady: () => Mail.T.cvReady(ord),
+                owner_order: () => { const t = ownerOrderText(ord); return Mail.send(to, t.split("\n")[0].slice(0, 120), `<pre style="font:14px/1.5 Arial,sans-serif;white-space:pre-wrap">${Mail.esc(t)}</pre>`, t); }};
+            if(!map[name]) return json(res, 400, {error: "Неизвестное письмо"});
+            const okSend = await map[name]();
+            if(okSend === false) return json(res, 500, {error: "Письмо не ушло — проверьте системную почту (Серверы и настройки → Тест системной почты)"});
+            return json(res, 200, {ok: true, demo: !o});
         }
         if(req.method === "GET" && p === "/servers"){
             const act = await q(`SELECT domain, COUNT(*) AS n, SUM(sent) AS sent FROM boxes WHERE deleted_at IS NULL AND active = 1 GROUP BY domain`);
