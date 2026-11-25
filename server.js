@@ -149,6 +149,11 @@ function parseBase(text, defaultBase){
     const db = await openDb(), engine = makeEngine(db), q = (s, p) => db.query(s, p), one = (s, p) => db.one(s, p);
     let counts = null, countsAt = 0;
     const askAssistant = require("./assistant.js")({json, body, limited, ipOf, getCounts: () => getCounts()});
+    /* Лимит приёма: не больше ORDERS_PER_DAY (по умолчанию 10) новых заказов в сутки по Москве; отменённые не считаются */
+    const ordersLimit = () => { const n = Number(env("ORDERS_PER_DAY")); return Number.isFinite(n) && n > 0 ? Math.floor(n) : 10; };
+    const ordersToday = async () => { const msk = 3 * 3600e3, d = new Date(Date.now() + msk), start = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - msk).toISOString(); return Number((await one(`SELECT COUNT(*) AS n FROM orders WHERE created_at >= $1 AND status <> 'cancelled'`, [start])).n); };
+    const ordersClosed = async () => (await ordersToday().catch(() => 0)) >= ordersLimit();
+    const CLOSED_MSG = () => `Мы принимаем не больше ${ordersLimit()} заказов в день, чтобы выполнять каждый внимательно. Приём откроется завтра в 00:00 по Москве.`;
     const getCounts = async () => { if(!counts || Date.now() - countsAt > 300e3){ counts = await engine.baseCounts(); countsAt = Date.now(); } return counts; };
     const SEC = SECM.create({one, q, now, Mail, env, siteUrl: Mail.siteUrl});
     await SEC.rotate().catch(e => console.error("🔐 CRM-ключ:", e.message)); setInterval(() => SEC.rotate().catch(() => {}), 3600e3).unref();
@@ -174,7 +179,7 @@ function parseBase(text, defaultBase){
             return send(res, 200, fs.readFileSync(f), MIME[path.extname(f).toLowerCase()] || "application/octet-stream", {"Cache-Control": "public, max-age=86400"});
         }
         if(p === "/") return send(res, 200, P.home(await getCounts().catch(() => null)));
-        if(p === "/order") return send(res, 200, P.orderForm(u.searchParams.get("s") || "", await getCounts().catch(() => null)));
+        if(p === "/order") return send(res, 200, P.orderForm(u.searchParams.get("s") || "", await getCounts().catch(() => null), await ordersClosed() ? CLOSED_MSG() : ""));
         if(p === "/policy" || p === "/offer") return send(res, 200, P.legal(p.slice(1)));
         if(p === "/blog") return send(res, 200, P.blogIndex());
         { const bm = p.match(/^\/blog\/([a-z0-9-]{3,80})$/); if(bm){ const pg = P.blogArticle(bm[1]); return pg ? send(res, 200, pg) : send(res, 404, P.notFound()); } }
@@ -235,6 +240,7 @@ function parseBase(text, defaultBase){
         if(req.method === "POST" && p === "/api/order"){
             const ip = ipOf(req);
             if(limited("order:" + ip, 6, 3600e3)) return json(res, 429, {error: "Слишком много заказов с вашего адреса. Попробуйте позже или напишите нам в чате на сайте."});
+            if(await ordersClosed()) return json(res, 409, {error: "На сегодня приём заказов закрыт. " + CLOSED_MSG()});
             const b = await body(req);
             if(b.hp) return json(res, 200, {url: "/"});                           // ловушка для ботов
             const sv = C.bySlug(clean(b.slug, 80)); if(!sv) return json(res, 400, {error: "Выберите услугу"});
@@ -298,6 +304,7 @@ function parseBase(text, defaultBase){
             if(!o) return json(res, 500, {error: "Не удалось создать заказ, попробуйте ещё раз"});
             Mail.T.confirm(o).catch(() => {});
             Mail.owner(ownerOrderText(o), o.id);
+            ordersToday().then(n => { if(n === ordersLimit()) Mail.toBot(`🚦 Дневной лимит заказов достигнут (${n}). До полуночи по Москве новые заказы не принимаются.`, "limit"); }).catch(() => {});
             return json(res, 200, {url: "/o/" + o.token, id: o.id, token: o.token});
         }
         let m = p.match(/^\/api\/order\/([\w-]{10,60})\/doc$/);

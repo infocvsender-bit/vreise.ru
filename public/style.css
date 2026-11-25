@@ -250,3 +250,6 @@ footer.f .fl .fnote{flex:1;min-width:240px;text-align:center}
 @media(max-width:520px){footer.f .fg{grid-template-columns:1fr}footer.f .fl{flex-direction:column;align-items:flex-start}footer.f .fl .fnote{text-align:left}}
 footer.f .brand{color:#fff;font-size:24px}footer.f .brand i{color:var(--gold);font-style:normal}
 footer.f .fl{padding-right:84px}@media(max-width:520px){footer.f .fl{padding-right:0;padding-bottom:70px}}
+
+.closedbar{max-width:1040px;margin:18px auto 0;background:#fff4d6;border:1.5px solid #f0d27a;color:#4a3a00;border-radius:14px;padding:14px 18px;line-height:1.5;font-size:15.5px}.closedbar b{color:#2b2200}
+button#go[disabled]{opacity:.5;cursor:not-allowed}

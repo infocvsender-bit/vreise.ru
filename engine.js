@@ -13,6 +13,9 @@ const WEEK = 7 * 864e5, DAY = 864e5, MSK = 3 * 3600e3;
 const MIN_HOURS = 10, WIN_FROM = 6, WIN_TO = 18;
 const mskParts = ms => { const d = new Date(ms + MSK); return {dow: d.getUTCDay(), h: d.getUTCHours() + d.getUTCMinutes() / 60 + d.getUTCSeconds() / 3600, d}; };
 const inWindow = ms => { const p = mskParts(ms); return p.dow >= 1 && p.dow <= 5 && p.h >= WIN_FROM && p.h < WIN_TO; };
+/* Пауза клиента — не дольше 2 рабочих дней: прибавляем 2 будних дня (суббота и воскресенье не считаются) */
+const PAUSE_DAYS = 2;
+function addWorkdays(ms, n){ let t = ms, k = 0; while(k < n){ t += DAY; const w = mskParts(t).dow; if(w >= 1 && w <= 5) k++; } return t; }
 function nextWindow(ms){                                   // ближайший момент не раньше ms, когда отправка разрешена
     let t = ms;
     for(let i = 0; i < 12; i++){
@@ -234,6 +237,10 @@ module.exports = function engine(db){
     async function tick(){
         if(busy) return; busy = true;
         try {
+            for(const pj of await q(`SELECT * FROM jobs WHERE status = 'pause' AND pause_until IS NOT NULL AND pause_until <= $1 AND last_error IS NULL`, [now()])){      // пауза клиента закончилась — продолжаем сами
+                await jobCtl(pj, "resume", "Система"); const po = await one(`SELECT * FROM orders WHERE id = $1`, [pj.order_id]);
+                if(po){ await note(po.id, `Рассылка №${pj.m}: пауза (максимум 2 рабочих дня) закончилась — рассылка продолжена автоматически`, "Система"); Mail.owner(`▶️ Пауза закончилась (2 рабочих дня), рассылка продолжена автоматически\nЗаказ №${po.num} · рассылка №${pj.m} · ${po.email}`, po.id).catch(() => {}); }
+            }
             const jobs = await q(`SELECT j.* FROM jobs j WHERE j.status IN ('wait','run') ORDER BY j.start_at`);
             for(const job of jobs){
                 const o = await one(`SELECT * FROM orders WHERE id = $1`, [job.order_id]); if(!o) continue;
@@ -374,9 +381,9 @@ module.exports = function engine(db){
 
     async function jobCtl(job, action, who){
         const o = await one(`SELECT * FROM orders WHERE id = $1`, [job.order_id]);
-        if(action === "pause") await q(`UPDATE jobs SET status = 'pause' WHERE id = $1 AND status IN ('run','wait')`, [job.id]);
-        else if(action === "resume") await q(`UPDATE jobs SET status = CASE WHEN started_at IS NULL THEN 'wait' ELSE 'run' END, last_error = NULL WHERE id = $1 AND status = 'pause'`, [job.id]);
-        else if(action === "stop"){ await q(`UPDATE jobs SET status = 'stop', finished_at = $1 WHERE id = $2`, [now(), job.id]); }
+        if(action === "pause") await q(`UPDATE jobs SET status = 'pause', pause_until = $2 WHERE id = $1 AND status IN ('run','wait')`, [job.id, who === "Клиент" ? new Date(addWorkdays(Date.now(), PAUSE_DAYS)).toISOString() : null]);   // клиентская пауза кончается сама через 2 рабочих дня; менеджер ставит паузу без срока
+        else if(action === "resume") await q(`UPDATE jobs SET status = CASE WHEN started_at IS NULL THEN 'wait' ELSE 'run' END, last_error = NULL, pause_until = NULL WHERE id = $1 AND status = 'pause'`, [job.id]);
+        else if(action === "stop"){ await q(`UPDATE jobs SET status = 'stop', finished_at = $1, pause_until = NULL WHERE id = $2`, [now(), job.id]); }
         else if(action === "retry"){ await q(`UPDATE queue SET status = 'wait', tries = 0, error = NULL WHERE job_id = $1 AND status = 'fail'`, [job.id]);
             await q(`UPDATE jobs SET status = 'run', failed = 0 WHERE id = $1`, [job.id]); }
         if(o) await note(o.id, `Рассылка №${job.m}: ${({pause: "пауза", resume: "продолжена", stop: "остановлена", retry: "повтор ошибок"})[action] || action}`, who);

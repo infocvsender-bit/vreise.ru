@@ -34,7 +34,7 @@
     [].forEach.call(document.querySelectorAll(".jbtn"), function(b){
         b.addEventListener("click", function(){
             var act = b.getAttribute("data-a");
-            if(act === "pause" && !confirm("Поставить рассылку на паузу? Письма перестанут уходить, пока вы не нажмёте «Продолжить».")) return;
+            if(act === "pause" && !confirm("Поставить рассылку на паузу? Письма перестанут уходить. Пауза — не дольше 2 рабочих дней, затем рассылка продолжится сама (или раньше — по кнопке «Продолжить»).")) return;
             if(act === "cancel" && !confirm("Отменить рассылку? Неотправленные письма не уйдут, это действие нельзя отменить. Уже отправленные письма вернуть нельзя.")) return;
             var msg = b.parentNode.querySelector(".jmsg"); b.disabled = true; say(msg, "");
             post("/job", {id: b.getAttribute("data-j"), action: act}).then(function(){ location.reload(); }).catch(function(e){ b.disabled = false; say(msg, e.message); });
