@@ -52,6 +52,6 @@ module.exports = async function openDb(){
         `CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT)`,
         `CREATE TABLE IF NOT EXISTS mail_log(id TEXT PRIMARY KEY, at TEXT NOT NULL, to_email TEXT, subject TEXT, ok INTEGER NOT NULL, error TEXT)`
     ]) await db.query(s);
-    for(const c of ["subject TEXT", "letter_ok TEXT", "email_ok TEXT", "details TEXT", "extra_base TEXT", "cover INTEGER DEFAULT 0", "cover_ok TEXT", "draft_subject TEXT", "draft_letter TEXT", "schedule TEXT"]) await db.query(`ALTER TABLE orders ADD COLUMN ${c}`).catch(() => {});
+    for(const c of ["subject TEXT", "letter_ok TEXT", "email_ok TEXT", "details TEXT", "extra_base TEXT", "cover INTEGER DEFAULT 0", "cover_ok TEXT", "draft_subject TEXT", "draft_letter TEXT", "schedule TEXT", "reply_to TEXT"]) await db.query(`ALTER TABLE orders ADD COLUMN ${c}`).catch(() => {});
     return db;
 };

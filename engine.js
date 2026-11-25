@@ -63,10 +63,10 @@ module.exports = function engine(db){
         const name = [o.first_name, o.last_name].filter(Boolean).join(" "), P = posList(o), many = P.length > 1;
         const phone = o.phone ? `\n${ru ? "Телефон" : "Phone"}: ${o.phone}` : "";
         if(ru){
-            return `Добрый день!\nУважаемый менеджер по экипажам!\nМеня зовут ${name}.\nПишу, чтобы откликнуться на ${many ? "должности" : "должность"} ${P.join(", ") || "моряка"} в вашей компании. У меня большой морской опыт, я ответственно отношусь к безопасности и умею работать в команде.\nЯ работал(а) на судах разных типов, имею все необходимые документы по конвенции ПДНВ (STCW). Если вашей компании потребуются дополнительные документы, я готов(а) их оформить.\n${o.vessel ? `Хотел(а) бы работать на судах: ${o.vessel}.\n` : ""}Безопасность для меня — приоритет: умею оценивать риски, действовать в аварийных ситуациях и применять эффективные меры безопасности. Легко нахожу общий язык с интернациональными экипажами.\nРезюме прикладываю — там подробнее о моей квалификации и опыте.\nСпасибо за внимание к моей кандидатуре. Готов(а) пройти собеседование в удобное для вас время и буду рад(а) обсудить, чем могу быть полезен(на) вашей компании.\nМои контакты:\n\nE-mail: ${o.email}${phone}\n\nС уважением,\n${name}`;
+            return `Добрый день!\nУважаемый менеджер по экипажам!\nМеня зовут ${name}.\nПишу, чтобы откликнуться на ${many ? "должности" : "должность"} ${P.join(", ") || "моряка"} в вашей компании. У меня большой морской опыт, я ответственно отношусь к безопасности и умею работать в команде.\nЯ работал(а) на судах разных типов, имею все необходимые документы по конвенции ПДНВ (STCW). Если вашей компании потребуются дополнительные документы, я готов(а) их оформить.\n${o.vessel ? `Хотел(а) бы работать на судах: ${o.vessel}.\n` : ""}Безопасность для меня — приоритет: умею оценивать риски, действовать в аварийных ситуациях и применять эффективные меры безопасности. Легко нахожу общий язык с интернациональными экипажами.\nРезюме прикладываю — там подробнее о моей квалификации и опыте.\nСпасибо за внимание к моей кандидатуре. Готов(а) пройти собеседование в удобное для вас время и буду рад(а) обсудить, чем могу быть полезен(на) вашей компании.\nМои контакты:\n\nE-mail: ${o.reply_to || o.email}${phone}\n\nС уважением,\n${name}`;
         }
         const nm = latin(name);
-        return `Good day\nDear Crew Manager\nMy name is ${nm}\nI am writing to apply for ${many ? "the positions" : "the position"} of ${P.join(", ") || "a seafarer position"} at your company. With my extensive maritime experience and strong commitment to safety and teamwork.\nI have experience in the maritime industry, having served onboard various types of vessels. I possess the necessary certifications according to STCW convention. Also I\u2019m ready to obtain any additional documents if it is required by your company.\n${o.vessel ? `I would like to work onboard: ${vesEn(o.vessel)}.\n` : ""}Safety is my top priority, and I have a proven track record of promoting a culture of safety onboard. I am skilled in risk assessment, emergency response, and implementing effective safety measures. I am also a team player with excellent communication skills and the ability to work well with multicultural crews.\nI have attached my resume for your review, which provides further details on my qualifications and experiences.\nThank you for considering my application. I am available for an interview at your convenience, and I look forward to the opportunity to discuss how my skills align with the needs of your company.\nMy Contact details\n\nEmail: ${o.email}${phone}\n\nBest Regards\n${nm}`;
+        return `Good day\nDear Crew Manager\nMy name is ${nm}\nI am writing to apply for ${many ? "the positions" : "the position"} of ${P.join(", ") || "a seafarer position"} at your company. With my extensive maritime experience and strong commitment to safety and teamwork.\nI have experience in the maritime industry, having served onboard various types of vessels. I possess the necessary certifications according to STCW convention. Also I\u2019m ready to obtain any additional documents if it is required by your company.\n${o.vessel ? `I would like to work onboard: ${vesEn(o.vessel)}.\n` : ""}Safety is my top priority, and I have a proven track record of promoting a culture of safety onboard. I am skilled in risk assessment, emergency response, and implementing effective safety measures. I am also a team player with excellent communication skills and the ability to work well with multicultural crews.\nI have attached my resume for your review, which provides further details on my qualifications and experiences.\nThank you for considering my application. I am available for an interview at your convenience, and I look forward to the opportunity to discuss how my skills align with the needs of your company.\nMy Contact details\n\nEmail: ${o.reply_to || o.email}${phone}\n\nBest Regards\n${nm}`;
     }
     function letterFor(o){
         const ru = o.base === "rossiya" && !o.extra_base, name = [o.first_name, o.last_name].filter(Boolean).join(" ");
@@ -161,7 +161,7 @@ module.exports = function engine(db){
         const attach = fb.d ? {name: fb.n || "CV.pdf", mime: M.mimeOf(fb.n || "CV.pdf"), data: Buffer.from(fb.d, "base64")} : null;
         const name = [o.first_name, o.last_name].filter(Boolean).join(" ");
         try {
-            const raw = M.message({fromEmail: box.email, fromName: name, to: row.email, subject: L.subject, text: L.text, attach, replyTo: o.email});
+            const raw = M.message({fromEmail: box.email, fromName: name, to: row.email, subject: L.subject, text: L.text, attach, replyTo: o.reply_to || o.email});
             await M.smtp(box, pass, box.email, row.email, raw);
             await q(`UPDATE queue SET status = 'sent', box = $1, sent_at = $2 WHERE id = $3`, [box.email, now(), row.id]);
             await q(`UPDATE jobs SET sent = sent + 1 WHERE id = $1`, [job.id]); await q(`UPDATE boxes SET sent = sent + 1 WHERE id = $1`, [box.id]);
@@ -295,6 +295,37 @@ module.exports = function engine(db){
     const REPLY_MS = () => { const m = Number(env("REPLY_MIN")); return (m > 0 ? m : 5) * 60e3; };
     const start = () => { if(!timer) timer = setInterval(() => { tick().catch(() => {}); if(Date.now() - replyAt > REPLY_MS()){ replyAt = Date.now(); pollReplies().catch(() => {}); pollInbox().catch(() => {}); } }, 5000); };
 
+    /* клиент поменял список исключений: убираем подходящие адреса из ещё не отправленной очереди уже идущих рассылок */
+    async function applyExclude(o){
+        const tokens = parseExclude(o.exclude); let removed = 0;
+        if(!tokens.length) return 0;
+        const jobs = await q(`SELECT * FROM jobs WHERE order_id = $1 AND started_at IS NOT NULL AND status IN ('run','pause','wait')`, [o.id]);
+        for(const j of jobs){
+            const rows = await q(`SELECT id, email, company FROM queue WHERE job_id = $1 AND status = 'wait'`, [j.id]);
+            const drop = rows.filter(r => excluded(r, tokens));
+            for(const r of drop) await q(`DELETE FROM queue WHERE id = $1`, [r.id]);
+            if(drop.length){ await q(`UPDATE jobs SET total = total - $1 WHERE id = $2`, [drop.length, j.id]); removed += drop.length; }
+        }
+        return removed;
+    }
+
+    /* клиент меняет время старта ещё не начавшейся рассылки; at — «YYYY-MM-DDTHH:MM» по Москве */
+    async function setJobTime(o, job, at){
+        const ms = parseMsk(at); if(!Number.isFinite(ms)) throw new Error("Неверная дата");
+        const p = mskParts(ms); if(p.h < WIN_FROM || p.h >= WIN_TO) throw new Error("Время старта — с 06:00 до 18:00 по Москве");
+        if(ms < Date.now() + 3600e3) throw new Error("Старт — не раньше чем через час от текущего момента");
+        if(ms > Date.now() + 200 * DAY) throw new Error("Дата слишком далеко");
+        const jobs = await q(`SELECT * FROM jobs WHERE order_id = $1 ORDER BY m`, [o.id]), day = t => Math.floor((t + MSK) / DAY);
+        const prev = jobs.find(x => x.m === job.m - 1), next = jobs.find(x => x.m === job.m + 1);
+        if(prev && day(ms) <= day(Date.parse(prev.start_at))) throw new Error("Каждая следующая рассылка — на более позднюю дату, чем предыдущая");
+        if(next && day(ms) >= day(Date.parse(next.start_at))) throw new Error("Эта рассылка должна быть раньше следующей");
+        const at2 = nextWindow(ms);
+        await q(`UPDATE jobs SET start_at = $1, status = CASE WHEN status = 'pause' THEN 'pause' ELSE 'wait' END WHERE id = $2`, [new Date(at2).toISOString(), job.id]);
+        let sched = []; try { sched = JSON.parse(o.schedule || "[]"); } catch(e){}
+        sched[job.m - 1] = at; await q(`UPDATE orders SET schedule = $1 WHERE id = $2`, [JSON.stringify(sched), o.id]);
+        return new Date(at2).toISOString();
+    }
+
     async function jobCtl(job, action, who){
         const o = await one(`SELECT * FROM orders WHERE id = $1`, [job.order_id]);
         if(action === "pause") await q(`UPDATE jobs SET status = 'pause' WHERE id = $1 AND status IN ('run','wait')`, [job.id]);
@@ -318,5 +349,5 @@ module.exports = function engine(db){
         return c.domain;
     }
 
-    return {pollReplies, pollInbox, startOrder, tick, start, jobCtl, note, pick, baseCounts, testSend, letterFor, hasBase, parseExclude, deleteBox};
+    return {pollReplies, pollInbox, startOrder, tick, start, jobCtl, applyExclude, setJobTime, note, pick, baseCounts, testSend, letterFor, hasBase, parseExclude, deleteBox};
 };

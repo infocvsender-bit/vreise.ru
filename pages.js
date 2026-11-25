@@ -212,20 +212,58 @@ ${o.status === "new" ? `<div style="margin-top:18px"><button class="btn gold" id
     const tracker = o.status === "cancelled" ? `<div class="err">Заказ отменён.</div>`
         : `<ol class="trk">${steps.map(x => `<li class="${x.s}"><i>${x.s === "done" ? "✓" : ""}</i><b>${x.t}</b><span>${x.d}</span></li>`).join("")}</ol>`;
     /* карточки рассылок */
-    const JST = {wait: "Ждёт старта", run: "Идёт", pause: "На паузе", done: "Завершена", stop: "Остановлена"};
+    const MSKMS = 3 * 3600e3, DAYMS = 864e5;
+    const plannedEnd = startMs => {                      // 10 часов отправки внутри окна «будни 06:00–18:00 МСК»
+        let left = 10 * 3600e3, t = startMs;
+        for(let i = 0; i < 40 && left > 0; i++){
+            const d = new Date(t + MSKMS), dow = d.getUTCDay(), h = d.getUTCHours() + d.getUTCMinutes() / 60, day0 = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - MSKMS;
+            if(dow >= 1 && dow <= 5 && h >= 6 && h < 18){ const can = Math.min(left, day0 + 18 * 3600e3 - t); left -= can; t += can; if(left > 0) t = day0 + DAYMS + 6 * 3600e3; }
+            else t = (dow >= 1 && dow <= 5 && h < 6) ? day0 + 6 * 3600e3 : day0 + DAYMS + 6 * 3600e3;
+        }
+        return t;
+    };
+    const fmtShort = ms => new Date(ms).toLocaleString("ru-RU", {timeZone: "Europe/Moscow", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"});
+    const JST = {wait: "Запланирована", run: "Идёт", pause: "На паузе", done: "Завершена", stop: "Отменена"};
     const progress = mail && jobs.length ? `<div class="panel"><h3>Рассылка</h3>${jobs.map(j => {
-        const pct = j.total ? Math.round((Number(j.sent) + Number(j.failed)) / j.total * 100) : 0, left = Math.max(0, Number(j.total || 0) - Number(j.sent) - Number(j.failed));
-        const late = j.status === "wait" && new Date(j.start_at).getTime() < Date.now();
+        const sentN = Number(j.sent), failN = Number(j.failed), total = Number(j.total || 0), pct = total ? Math.round((sentN + failN) / total * 100) : 0, left = Math.max(0, total - sentN - failN);
+        const startMs = Date.parse(j.started_at || j.start_at), endMs = plannedEnd(startMs), late = j.status === "wait" && Date.parse(j.start_at) < Date.now();
+        const notStarted = !j.started_at && ["wait", "pause"].includes(j.status), active = ["wait", "run", "pause"].includes(j.status);
+        const badge = j.status === "wait" ? `🕒 Запланирована на ${fmtShort(Date.parse(j.start_at))}` : JST[j.status] || j.status;
         const info = {
-            wait: late ? "Рассылка стартует в ближайшее рабочее время (будни с 06:00 до 18:00 МСК)." : `Старт ${fmtMsk(j.start_at)} МСК. До старта можно поменять письмо или резюме ниже.`,
+            wait: late ? "Рассылка стартует в ближайшее рабочее время (будни с 06:00 до 18:00 МСК)." : "До старта можно поменять время, письмо, резюме и список исключений — всё ниже на этой странице.",
             run: `Письма уходят по будням с 06:00 до 18:00 МСК небольшими порциями, чтобы не попадать в спам.${left ? ` Осталось отправить: ${left}.` : ""}`,
             pause: j.last_error ? "Рассылка приостановлена с нашей стороны — мы уже разбираемся. Если срочно, напишите менеджеру внизу страницы." : "Письма не отправляются. Нажмите «Продолжить», когда будете готовы — рассылка пойдёт с того места, где остановилась.",
-            done: j.finished_at ? `Завершена ${fmtMsk(j.finished_at)} МСК.` : "Рассылка завершена.", stop: "Рассылка остановлена."}[j.status] || "";
-        const btn = ["wait", "run"].includes(j.status) ? `<button class="btn sm jbtn" data-j="${esc(j.id)}" data-a="pause" type="button" style="color:var(--deep);border:1.5px solid #9fb6bb;background:#fff">⏸ Пауза</button>`
-            : j.status === "pause" && !j.last_error ? `<button class="btn gold sm jbtn" data-j="${esc(j.id)}" data-a="resume" type="button">▶ Продолжить</button>` : "";
-        return `<div class="jc2"><div class="jh"><b>Рассылка №${j.m}</b><span class="jst ${j.status}">${JST[j.status] || j.status}</span></div><div class="bar"><i style="width:${pct}%"></i></div>
-<span class="hint">Отправлено ${j.sent} из ${j.total || "—"}${Number(j.failed) ? `, не доставлено ${j.failed}` : ""}</span>
-<p class="jn">${info}</p>${btn ? `<div class="ja">${btn}<span class="hint jmsg"></span></div>` : ""}</div>`; }).join("")}</div>` : "";
+            done: j.finished_at ? `Завершена ${fmtMsk(j.finished_at)} МСК.` : "Рассылка завершена.", stop: "Рассылка отменена."}[j.status] || "";
+        const mskVal = new Date(Date.parse(j.start_at) + MSKMS).toISOString().slice(0, 16);
+        const btns = [];
+        if(["wait", "run"].includes(j.status)) btns.push(`<button class="btn sm jbtn jline" data-j="${esc(j.id)}" data-a="pause" type="button">⏸ Пауза</button>`);
+        if(j.status === "pause" && !j.last_error) btns.push(`<button class="btn gold sm jbtn" data-j="${esc(j.id)}" data-a="resume" type="button">▶ Продолжить</button>`);
+        if(notStarted) btns.push(`<button class="btn sm jline jtime" data-j="${esc(j.id)}" type="button">🕒 Изменить время</button>`);
+        if(active) btns.push(`<button class="btn sm jbtn jred" data-j="${esc(j.id)}" data-a="cancel" type="button">✖ Отменить рассылку</button>`);
+        return `<div class="jc2"><div class="jh"><b>Рассылка №${j.m}</b><span class="jst ${j.status}">${badge}</span></div>
+${active && j.status !== "pause" ? `<div class="chips"><span>🕒 ${fmtShort(startMs)} – ${fmtShort(endMs)} МСК</span><span class="dk">10 ч</span></div>` : ""}
+<div class="bigp"><div class="bgn">${pct}<small>%</small></div><div class="bgr"><div class="bar"><i style="width:${pct}%"></i></div>
+<div>${total ? `Отправлено: <b>${sentN}</b> из ${total.toLocaleString("ru-RU")} адресов` : "Отправлено: <b>0</b> · адреса подберём перед стартом"}${failN ? `, не доставлено ${failN}` : ""}</div>
+${active ? `<span class="hint">Старт: ${fmtShort(startMs)} МСК · плановое окончание: ${fmtShort(endMs)} МСК</span>` : ""}</div></div>
+<p class="jn">${info}</p>
+${btns.length ? `<div class="ja">${btns.join("")}<span class="hint jmsg"></span></div>` : ""}
+${notStarted ? `<div class="jtf" hidden data-j="${esc(j.id)}"><label class="f">Новое время старта <small>— по Москве, с 06:00 до 18:00, не раньше чем через час</small><input class="in jtv" type="datetime-local" value="${mskVal}" step="60"></label>
+<div class="ja"><button class="btn gold sm jtsave" type="button">Сохранить время</button><button class="btn sm jline jtcancel" type="button">Отмена</button><span class="hint jtmsg"></span></div></div>` : ""}</div>`; }).join("")}</div>` : "";
+    /* куда не отправлять / адрес для ответов */
+    const exList = String(o.exclude || "").split(/[\n,;]+/).map(x => x.trim()).filter(Boolean);
+    const started = jobs.some(j => j.started_at);
+    const exclBlock = mail && o.status !== "cancelled" ? `<div class="panel"><h3>🚫 Куда НЕ отправлять</h3>
+<p class="hint" style="margin:0 0 8px" id="exview">${exList.length ? esc(exList.join(", ")) : "Ограничений нет — резюме уйдёт всем компаниям из базы."}</p>
+<div id="exform" hidden><textarea class="in" id="extxt" maxlength="1500" style="min-height:90px" placeholder="По одному в строке: домен (например, @marlownavigation.com) или название компании">${esc(exList.join("\n"))}</textarea>
+<p class="hint">${started ? "Новые исключения применятся сразу ко всем ещё не отправленным письмам. Вернуть уже убранные адреса нельзя." : "Мы уберём эти компании из рассылки перед стартом."}</p>
+<div class="ja"><button class="btn gold sm" id="exsave" type="button">Сохранить</button><button class="btn sm jline" id="excancel" type="button">Отмена</button><span class="hint" id="exmsg"></span></div></div>
+<button class="btn sm jline" id="exedit" type="button">✏️ Изменить</button></div>` : "";
+    const replyAddr = o.reply_to || o.email;
+    const replyBlock = mail && o.status !== "cancelled" ? `<div class="panel"><h3>📩 Ответы компаний придут на</h3>
+<p style="margin:0 0 10px"><b id="rtview">${esc(replyAddr)}</b> <span class="hint">· ${o.reply_to ? "указанный вами адрес" : "e-mail заказа"}</span></p>
+<div id="rtform" hidden><input class="in" id="rtin" type="email" maxlength="120" value="${esc(replyAddr)}" style="max-width:380px"><p class="hint">Этот адрес будет указан в письмах компаниям для ответа.${started ? " Для уже отправленных писем адрес не изменится." : ""}</p>
+<div class="ja"><button class="btn gold sm" id="rtsave" type="button">Сохранить</button><button class="btn sm jline" id="rtcancel" type="button">Отмена</button><span class="hint" id="rtmsg"></span></div></div>
+<button class="btn sm jline" id="rtedit" type="button">✏️ Изменить адрес</button></div>` : "";
     const list = mail && sent.length ? `<div class="panel nosel"><h3>Куда отправлено</h3><table class="t"><thead><tr><th>Компания</th><th>E-mail</th><th>Когда</th></tr></thead><tbody>${sent.map(r =>
         `<tr><td>${esc(r.company || "—")}</td><td>${esc(r.email)}</td><td>${esc(new Date(r.sent_at).toLocaleString("ru-RU", {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"}))}</td></tr>`).join("")}</tbody></table>
 <p class="hint">Показаны последние отправленные письма. Названия и адреса компаний частично скрыты — это защита базы.</p></div>` : "";
@@ -256,7 +294,7 @@ ${msgs.map(m => `<div style="margin-top:14px;padding:10px 14px;border-radius:12p
 <form id="msgf" style="margin-top:14px"><textarea class="in" id="msgt" maxlength="1500" placeholder="Ваш вопрос. Ответ придёт на ${esc(o.email)} и появится здесь." style="min-height:90px"></textarea>
 <div style="margin-top:10px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><button class="btn gold sm" id="msgb" type="submit">Отправить</button><span class="hint" id="msgs"></span></div></form></details></div>`;
     const body = `<div class="page"><h1>Заказ №${o.num}</h1><p class="sub">${esc(o.title)} · <span class="tag ${o.status}">${STATUS[o.status] || o.status}</span></p>
-${tracker}${emailBanner}${coverBanner}${coverDraft}${payBlock}${wait}${res}${progress}${repl}${list}${letterBlock}${resumeBlock}${chat}
+${tracker}${emailBanner}${coverBanner}${coverDraft}${payBlock}${wait}${res}${progress}${exclBlock}${replyBlock}${repl}${list}${letterBlock}${resumeBlock}${chat}
 <div class="panel"><h3>Данные заказа</h3><table class="t"><tbody>
 <tr><td>Клиент</td><td>${esc([o.first_name, o.last_name].filter(Boolean).join(" "))}</td></tr><tr><td>E-mail</td><td>${esc(o.email)}</td></tr>
 ${o.phone ? `<tr><td>Телефон</td><td>${esc(o.phone)}</td></tr>` : ""}${o.position ? `<tr><td>Должность</td><td>${esc(o.position)}</td></tr>` : ""}

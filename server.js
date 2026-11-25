@@ -358,13 +358,62 @@ function parseBase(text, defaultBase){
             const o = await byToken(m[1]); if(!o || !o.base) return json(res, 404, {error: "Заказ не найден"});
             if(o.status === "cancelled") return json(res, 400, {error: "Заказ отменён"});
             const b = await body(req, 2000), act = String(b.action || "");
-            if(!["pause", "resume"].includes(act)) return json(res, 400, {error: "Неизвестное действие"});
+            if(!["pause", "resume", "cancel"].includes(act)) return json(res, 400, {error: "Неизвестное действие"});
             const j = await one(`SELECT * FROM jobs WHERE id = $1 AND order_id = $2`, [String(b.id || ""), o.id]);
             if(!j) return json(res, 404, {error: "Рассылка не найдена"});
             if(act === "pause" && !["wait", "run"].includes(j.status)) return json(res, 400, {error: "Эту рассылку нельзя поставить на паузу"});
             if(act === "resume" && (j.status !== "pause" || j.last_error)) return json(res, 400, {error: "Эту рассылку нельзя продолжить самостоятельно — напишите менеджеру"});
+            if(act === "cancel" && !["wait", "run", "pause"].includes(j.status)) return json(res, 400, {error: "Эту рассылку уже нельзя отменить"});
+            if(act === "cancel"){
+                await engine.jobCtl(j, "stop", "Клиент");
+                const left = await one(`SELECT COUNT(*) AS n FROM jobs WHERE order_id = $1 AND status IN ('wait','run','pause')`, [o.id]);
+                const sentAll = await one(`SELECT COALESCE(SUM(sent), 0) AS n FROM jobs WHERE order_id = $1`, [o.id]);
+                if(Number(left.n) === 0 && o.kind === "mailing"){
+                    if(Number(sentAll.n) === 0) await q(`UPDATE orders SET status = 'cancelled' WHERE id = $1`, [o.id]);
+                    else await q(`UPDATE orders SET status = 'done', done_at = $1 WHERE id = $2`, [now(), o.id]);
+                }
+                Mail.owner(`✖ Клиент отменил рассылку №${j.m}\nЗаказ №${o.num} · ${o.first_name || ""} ${o.last_name || ""} · ${o.email}\nУже отправлено писем: ${j.sent}. Вопрос возврата оплаты — на вашей стороне.\n${Mail.siteUrl()}/crm`, o.id);
+                return json(res, 200, {ok: true});
+            }
             await engine.jobCtl(j, act, "Клиент");
             Mail.owner(`${act === "pause" ? "⏸ Клиент поставил рассылку на паузу" : "▶️ Клиент продолжил рассылку"}\nЗаказ №${o.num} · рассылка №${j.m} · ${o.email}`, o.id);
+            return json(res, 200, {ok: true});
+        }
+        /* смена времени старта ещё не начавшейся рассылки */
+        m = p.match(/^\/api\/o\/([A-Za-z0-9_-]{10,80})\/job-time$/);
+        if(req.method === "POST" && m){
+            if(limited("jobtime:" + m[1], 20, 3600e3)) return json(res, 429, {error: "Слишком много изменений, попробуйте позже"});
+            const o = await byToken(m[1]); if(!o || !o.base) return json(res, 404, {error: "Заказ не найден"});
+            if(o.status === "cancelled") return json(res, 400, {error: "Заказ отменён"});
+            const b = await body(req, 1000), j = await one(`SELECT * FROM jobs WHERE id = $1 AND order_id = $2`, [String(b.id || ""), o.id]);
+            if(!j) return json(res, 404, {error: "Рассылка не найдена"});
+            if(j.started_at || !["wait", "pause"].includes(j.status)) return json(res, 400, {error: "Рассылка уже началась — время менять поздно"});
+            try { const at = await engine.setJobTime(o, j, String(b.at || "")); await engine.note(o.id, `Клиент изменил время старта рассылки №${j.m}: ${String(b.at).replace("T", " ")} МСК`, "Клиент"); return json(res, 200, {ok: true, start_at: at}); }
+            catch(e){ return json(res, 400, {error: e.message}); }
+        }
+        /* список «куда не отправлять» */
+        m = p.match(/^\/api\/o\/([A-Za-z0-9_-]{10,80})\/exclude$/);
+        if(req.method === "POST" && m){
+            if(limited("excl:" + m[1], 30, 3600e3)) return json(res, 429, {error: "Слишком много изменений, попробуйте позже"});
+            const o = await byToken(m[1]); if(!o || !o.base) return json(res, 404, {error: "Заказ не найден"});
+            if(o.status === "cancelled") return json(res, 400, {error: "Заказ отменён"});
+            const text = clean((await body(req, 5000)).text, 1500);
+            await q(`UPDATE orders SET exclude = $1 WHERE id = $2`, [text, o.id]);
+            const removed = await engine.applyExclude({...o, exclude: text});
+            await engine.note(o.id, `Клиент изменил список «куда не отправлять»${removed ? ` (убрано из очереди адресов: ${removed})` : ""}`, "Клиент");
+            return json(res, 200, {ok: true, removed});
+        }
+        /* адрес, куда придут ответы компаний */
+        m = p.match(/^\/api\/o\/([A-Za-z0-9_-]{10,80})\/reply-to$/);
+        if(req.method === "POST" && m){
+            if(limited("rto:" + m[1], 10, 3600e3)) return json(res, 429, {error: "Слишком много изменений, попробуйте позже"});
+            const o = await byToken(m[1]); if(!o || !o.base) return json(res, 404, {error: "Заказ не найден"});
+            if(o.status === "cancelled") return json(res, 400, {error: "Заказ отменён"});
+            const em = clean((await body(req, 1000)).email, 120).toLowerCase();
+            if(em && !EMAIL.test(em)) return json(res, 400, {error: "Укажите корректный e-mail"});
+            const val = em && em !== String(o.email).toLowerCase() ? em : null;
+            await q(`UPDATE orders SET reply_to = $1 WHERE id = $2`, [val, o.id]);
+            await engine.note(o.id, val ? `Клиент указал адрес для ответов компаний: ${val}` : "Клиент вернул адрес для ответов: e-mail заказа", "Клиент");
             return json(res, 200, {ok: true});
         }
         m = p.match(/^\/api\/o\/([A-Za-z0-9_-]{10,80})\/message$/);

@@ -205,3 +205,10 @@ textarea.in{font-weight:400}
 .jn{margin:10px 0 0;font-size:14.5px;color:var(--ink)}
 .ja{margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 @media(max-width:520px){.trk{padding:16px 4px 12px}.trk b{font-size:12.5px}.trk span{font-size:11px}.trk i{width:28px;height:28px}.trk li:not(:first-child):before{top:13px}}
+.jline{color:var(--deep);border:1.5px solid #9fb6bb;background:#fff}
+.jred{color:#a32020;border:1.5px solid #e2b4b4;background:#fff}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 4px}.chips span{border-radius:12px;background:#eef3f5;padding:7px 13px;font-size:14px;color:var(--deep);font-weight:600}.chips .dk{background:var(--deep);color:#fff}
+.bigp{display:flex;gap:18px;align-items:center;margin:12px 0 4px}.bigp .bgn{font-size:46px;font-weight:800;color:#5b3fd0;line-height:1;min-width:92px}.bigp .bgn small{font-size:20px;margin-left:2px}.bigp .bgr{flex:1;min-width:0}
+.jtf{margin-top:14px;padding-top:14px;border-top:1px dashed var(--line)}
+@media(max-width:520px){.bigp .bgn{font-size:36px;min-width:72px}.bigp{gap:12px}}
+[hidden]{display:none!important}

@@ -25,18 +25,51 @@
         });
     });
 
-    /* пауза / продолжение рассылки */
+    /* управление рассылкой: пауза / продолжить / отменить / время старта */
+    function post(path, data){
+        return fetch("/api/o/" + window.__tok + path, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(data)})
+            .then(function(r){ return r.json().then(function(d){ if(!r.ok || !d.ok) throw new Error(d.error || "Не получилось, попробуйте ещё раз"); return d; }); });
+    }
+    function say(el, t){ if(el) el.textContent = t || ""; }
     [].forEach.call(document.querySelectorAll(".jbtn"), function(b){
         b.addEventListener("click", function(){
             var act = b.getAttribute("data-a");
             if(act === "pause" && !confirm("Поставить рассылку на паузу? Письма перестанут уходить, пока вы не нажмёте «Продолжить».")) return;
-            var msg = b.parentNode.querySelector(".jmsg"); b.disabled = true;
-            fetch("/api/o/" + window.__tok + "/job", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({id: b.getAttribute("data-j"), action: act})})
-                .then(function(r){ return r.json(); })
-                .then(function(d){ if(d && d.ok) location.reload(); else { b.disabled = false; if(msg) msg.textContent = (d && d.error) || "Не получилось, попробуйте ещё раз"; } })
-                .catch(function(){ b.disabled = false; if(msg) msg.textContent = "Нет связи, попробуйте ещё раз"; });
+            if(act === "cancel" && !confirm("Отменить рассылку? Неотправленные письма не уйдут, это действие нельзя отменить. Уже отправленные письма вернуть нельзя.")) return;
+            var msg = b.parentNode.querySelector(".jmsg"); b.disabled = true; say(msg, "");
+            post("/job", {id: b.getAttribute("data-j"), action: act}).then(function(){ location.reload(); }).catch(function(e){ b.disabled = false; say(msg, e.message); });
         });
     });
+    [].forEach.call(document.querySelectorAll(".jtime"), function(b){
+        b.addEventListener("click", function(){ var f = b.closest(".jc2").querySelector(".jtf"); if(f) f.hidden = !f.hidden; });
+    });
+    [].forEach.call(document.querySelectorAll(".jtcancel"), function(b){ b.addEventListener("click", function(){ b.closest(".jtf").hidden = true; }); });
+    [].forEach.call(document.querySelectorAll(".jtsave"), function(b){
+        b.addEventListener("click", function(){
+            var f = b.closest(".jtf"), msg = f.querySelector(".jtmsg"), v = f.querySelector(".jtv").value;
+            if(!v){ say(msg, "Выберите дату и время"); return; }
+            b.disabled = true; say(msg, "");
+            post("/job-time", {id: f.getAttribute("data-j"), at: v.slice(0, 16)}).then(function(){ location.reload(); }).catch(function(e){ b.disabled = false; say(msg, e.message); });
+        });
+    });
+    /* куда не отправлять */
+    var exedit = $("exedit"); if(exedit){
+        exedit.addEventListener("click", function(){ $("exform").hidden = false; exedit.hidden = true; $("exview").hidden = true; });
+        $("excancel").addEventListener("click", function(){ $("exform").hidden = true; exedit.hidden = false; $("exview").hidden = false; });
+        $("exsave").addEventListener("click", function(){
+            var b = $("exsave"); b.disabled = true; say($("exmsg"), "");
+            post("/exclude", {text: $("extxt").value}).then(function(){ location.reload(); }).catch(function(e){ b.disabled = false; say($("exmsg"), e.message); });
+        });
+    }
+    /* адрес для ответов */
+    var rtedit = $("rtedit"); if(rtedit){
+        rtedit.addEventListener("click", function(){ $("rtform").hidden = false; rtedit.hidden = true; });
+        $("rtcancel").addEventListener("click", function(){ $("rtform").hidden = true; rtedit.hidden = false; });
+        $("rtsave").addEventListener("click", function(){
+            var b = $("rtsave"); b.disabled = true; say($("rtmsg"), "");
+            post("/reply-to", {email: $("rtin").value}).then(function(){ location.reload(); }).catch(function(e){ b.disabled = false; say($("rtmsg"), e.message); });
+        });
+    }
 
     /* «Я оплатил(а)» */
     var claim = $("claim");
