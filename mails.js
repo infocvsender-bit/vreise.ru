@@ -70,11 +70,17 @@ const T = {
         `<p>Ваше резюме «Стандарт» готово — файл можно скачать на странице заказа. Если нужна правка, напишите нам: одна правка входит в стоимость.</p>`, "Скачать резюме", orderLink(o))
 };
 
-/* уведомление владельцу: только письмо на OWNER_EMAIL (без Telegram-бота) */
-async function owner(text){
+/* уведомление владельцу: письмо на OWNER_EMAIL + (если заданы ADMIN_HOOK_URL и ADMIN_HOOK_KEY) копия в админ-бот. Клиентам бот нигде не показывается. */
+async function toBot(text, id){
+    const url = env("ADMIN_HOOK_URL"), key = env("ADMIN_HOOK_KEY"); if(!url || key.length < 16) return;
+    try { const r = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json", "x-hook-key": key}, body: JSON.stringify({text: String(text).slice(0, 3500), id: id || ""}), signal: AbortSignal.timeout(15000)}); if(!r.ok) console.error("admin-hook:", r.status); }
+    catch(e){ console.error("admin-hook:", e.message); }
+}
+async function owner(text, id){
+    toBot(text, id);
     const subj = text.split("\n")[0].slice(0, 120);
     if(env("OWNER_EMAIL")) await send(env("OWNER_EMAIL"), subj, `<pre style="font:14px/1.5 Arial,sans-serif;white-space:pre-wrap">${esc(text)}</pre>`, text).catch(() => {});
     console.log("🔔", text.replace(/\n/g, " | "));
 }
 
-module.exports = {esc, siteUrl, phone, WA, TGL, rub, orderLink, T, owner, send, layout};
+module.exports = {toBot, esc, siteUrl, phone, WA, TGL, rub, orderLink, T, owner, send, layout};

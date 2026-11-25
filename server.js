@@ -229,7 +229,7 @@ function parseBase(text, defaultBase){
             }
             if(!o) return json(res, 500, {error: "Не удалось создать заказ, попробуйте ещё раз"});
             Mail.T.confirm(o).catch(() => {});
-            Mail.owner(`🆕 Новый заказ №${o.num}\n${o.title} · ${Mail.rub(o.price)}\n${first} ${last} · ${email}${o.phone ? " · " + o.phone : ""}`);
+            Mail.owner(`🆕 Новый заказ №${o.num}\n${o.title} · ${Mail.rub(o.price)}\n${first} ${last} · ${email}${o.phone ? " · " + o.phone : ""}`, o.id);
             return json(res, 200, {url: "/o/" + o.token, id: o.id, token: o.token});
         }
         let m = p.match(/^\/api\/order\/([\w-]{10,60})\/doc$/);
@@ -262,7 +262,7 @@ function parseBase(text, defaultBase){
             if(o.status !== "new") return json(res, 200, {ok: true});
             await q(`UPDATE orders SET status = 'claimed', claimed_at = $1 WHERE id = $2 AND status = 'new'`, [now(), o.id]);
             await engine.note(o.id, "Клиент нажал «Я оплатил(а)»", "Клиент");
-            Mail.owner(`💳 Клиент сообщил об оплате\nЗаказ №${o.num} · ${Mail.rub(o.price)}\n${o.first_name || ""} ${o.last_name || ""} · ${o.email}\nПроверьте карту и подтвердите в CRM: ${Mail.siteUrl()}/crm`);
+            Mail.owner(`💳 Клиент сообщил об оплате\nЗаказ №${o.num} · ${Mail.rub(o.price)}\n${o.first_name || ""} ${o.last_name || ""} · ${o.email}\nПроверьте карту и подтвердите в CRM: ${Mail.siteUrl()}/crm`, o.id);
             return json(res, 200, {ok: true});
         }
         m = p.match(/^\/api\/o\/([A-Za-z0-9_-]{10,80})\/resend$/);
@@ -282,7 +282,7 @@ function parseBase(text, defaultBase){
             if(text.length < 40) return json(res, 400, {error: "Текст письма слишком короткий"});
             await q(`UPDATE orders SET letter = $1, subject = $2, letter_ok = $3, cover_ok = $3 WHERE id = $4`, [text, subject, now(), o.id]);
             await engine.note(o.id, "Клиент подтвердил персональное письмо" + (text !== o.draft_letter ? " (с правками)" : ""), "Клиент");
-            Mail.owner(`✅ Клиент подтвердил персональное письмо — заказ №${o.num}${text !== o.draft_letter ? " (с правками)" : ""}\nРассылка стартует.`);
+            Mail.owner(`✅ Клиент подтвердил персональное письмо — заказ №${o.num}${text !== o.draft_letter ? " (с правками)" : ""}\nРассылка стартует.`, o.id);
             engine.tick().catch(() => {});
             return json(res, 200, {ok: true});
         }
@@ -319,7 +319,7 @@ function parseBase(text, defaultBase){
             const o = await byToken(m[1]); if(!o) return json(res, 404, {error: "Заказ не найден"});
             const text = clean((await body(req, 20000)).text, 1500); if(text.length < 2) return json(res, 400, {error: "Напишите сообщение"});
             await engine.note(o.id, text, "Сообщение клиента");
-            Mail.owner(`💬 Сообщение от клиента\nЗаказ №${o.num} · ${o.first_name || ""} ${o.last_name || ""} · ${o.email}\n\n${text}\n\nОтветить: ${Mail.siteUrl()}/crm`);
+            Mail.owner(`💬 Сообщение от клиента\nЗаказ №${o.num} · ${o.first_name || ""} ${o.last_name || ""} · ${o.email}\n\n${text}\n\nОтветить: ${Mail.siteUrl()}/crm`, o.id);
             return json(res, 200, {ok: true});
         }
         return json(res, 404, {error: "not found"});
@@ -327,7 +327,7 @@ function parseBase(text, defaultBase){
 
     /* ---------- CRM ---------- */
     async function crmApi(req, res, u){
-        const p = u.pathname.replace(/^\/crm\/api/, ""), who = "Владелец";
+        const p = u.pathname.replace(/^\/crm\/api/, ""), who = u.viaBot ? "Владелец (бот)" : "Владелец";
         let m;
         if(req.method === "GET" && p === "/orders"){
             const st = clean(u.searchParams.get("status"), 20), s = clean(u.searchParams.get("q"), 80).toLowerCase();
@@ -524,6 +524,15 @@ function parseBase(text, defaultBase){
                 if(!crmAuthed(req)) return json(res, 401, {error: "Войдите в CRM"});
                 if(req.method === "POST" && !/^https?:\/\/([^/]+)/.test(req.headers.origin || "http://" + req.headers.host)) return json(res, 403, {error: "origin"});
                 return await crmApi(req, res, u);
+            }
+            if(u.pathname.startsWith("/api/hook/")){                         // управление заказами из админ-бота: по общему ключу, только список разрешённых действий
+                const K = env("ADMIN_HOOK_KEY"), k = String(req.headers["x-hook-key"] || ""), ka = Buffer.from(k), kb = Buffer.from(K);
+                if(K.length < 16 || ka.length !== kb.length || !crypto.timingSafeEqual(ka, kb)){ if(limited("hookbad:" + ipOf(req), 20, 3600e3)) return json(res, 429, {error: "limit"}); return json(res, 403, {error: "key"}); }
+                const rest = u.pathname.slice("/api/hook".length);
+                if(!/^\/(orders|orders\/[\w-]+|orders\/[\w-]+\/(confirm|cancel|note|reply|email-ok|cover-skip)|jobs\/[\w-]+|jobs\/[\w-]+\/(pause|resume|stop|retry))$/.test(rest)) return json(res, 404, {error: "not found"});
+                if(req.method === "GET" && /^\/jobs\/[\w-]+$/.test(rest)){ const j = await one(`SELECT id, order_id, m, status FROM jobs WHERE id = $1`, [rest.slice(6)]); return j ? json(res, 200, j) : json(res, 404, {error: "нет задания"}); }
+                const u2 = new URL(u); u2.pathname = "/crm/api" + rest; u2.viaBot = true;
+                return await crmApi(req, res, u2);
             }
             if(u.pathname.startsWith("/api/")) return await publicApi(req, res, u);
             if(req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "method not allowed", "text/plain");

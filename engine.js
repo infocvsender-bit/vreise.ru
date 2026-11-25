@@ -120,7 +120,7 @@ module.exports = function engine(db){
         await note(o.id, `Рассылка поставлена в очередь: ${o.times} шт. по выбранным клиентом датам (отправка — по будням 06:00–18:00 МСК)`, who || "Система");
         if(Number(o.cover) && !o.cover_ok){
             await note(o.id, "💌 Заказано персональное сопроводительное письмо — составьте его в CRM (карточка заказа), клиент подтвердит. Рассылка стартует после подтверждения.", "Система");
-            Mail.owner(`💌 Нужно персональное письмо — заказ №${o.num}\n${[o.first_name, o.last_name].filter(Boolean).join(" ")} · ${o.position || ""}\nCRM → заказ №${o.num} → «Персональное письмо». Рассылка ждёт.`);
+            Mail.owner(`💌 Нужно персональное письмо — заказ №${o.num}\n${[o.first_name, o.last_name].filter(Boolean).join(" ")} · ${o.position || ""}\nCRM → заказ №${o.num} → «Персональное письмо». Рассылка ждёт.`, o.id);
         } else try { const L = letterFor(o); Mail.T.preview(o, L, o.kind === "cv" ? o.res_name : o.cv_name).catch(() => {}); } catch(e){}
         setTimeout(() => tick().catch(() => {}), 1500);
     }
@@ -137,7 +137,7 @@ module.exports = function engine(db){
         await q(`UPDATE jobs SET status = 'run', total = $1, started_at = $2, last_error = NULL WHERE id = $3`, [rows.length, now(), job.id]);
         await note(o.id, `Рассылка №${job.m} началась: ${rows.length} адресов, ящиков: ${ids.length}`);
         Mail.T.started(o, {...job, total: rows.length}).catch(() => {});
-        Mail.owner(`▶️ Рассылка №${job.m} запущена\nЗаказ №${o.num} · ${o.first_name || ""} ${o.last_name || ""}\n${rows.length} адресов`);
+        Mail.owner(`▶️ Рассылка №${job.m} запущена\nЗаказ №${o.num} · ${o.first_name || ""} ${o.last_name || ""}\n${rows.length} адресов`, o.id);
     }
 
     /* ---------- отправка одного письма ---------- */
@@ -182,7 +182,7 @@ module.exports = function engine(db){
         const j = await one(`SELECT * FROM jobs WHERE id = $1`, [job.id]);
         await note(o.id, `Рассылка №${j.m} завершена: отправлено ${j.sent} из ${j.total}, ошибок ${j.failed}`);
         Mail.T.finished(o, j).catch(() => {});
-        Mail.owner(`✅ Рассылка №${j.m} завершена\nЗаказ №${o.num} · ${o.first_name || ""} ${o.last_name || ""}\nОтправлено ${j.sent} из ${j.total}, ошибок ${j.failed}`);
+        Mail.owner(`✅ Рассылка №${j.m} завершена\nЗаказ №${o.num} · ${o.first_name || ""} ${o.last_name || ""}\nОтправлено ${j.sent} из ${j.total}, ошибок ${j.failed}`, o.id);
         const left = await one(`SELECT COUNT(*) AS n FROM jobs WHERE order_id = $1 AND status <> 'done' AND status <> 'stop'`, [o.id]);
         if(Number(left.n) === 0){ await q(`UPDATE orders SET status = 'done', done_at = $1 WHERE id = $2`, [now(), o.id]); }
     }
