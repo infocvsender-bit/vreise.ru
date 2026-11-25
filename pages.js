@@ -34,7 +34,7 @@ function home(counts){
     const rows = C.BASES.map((b, i) => `<li class="pc a${i % 4}" data-p="${b.prices.map((_, k) => C.priceOf(b, k + 1)).join(",")}" data-b="${b.key}">
       <h4>${esc(b.name)}</h4><p class="pc-note">${esc(b.note)}</p>
       ${n[b.key] > 0 ? `<div class="pc-cnt"><b>${numFmt(n[b.key])}</b><span>${plAddr(n[b.key])} в базе</span></div>` : `<div class="pc-cnt"></div>`}
-      <div class="pc-foot"><div class="pc-price" data-price>${rub(C.priceOf(b, 1))}</div><a class="btn gold" data-order href="/order?s=${C.SERVICES.find(s => s.base === b.key && s.times === 1).slug}">Заказать</a><a class="btn ghost" href="#included">Что входит в заказ</a></div></li>`).join("");
+      <div class="pc-foot"><div class="pc-price" data-price>${rub(C.priceOf(b, 1))}</div><a class="btn gold" data-order href="/order?s=${C.SERVICES.find(s => s.base === b.key && s.times === 1).slug}">Заказать</a><a class="btn ghost" href="#included">Что входит в заказ?</a></div></li>`).join("");
     const hero = `<header class="hero">${navTop()}<div class="wrap"><div>
 <div class="pill"><b></b>Онлайн-сервис для моряков</div>
 <h1>Ваше резюме — <span>сразу в крюинговые компании</span></h1>
