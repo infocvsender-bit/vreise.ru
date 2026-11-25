@@ -63,7 +63,7 @@ nav.top .sp{flex:1}
 .pc.a1:before{background:var(--gold)}.pc.a2:before{background:#2f9e8f}.pc.a3:before{background:#6b8fa3}
 .pc:hover{transform:translateY(-3px);box-shadow:0 18px 40px -22px rgba(7,34,43,.45)}
 .pc h4{font-size:20px;letter-spacing:-.4px;color:var(--deep);line-height:1.2}
-.pc-note{font-size:14px;color:var(--muted);margin-top:6px;min-height:42px}
+.pc-note{font-size:14px;color:var(--muted);margin-top:6px;min-height:63px;line-height:1.45}
 .pc-cnt{margin:14px 0 18px;min-height:62px}.pc-cnt b{display:block;font-size:32px;letter-spacing:-1px;color:var(--teal);line-height:1}.pc-cnt span{font-size:13.5px;color:var(--muted)}
 .pc-foot{margin-top:auto;border-top:1px dashed var(--line);padding-top:16px;display:flex;flex-direction:column;gap:12px}
 .pc-price{font-size:28px;font-weight:800;letter-spacing:-.8px;color:var(--ink)}
