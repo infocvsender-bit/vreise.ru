@@ -427,7 +427,7 @@
             var i = 0, bad = 0, base = "/api/order/" + encodeURIComponent(x.j.id);
             var next = function(){
                 if(i >= docs.length){
-                    return fetch(base + "/docs-done?t=" + encodeURIComponent(x.j.token), {method: "POST"}).catch(function(){}).then(function(){ location.href = x.j.url + (bad ? "?docs=" + bad : ""); });
+                    return fetch(base + "/docs-done?t=" + encodeURIComponent(x.j.token), {method: "POST"}).catch(function(){}).then(function(){ location.href = x.j.url + (bad ? (x.j.url.indexOf("?") >= 0 ? "&" : "?") + "docs=" + bad : ""); });
                 }
                 go.textContent = "Загружаем документы: " + (i + 1) + " из " + docs.length + "…";
                 var d = docs[i++];

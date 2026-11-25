@@ -79,8 +79,8 @@ function create({one, q, now, Mail, env, siteUrl}){
         const h = {"X-Frame-Options": "DENY", "X-Content-Type-Options": "nosniff", "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()", "Cross-Origin-Opener-Policy": "same-origin",
             "Content-Security-Policy": "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"};
         if(/^https/.test(siteUrl()) || req.headers["x-forwarded-proto"] === "https") h["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains";
-        if(/^\/(crm|o\/|api\/)/.test(p)) h["X-Robots-Tag"] = "noindex, nofollow, noarchive, nosnippet";
-        if(/^\/(crm|o\/|api\/)/.test(p)) { h["Cache-Control"] = "no-store"; h["Referrer-Policy"] = "no-referrer"; }
+        if(/^\/(crm|o\/|payment_in_rub|api\/)/.test(p)) h["X-Robots-Tag"] = "noindex, nofollow, noarchive, nosnippet";
+        if(/^\/(crm|o\/|payment_in_rub|api\/)/.test(p)) { h["Cache-Control"] = "no-store"; h["Referrer-Policy"] = "no-referrer"; }
         for(const [k, v] of Object.entries(h)) res.setHeader(k, v);
 
         if(p === "/health") return false;

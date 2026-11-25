@@ -164,7 +164,7 @@ function parseBase(text, defaultBase){
     async function site(req, res, u){
         const p = u.pathname.replace(/\/+$/, "") || "/";
         if(p === "/health") return send(res, 200, "ok", "text/plain");
-        if(p === "/robots.txt") return send(res, 200, `User-agent: *\nAllow: /\nDisallow: /crm\nDisallow: /o/\nDisallow: /api/\nDisallow: /order\nSitemap: ${Mail.siteUrl()}/sitemap.xml\n`, "text/plain; charset=utf-8");
+        if(p === "/robots.txt") return send(res, 200, `User-agent: *\nAllow: /\nDisallow: /crm\nDisallow: /o/\nDisallow: /payment_in_rub\nDisallow: /api/\nDisallow: /order\nSitemap: ${Mail.siteUrl()}/sitemap.xml\n`, "text/plain; charset=utf-8");
         if(p === "/sitemap.xml"){
             const s = Mail.siteUrl(), B = require("./blog.js"), last = B.SLUGS.map(x => B.A[x].date).sort().pop();
             const rows = [["/", "weekly", "1.0", last], ["/blog", "weekly", "0.8", last], ...B.SLUGS.map(x => ["/blog/" + x, "monthly", "0.7", B.A[x].date]), ["/policy", "yearly", "0.2", ""], ["/offer", "yearly", "0.2", ""]];
@@ -190,6 +190,13 @@ function parseBase(text, defaultBase){
             if(!o.email_ok){ await q(`UPDATE orders SET email_ok = $1 WHERE id = $2`, [now(), o.id]); await engine.note(o.id, "E-mail подтверждён клиентом", "Клиент"); }
             return redirect(res, "/o/" + o.token);
         }
+        /* /payment_in_rub — адрес страницы оплаты (на него настроены цели конверсии): та же личная страница заказа, пока заказ ждёт оплаты; токен — в ?o= */
+        if(p === "/payment_in_rub"){
+            const tk = String(u.searchParams.get("o") || ""); if(!/^[A-Za-z0-9_-]{10,80}$/.test(tk)) return redirect(res, "/order");
+            const o = await byToken(tk); if(!o) return send(res, 404, P.notFound());
+            if(!["new", "claimed"].includes(o.status)) return redirect(res, "/o/" + o.token);
+            return send(res, 200, await cabinetHtml(o), "text/html; charset=utf-8", {"Cache-Control": "no-store"});
+        }
         m = p.match(/^\/o\/([A-Za-z0-9_-]{10,80})(\/file)?$/);
         if(m){
             const o = await byToken(m[1]); if(!o) return send(res, 404, P.notFound());
@@ -198,15 +205,19 @@ function parseBase(text, defaultBase){
                 return send(res, 200, Buffer.from(o.res_b64, "base64"), M.mimeOf(o.res_name || "cv.pdf"),
                     {"Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(o.res_name || "cv.pdf")}`, "Cache-Control": "no-store"});
             }
-            const jobs = await q(`SELECT * FROM jobs WHERE order_id = $1 ORDER BY m`, [o.id]);
-            const msgs = await q(`SELECT at, author, text FROM notes WHERE order_id = $1 AND author IN ('Сообщение клиента', 'Ответ менеджера') ORDER BY at`, [o.id]);
-            const sent = (jobs.length ? await q(`SELECT qu.company, qu.email, qu.sent_at FROM queue qu JOIN jobs j ON j.id = qu.job_id WHERE j.order_id = $1 AND qu.status = 'sent' ORDER BY qu.sent_at DESC LIMIT 200`, [o.id]) : []).map(r => ({company: Mask.maskCompany(r.company || ""), email: Mask.maskEmail(r.email), sent_at: r.sent_at}));
-            const std = o.base ? {cur: engine.letterFor(o), def: engine.letterFor({...o, letter: "", subject: ""})} : null;
-            const replies = o.base ? await q(`SELECT id, from_email, from_name, subject, text, kind, at FROM replies WHERE order_id = $1 AND kind <> 'bounce' ORDER BY at DESC LIMIT 100`, [o.id]) : [];
-            if(replies.length){ const fw = new Set((await q(`SELECT reply_id FROM reply_fwd WHERE order_id = $1`, [o.id])).map(x => x.reply_id)); for(const r of replies) r.fwd = fw.has(r.id); }
-            return send(res, 200, P.orderPage(o, jobs, sent, msgs, std, replies), "text/html; charset=utf-8", {"Cache-Control": "no-store"});
+            return send(res, 200, await cabinetHtml(o), "text/html; charset=utf-8", {"Cache-Control": "no-store"});
         }
         return send(res, 404, P.notFound());
+    }
+
+    async function cabinetHtml(o){
+        const jobs = await q(`SELECT * FROM jobs WHERE order_id = $1 ORDER BY m`, [o.id]);
+        const msgs = await q(`SELECT at, author, text FROM notes WHERE order_id = $1 AND author IN ('Сообщение клиента', 'Ответ менеджера') ORDER BY at`, [o.id]);
+        const sent = (jobs.length ? await q(`SELECT qu.company, qu.email, qu.sent_at FROM queue qu JOIN jobs j ON j.id = qu.job_id WHERE j.order_id = $1 AND qu.status = 'sent' ORDER BY qu.sent_at DESC LIMIT 200`, [o.id]) : []).map(r => ({company: Mask.maskCompany(r.company || ""), email: Mask.maskEmail(r.email), sent_at: r.sent_at}));
+        const std = o.base ? {cur: engine.letterFor(o), def: engine.letterFor({...o, letter: "", subject: ""})} : null;
+        const replies = o.base ? await q(`SELECT id, from_email, from_name, subject, text, kind, at FROM replies WHERE order_id = $1 AND kind <> 'bounce' ORDER BY at DESC LIMIT 100`, [o.id]) : [];
+        if(replies.length){ const fw = new Set((await q(`SELECT reply_id FROM reply_fwd WHERE order_id = $1`, [o.id])).map(x => x.reply_id)); for(const r of replies) r.fwd = fw.has(r.id); }
+        return P.orderPage(o, jobs, sent, msgs, std, replies);
     }
 
     /* ---------- публичные API ---------- */
@@ -325,7 +336,7 @@ function parseBase(text, defaultBase){
             Mail.T.confirm(o).catch(() => {});
             Mail.owner(ownerOrderText(o), o.id);
             ordersToday().then(n => { if(n === ordersLimit()) Mail.toBot(`🚦 Дневной лимит заказов достигнут (${n}). До полуночи по Москве новые заказы не принимаются.`, "limit"); }).catch(() => {});
-            return json(res, 200, {url: "/o/" + o.token, id: o.id, token: o.token});
+            return json(res, 200, {url: "/payment_in_rub?o=" + o.token, id: o.id, token: o.token});
         }
         let m = p.match(/^\/api\/order\/([\w-]{10,60})\/doc$/);
         if(req.method === "POST" && m){
