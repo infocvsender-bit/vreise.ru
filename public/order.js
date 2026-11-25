@@ -90,6 +90,46 @@
     var LATIN = /^[A-Za-z][A-Za-z' .-]*$/, DOC_EXT = /\.(pdf|docx?|rtf|odt|xlsx?|ods|txt|jpe?g|png|webp)$/i, DOC_MAX = 15 * 1024 * 1024, DOC_TOTAL = 100 * 1024 * 1024, DOC_COUNT = 25;
     var phoneOk = function(v){ return /^\+\d{9,15}$/.test(String(v).replace(/[\s()-]/g, "")); };
     function timesOf(){ var m = /^rassylka-(\d)-/.exec(sel ? sel.value : ""); return m ? Number(m[1]) : 1; }
+    /* даты и время рассылок (по Москве) */
+    var schedBox = $("sched"), schedVals = [];
+    function p2(n){ return (n < 10 ? "0" : "") + n; }
+    function dstr(d){ return d.getUTCFullYear() + "-" + p2(d.getUTCMonth() + 1) + "-" + p2(d.getUTCDate()); }
+    function mskDay(add){ return dstr(new Date(Date.now() + 3 * 3600e3 + add * 864e5)); }
+    function mailCount(){ if(isCv){ if(!addBase || !addBase.value) return 0; return Number(addBase.value.split(":")[1]) || 1; } return timesOf(); }
+    function renderSched(){
+        if(!schedBox) return;
+        var n = mailCount(), min = mskDay(1), html = "";
+        for(var i = 0; i < n; i++){
+            var v = schedVals[i] || {d: mskDay(1 + 7 * i), t: "10:00"};
+            if(v.d < min) v.d = min; schedVals[i] = v;
+            var opts = ""; for(var h = 6; h < 18; h++) for(var m = 0; m < 60; m += 30){ var tt = p2(h) + ":" + p2(m); opts += "<option" + (tt === v.t ? " selected" : "") + ">" + tt + "</option>"; }
+            html += '<div class="schrow"><span class="schn">' + (n > 1 ? "Рассылка №" + (i + 1) : "Рассылка") + '</span><input type="date" class="in" data-sd="' + i + '" min="' + min + '" value="' + v.d + '"><select class="in" data-st="' + i + '">' + opts + '</select><span class="schw" data-sw="' + i + '"></span></div>';
+        }
+        schedBox.innerHTML = html; weekendNotes();
+    }
+    function weekendNotes(){
+        [].forEach.call(schedBox ? schedBox.querySelectorAll("[data-sw]") : [], function(w){
+            var v = schedVals[Number(w.getAttribute("data-sw"))]; if(!v || !v.d) return;
+            var dw = new Date(v.d + "T00:00:00Z").getUTCDay();
+            w.textContent = dw === 6 || dw === 0 ? "Выходной — старт перенесётся на понедельник" : "";
+        });
+    }
+    if(schedBox) schedBox.addEventListener("change", function(e){
+        var a = e.target.getAttribute("data-sd"), b = e.target.getAttribute("data-st");
+        if(a !== null){ schedVals[Number(a)].d = e.target.value; }
+        if(b !== null){ schedVals[Number(b)].t = e.target.value; }
+        weekendNotes();
+    });
+    function schedCheck(){
+        var n = mailCount(), min = mskDay(1), prev = "";
+        for(var i = 0; i < n; i++){
+            var v = schedVals[i]; if(!v || !/^\d{4}-\d{2}-\d{2}$/.test(v.d)) return "Выберите дату рассылки";
+            if(v.d < min) return "Дата рассылки — не раньше завтрашнего дня";
+            if(prev && v.d <= prev) return "Каждая следующая рассылка — на более позднюю дату, чем предыдущая";
+            prev = v.d;
+        }
+        return "";
+    }
     var lastSum = 0;
     function recalc(){
         var sum = 0;
@@ -114,6 +154,7 @@
         }
         lastSum = sum;
         if(total) total.textContent = fmt(sum);
+        if(schedBox){ var cur = schedBox.querySelectorAll("[data-sd]").length; if(cur !== mailCount() || !cur && mailCount()) renderSched(); }
     }
     /* предложение персонального сопроводительного письма — после нажатия «Оформить заказ» */
     function askCover(cb){
@@ -222,12 +263,14 @@
             if(file && file.size > 5 * 1024 * 1024) return fail("Файл больше 5 МБ — уменьшите его или пришлите в WhatsApp");
         }
         if(!$("agree").checked) return fail("Нужно согласие с офертой и политикой конфиденциальности");
+        var sm = schedCheck(); if(sm) return fail(sm);
         askCover(function(cover){
         go.disabled = true; go.textContent = "Отправляем…";
         (file ? readFile(file) : Promise.resolve(null)).then(function(fl){
             var body = {slug: val("slug"), first: val("first"), last: val("last"), email: val("email"), phone: val("phone"), position: positionValue(), vessel: val("vessel"),
                 letter: val("letter"), exclude: val("exclude"), comment: val("comment"), hp: val("hp"), agree: $("agree").checked, file: fl, cover: cover ? 1 : 0};
             if(extra && extra.value) body.extra = extra.value;
+            if(mailCount()) body.schedule = schedVals.slice(0, mailCount()).map(function(v){ return v.d + "T" + v.t; });
             if(isCv){
                 if(addBase && addBase.value){ var ps = addBase.value.split(":"); body.addon = {base: ps[0], times: Number(ps[1])}; }
                 body.details = {linkedin: val("linkedin"), messengers: [].map.call(document.querySelectorAll("input[name=msg]:checked"), function(x){ return x.value; }), location: val("location"), dob: val("dob"),

@@ -183,3 +183,6 @@ textarea.in{font-weight:400}
 @media(max-width:480px){.pcs{grid-template-columns:1fr}}
 .pc .btn.ghost{background:transparent;color:var(--deep);border:1.5px solid var(--line);box-shadow:none;font-weight:700}.pc .btn.ghost:hover{border-color:var(--teal);background:#eef6f5}
 .included{scroll-margin-top:24px}
+
+.schrow{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:10px}.schrow .schn{font-weight:700;color:var(--deep);min-width:110px}.schrow .in{width:auto;min-width:0}.schrow .schw{flex-basis:100%;font-size:13.5px;color:#b9770e;margin-top:-4px}
+@media(max-width:520px){.schrow .schn{flex-basis:100%}}

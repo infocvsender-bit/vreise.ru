@@ -7,6 +7,7 @@ const env = k => String(process.env[k] || "").trim();
 
 const POSITIONS = ["Master", "Chief Officer", "Second Officer", "Third Officer", "DPO", "SDPO", "Chief Engineer", "Second Engineer", "Third Engineer", "Fourth Engineer", "ETO", "Electrician",
     "Bosun", "AB", "OS", "Crane Operator", "Deck Cadet", "Engine Cadet", "Motorman", "Fitter", "Welder", "Wiper", "Oiler", "Cook", "Steward", "Messman", "Medic"];
+const SCHED_NOTE = "Время московское. Старт — с 06:00 до 18:00. Рассылка идёт по будням с 06:00 до 18:00 и занимает не менее 10 часов: если она началась, например, в 15:00, то с 15:00 до 18:00 уйдёт часть писем, остальные — на следующий рабочий день с 06:00. В выходные письма не отправляются — всё переносится на понедельник. Дата — не раньше завтрашнего дня.";
 const VESSELS = ["Офшорные суда", "Контейнеровозы", "Танкеры (нефть, продукты, химия)", "Газовозы (LPG / LNG)", "Балкеры", "Генеральные грузы", "Ро-ро / паромы", "Пассажирские суда", "Яхты", "Любые суда"];
 
 function shell({title, desc, body, path = "/", hero = "", noindex = false, scripts = ""}){
@@ -65,7 +66,7 @@ function home(counts){
 <section class="sec" id="pay"><div class="c"><div class="pay"><div><div class="kick">Оплата</div><h2>Картой, в рублях</h2>
 <p class="sub" style="margin-bottom:0">После оформления заказа вы увидите сумму и реквизиты карты для перевода. Платёж проверяем вручную и сразу запускаем работу.</p></div>
 <div class="note"><p><b>Что входит в стоимость.</b> Рассылка по выбранной базе, сопроводительное письмо, статистика и статус рассылки в личном кабинете.</p>
-<p style="margin-top:10px"><b>Повторные рассылки.</b> При заказе двух и трёх рассылок следующая идёт через неделю после предыдущей.</p></div></div></div></section>
+<p style="margin-top:10px"><b>Даты рассылок.</b> Дату и время старта каждой рассылки вы выбираете при оформлении заказа: не раньше завтрашнего дня, старт с 06:00 до 18:00 по Москве. Письма уходят по будням с 06:00 до 18:00, рассылка занимает не менее 10 часов, в выходные перерыв — продолжение в понедельник.</p></div></div></div></section>
 <section class="sec alt"><div class="c faq"><div class="kick">Вопросы</div><h2>Коротко о главном</h2><div style="margin-top:20px">
 <details><summary>Куда приходят ответы компаний?</summary><p>На ту почту, которую вы указали в заказе. В письме компании видят ваше имя, а ответ уходит прямо вам.</p></details>
 <details><summary>Можно ли исключить некоторые компании?</summary><p>Да. При оформлении заказа впишите названия компаний или домены — мы не будем им писать.</p></details>
@@ -132,7 +133,7 @@ ${r("nokName", "Имя Фамилия")}${r("nokRel", "Кем приходитс
 <div class="panel addon"><h3>➕ Добавить рассылку резюме <span class="badge">−${C.discPct()}%</span></h3>
 <p class="hint" style="margin-top:0">Разошлём готовое резюме в крюинговые компании со скидкой ${C.discPct()}%. Рассылка стартует сама, как только резюме будет готово и вы подтвердите e-mail.</p>
 <label class="f">База и количество рассылок<select class="in" id="addBase"><option value="" data-p="0">Не нужна</option>${C.BASES.map(b => `<optgroup label="${esc(b.name)}${(counts && counts.byBase && counts.byBase[b.key] > 0) ? " · " + addrCount(counts.byBase[b.key]) : ""}">${[1, 2, 3].map(n => `<option value="${b.key}:${n}" data-p="${C.addonPrice(C.priceOf(b, n))}">${C.TIMES[n - 1]} — ${numFmt(C.priceOf(b, n))} ₽ → ${numFmt(C.addonPrice(C.priceOf(b, n)))} ₽</option>`).join("")}</optgroup>`).join("")}</select></label>
-<div id="addMore" hidden style="margin-top:14px"><label class="f">Исключить компании<small> — по желанию, по одному в строке. Можно указать название компании, но лучше домен — так точнее: например, <b>@marlownavigation.com</b></small><textarea class="in" id="exclude" style="min-height:80px" placeholder="@marlownavigation.com"></textarea></label></div></div>
+<div id="addMore" hidden style="margin-top:14px"><div class="lbl" style="font-weight:700;color:var(--deep);margin-bottom:8px">📅 Дата и время рассылки</div><div id="sched"></div><p class="hint" style="margin:8px 0 14px">${SCHED_NOTE}</p><label class="f">Исключить компании<small> — по желанию, по одному в строке. Можно указать название компании, но лучше домен — так точнее: например, <b>@marlownavigation.com</b></small><textarea class="in" id="exclude" style="min-height:80px" placeholder="@marlownavigation.com"></textarea></label></div></div>
 <div class="panel"><label class="check"><input type="checkbox" id="agree" required><span>Я принимаю условия <a href="/offer" target="_blank">публичной оферты</a> и согласен(на) на обработку персональных данных согласно <a href="/policy" target="_blank">политике конфиденциальности</a>.</span></label></div>
 <input type="text" id="hp" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true">
 <div class="sum"><div>К оплате<br><b id="total">${rub(C.cvPrice())}</b></div><button class="btn gold" id="go" type="submit">Оформить заказ</button></div></form></div>${coverModal()}`;
@@ -150,7 +151,7 @@ function orderForm(slug, counts){
         `<input type="hidden" id="slug" value="${sv.slug}" data-slugs="${slugs.join(",")}" data-prices="${prices.join(",")}">
 <div class="lbl" style="font-weight:700;color:var(--deep);margin-bottom:10px">Количество рассылок</div>
 <div class="seg full" id="timesSeg" role="group" aria-label="Количество рассылок">${[1, 2, 3].map(n => `<button type="button" data-n="${n}"${sv.times === n ? ' class="on"' : ""}>${timesLbl[n - 1]}<small>${rub(prices[n - 1])}</small></button>`).join("")}</div>
-<div class="xnote big" id="baseNote">Рассылка по базе <b>«${esc(bs.name)}»</b>${cnt[bs.key] > 0 ? " · " + addrCount(cnt[bs.key]) : ""} · <span id="tmsTxt">${timesLbl[sv.times - 1]}</span> — <b id="tmsSum">${rub(prices[sv.times - 1])}</b><br><span class="hint">Если рассылок несколько, они уходят с интервалом в неделю. <a href="/#services">Выбрать другую базу</a></span></div>`;
+<div class="xnote big" id="baseNote">Рассылка по базе <b>«${esc(bs.name)}»</b>${cnt[bs.key] > 0 ? " · " + addrCount(cnt[bs.key]) : ""} · <span id="tmsTxt">${timesLbl[sv.times - 1]}</span> — <b id="tmsSum">${rub(prices[sv.times - 1])}</b><br><span class="hint">Дату и время каждой рассылки выберите ниже. <a href="/#services">Выбрать другую базу</a></span></div>`;
     const extraPanel = cv ? "" : `<div class="panel addon"><h3>➕ Добавить ещё одну базу <span class="badge">−${C.extraDiscPct()}%</span></h3>
 <p class="hint" style="margin-top:0">Любую базу можно добавить в те же рассылки на ${C.extraDiscPct()}% дешевле — например, к базе «Россия» добавить «Танкеры и газовозы». Адреса не повторяются.</p>
 <label class="f">Дополнительная база<select class="in" id="extra"><option value="">Не нужна</option>${C.BASES.map(b => `<option value="${b.key}" data-p="${[1, 2, 3].map(n => C.extraPrice(C.priceOf(b, n))).join(",")}" data-f="${[1, 2, 3].map(n => C.priceOf(b, n)).join(",")}">${esc(b.name)}</option>`).join("")}</select></label>
@@ -159,6 +160,7 @@ function orderForm(slug, counts){
 <p class="sub">${cv ? "Заполните данные — мы подготовим резюме по международному образцу." : "Заполните форму и загрузите резюме. Оплата — на следующем шаге."}</p>
 <form id="f" novalidate><div class="err" id="err" hidden></div>
 <div class="panel">${cv ? "<h3>Услуга</h3>" : ""}${pick}${cv ? `<p class="hint" style="margin-top:0">${esc(C.CV.title)} · <b>${rub(C.cvPrice())}</b></p>` : ""}</div>
+${cv ? "" : `<div class="panel"><h3>📅 Дата и время рассылки</h3><div id="sched"></div><p class="hint" style="margin:12px 0 0">${SCHED_NOTE}</p></div>`}
 <div class="panel"><h3>О вас</h3><div class="grid2">
 <label class="f">Имя<input class="in" id="first" autocomplete="given-name" required></label>
 <label class="f">Фамилия<input class="in" id="last" autocomplete="family-name" required></label>
@@ -199,7 +201,7 @@ ${o.status === "new" ? `<div style="margin-top:18px"><button class="btn gold" id
     const progress = mail && jobs.length ? `<div class="panel"><h3>Рассылка</h3>${jobs.map(j => {
         const pct = j.total ? Math.round((Number(j.sent) + Number(j.failed)) / j.total * 100) : 0;
         const st = {wait: "ожидает запуска", run: "идёт", pause: "на паузе", done: "завершена", stop: "остановлена"}[j.status] || j.status;
-        return `<div style="margin-bottom:14px"><b>Рассылка №${j.m}</b> — ${st}${j.status === "wait" ? ` (старт ${new Date(j.start_at).toLocaleDateString("ru-RU")})` : ""}<div class="bar"><i style="width:${pct}%"></i></div>
+        return `<div style="margin-bottom:14px"><b>Рассылка №${j.m}</b> — ${st}${j.status === "wait" ? ` (старт ${new Date(j.start_at).toLocaleString("ru-RU", {timeZone: "Europe/Moscow", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit"})} МСК)` : ""}<div class="bar"><i style="width:${pct}%"></i></div>
 <span class="hint">Отправлено ${j.sent} из ${j.total || "—"}${Number(j.failed) ? `, не доставлено ${j.failed}` : ""}</span></div>`; }).join("")}</div>` : "";
     const list = mail && sent.length ? `<div class="panel nosel"><h3>Куда отправлено</h3><table class="t"><thead><tr><th>Компания</th><th>E-mail</th><th>Когда</th></tr></thead><tbody>${sent.map(r =>
         `<tr><td>${esc(r.company || "—")}</td><td>${esc(r.email)}</td><td>${esc(new Date(r.sent_at).toLocaleString("ru-RU", {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"}))}</td></tr>`).join("")}</tbody></table>
@@ -256,7 +258,7 @@ function legal(kind){
 <h2>Контакты</h2><p>По вопросам обработки данных: ${contact}.</p>`;
     const offer = `<h1>Публичная оферта</h1>
 <p>Настоящий документ — предложение ${esc(who())} (далее — Исполнитель) любому лицу (далее — Заказчик) заключить договор на оказание услуг на условиях ниже. Оформление заказа на сайте Vreise.ru означает согласие с этой офертой.</p>
-<h2>1. Услуги</h2><ul><li><b>Рассылка резюме</b> — отправка резюме Заказчика на адреса электронной почты компаний из выбранной базы с сопроводительным письмом. Количество рассылок (одна, две или три) выбирается при заказе; повторные рассылки проходят с интервалом около недели.</li><li><b>Резюме «Стандарт»</b> — составление резюме по данным, предоставленным Заказчиком; одна бесплатная правка.</li></ul>
+<h2>1. Услуги</h2><ul><li><b>Рассылка резюме</b> — отправка резюме Заказчика на адреса электронной почты компаний из выбранной базы с сопроводительным письмом. Количество рассылок (одна, две или три) выбирается при заказе; дату и время старта каждой рассылки Заказчик выбирает при оформлении заказа (не ранее чем со следующего дня; старт — с 06:00 до 18:00 по московскому времени); отправка осуществляется по будням с 06:00 до 18:00 по московскому времени, рассылка занимает не менее 10 часов, в выходные дни отправка переносится на понедельник.</li><li><b>Резюме «Стандарт»</b> — составление резюме по данным, предоставленным Заказчиком; одна бесплатная правка.</li></ul>
 <h2>2. Стоимость и оплата</h2><p>Стоимость указана на сайте в рублях. Оплата — переводом на банковскую карту по реквизитам, указанным на странице заказа. Заказ принимается в работу после подтверждения поступления платежа.</p>
 <h2>3. Порядок оказания услуг</h2><ul><li>Рассылка начинается после подтверждения оплаты. Письма отправляются постепенно в течение нескольких часов.</li><li>Ход рассылки и список компаний доступны Заказчику на странице заказа.</li><li>Резюме «Стандарт» готовится в течение 6 часов после подтверждения оплаты и направляется на e-mail Заказчика.</li></ul>
 <h2>4. Ограничение ответственности</h2><p>Исполнитель обязуется отправить резюме по выбранной базе, но не гарантирует ответ компаний, приглашение на собеседование или трудоустройство: решения принимают работодатели. Исполнитель не отвечает за недоставку писем по причинам на стороне получателя (неактуальный адрес, спам-фильтры, переполненный ящик). Заказчик отвечает за достоверность своих данных и за право распространять предоставленные документы.</p>

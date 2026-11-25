@@ -196,6 +196,23 @@ function parseBase(text, defaultBase){
                 extra = eb.key; price = sv.price + C.extraPrice(C.priceOf(eb, sv.times));
                 title = `${sv.title} + «${eb.name}» (доп. база −${C.extraDiscPct()}%)`;
             }
+            let schedule = null;
+            if(base){                                                              // даты и время рассылок (по Москве): не раньше завтра, старт 06:00–17:59, по возрастанию
+                const arr = Array.isArray(b.schedule) ? b.schedule.slice(0, 3) : [];
+                if(arr.length !== Number(times)) return json(res, 400, {error: "Выберите дату и время старта для каждой рассылки"});
+                const mskNow = new Date(Date.now() + 3 * 3600e3), today = Date.UTC(mskNow.getUTCFullYear(), mskNow.getUTCMonth(), mskNow.getUTCDate());
+                let prevDay = today;
+                for(const x of arr){
+                    const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(String(x));
+                    if(!m) return json(res, 400, {error: "Неверная дата рассылки"});
+                    const day = Date.UTC(+m[1], +m[2] - 1, +m[3]), hh = +m[4], mm = +m[5];
+                    if(new Date(day).getUTCDate() !== +m[3] || hh < 6 || hh > 17 || mm > 59) return json(res, 400, {error: "Время старта — с 06:00 до 18:00 по Москве"});
+                    if(day <= prevDay) return json(res, 400, {error: prevDay === today ? "Дата рассылки — не раньше завтрашнего дня" : "Каждая следующая рассылка — на более позднюю дату"});
+                    if(day - today > 200 * 864e5) return json(res, 400, {error: "Дата рассылки слишком далеко"});
+                    prevDay = day;
+                }
+                schedule = JSON.stringify(arr);
+            }
             const cover = b.cover ? 1 : 0;
             if(cover){ price += C.coverPrice(); title += " + персональное сопроводительное письмо"; }
             const id = uuid(), token = crypto.randomBytes(18).toString("base64url");
@@ -203,10 +220,10 @@ function parseBase(text, defaultBase){
             for(let k = 0; k < 5 && !o; k++){
                 const num = Number((await one(`SELECT COALESCE(MAX(num), 1000) + 1 AS n FROM orders`)).n);
                 try {
-                    await q(`INSERT INTO orders(id, num, token, kind, slug, title, base, times, price, status, first_name, last_name, email, phone, position, vessel, letter, exclude, comment, cv_name, cv_b64, ip, created_at, details, extra_base, cover)
-                        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'new',$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)`,
+                    await q(`INSERT INTO orders(id, num, token, kind, slug, title, base, times, price, status, first_name, last_name, email, phone, position, vessel, letter, exclude, comment, cv_name, cv_b64, ip, created_at, details, extra_base, cover, schedule)
+                        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'new',$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)`,
                         [id, num, token, sv.kind, sv.slug, title, base, times, price, first, last, email, clean(b.phone, 40), clean(b.position, 160), clean(b.vessel, 300),
-                         sv.kind === "mailing" ? clean(b.letter, 4000) : "", base ? clean(b.exclude, 1500) : "", sv.kind === "cv" ? clean(b.comment, 6000) : "", cvName, cvB64, ip, now(), details, extra, cover]);
+                         sv.kind === "mailing" ? clean(b.letter, 4000) : "", base ? clean(b.exclude, 1500) : "", sv.kind === "cv" ? clean(b.comment, 6000) : "", cvName, cvB64, ip, now(), details, extra, cover, schedule]);
                     o = await one(`SELECT * FROM orders WHERE id = $1`, [id]);
                 } catch(e){ if(!/unique|duplicate/i.test(e.message)) throw e; }
             }

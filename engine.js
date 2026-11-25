@@ -1,5 +1,5 @@
 "use strict";
-/* Рассылка: заказ оплачен → задания (1/2/3 рассылки с интервалом в неделю) → ящик на каждом сервере Hestia (по имени клиента) →
+/* Рассылка: заказ оплачен → задания (1/2/3 рассылки на выбранные даты, отправка по будням 06:00–18:00 МСК, не быстрее 10 часов) → ящик на каждом сервере Hestia (по имени клиента) →
    очередь адресов из базы → письма по одному с паузой SEND_GAP_SEC → отчёт. Ответы компаний идут клиенту (Reply-To). Ящики удаляются через 24 часа после конца. */
 const crypto = require("crypto");
 const M = require("./mailer.js");
@@ -8,7 +8,24 @@ const {env} = M;
 
 const uuid = () => crypto.randomUUID(), now = () => new Date().toISOString();
 const GAP = () => Math.max(2, Number(env("SEND_GAP_SEC")) || 20) * 1000;
-const WEEK = 7 * 864e5;
+const WEEK = 7 * 864e5, DAY = 864e5, MSK = 3 * 3600e3;
+/* Окно отправки: будни, 06:00–18:00 по Москве (UTC+3, без перехода на летнее время). Рассылка идёт минимум 10 часов окна. */
+const MIN_HOURS = 10, WIN_FROM = 6, WIN_TO = 18;
+const mskParts = ms => { const d = new Date(ms + MSK); return {dow: d.getUTCDay(), h: d.getUTCHours() + d.getUTCMinutes() / 60 + d.getUTCSeconds() / 3600, d}; };
+const inWindow = ms => { const p = mskParts(ms); return p.dow >= 1 && p.dow <= 5 && p.h >= WIN_FROM && p.h < WIN_TO; };
+function nextWindow(ms){                                   // ближайший момент не раньше ms, когда отправка разрешена
+    let t = ms;
+    for(let i = 0; i < 12; i++){
+        const p = mskParts(t), day0 = Date.UTC(p.d.getUTCFullYear(), p.d.getUTCMonth(), p.d.getUTCDate()) - MSK;   // 00:00 МСК этого дня, в UTC
+        if(p.dow === 6) t = day0 + 2 * DAY + WIN_FROM * 3600e3;          // суббота → понедельник
+        else if(p.dow === 0) t = day0 + DAY + WIN_FROM * 3600e3;         // воскресенье → понедельник
+        else if(p.h < WIN_FROM) t = day0 + WIN_FROM * 3600e3;
+        else if(p.h >= WIN_TO) t = day0 + DAY + WIN_FROM * 3600e3;
+        else return t;
+    }
+    return t;
+}
+const parseMsk = s => { const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(String(s || "")); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) - MSK : NaN; };
 
 module.exports = function engine(db){
     const q = (s, p) => db.query(s, p), one = (s, p) => db.one(s, p);
@@ -91,10 +108,16 @@ module.exports = function engine(db){
     async function startOrder(o, who, opt = {}){
         if(o.kind !== "mailing" && !(o.kind === "cv" && o.base && opt.resume)){ await q(`UPDATE orders SET status = 'in_progress' WHERE id = $1`, [o.id]); return; }
         if(await one(`SELECT id FROM jobs WHERE order_id = $1`, [o.id])) return;
-        for(let m = 1; m <= Number(o.times || 1); m++)
-            await q(`INSERT INTO jobs(id, order_id, m, status, start_at) VALUES($1,$2,$3,'wait',$4)`, [uuid(), o.id, m, new Date(Date.now() + (m - 1) * WEEK).toISOString()]);
+        let sched = []; try { sched = JSON.parse(o.schedule || "[]"); } catch(e){}
+        let prev = 0;
+        for(let m = 1; m <= Number(o.times || 1); m++){
+            let chosen = parseMsk(sched[m - 1]); if(Number.isFinite(chosen)){ const wd = mskParts(chosen).dow; if(wd === 6) chosen += 2 * DAY; else if(wd === 0) chosen += DAY; }   // выходной → тот же час в понедельник
+            const want = Math.max(Number.isFinite(chosen) ? chosen : Date.now() + (m - 1) * WEEK, Date.now(), prev ? prev + DAY : 0);
+            const at = nextWindow(want); prev = at;
+            await q(`INSERT INTO jobs(id, order_id, m, status, start_at) VALUES($1,$2,$3,'wait',$4)`, [uuid(), o.id, m, new Date(at).toISOString()]);
+        }
         await q(`UPDATE orders SET status = 'in_progress' WHERE id = $1`, [o.id]);
-        await note(o.id, `Рассылка поставлена в очередь: ${o.times} шт. (интервал — неделя)`, who || "Система");
+        await note(o.id, `Рассылка поставлена в очередь: ${o.times} шт. по выбранным клиентом датам (отправка — по будням 06:00–18:00 МСК)`, who || "Система");
         if(Number(o.cover) && !o.cover_ok){
             await note(o.id, "💌 Заказано персональное сопроводительное письмо — составьте его в CRM (карточка заказа), клиент подтвердит. Рассылка стартует после подтверждения.", "Система");
             Mail.owner(`💌 Нужно персональное письмо — заказ №${o.num}\n${[o.first_name, o.last_name].filter(Boolean).join(" ")} · ${o.position || ""}\nCRM → заказ №${o.num} → «Персональное письмо». Рассылка ждёт.`);
@@ -173,14 +196,15 @@ module.exports = function engine(db){
                 const o = await one(`SELECT * FROM orders WHERE id = $1`, [job.order_id]); if(!o) continue;
                 if(job.status === "wait"){
                     if(Number(o.cover) && !o.cover_ok) continue;                       // ждём персональное письмо и подтверждение клиента
-                    if(Date.parse(job.start_at) > Date.now() || !["paid", "in_progress"].includes(o.status) || !o.email_ok) continue;           // ждём оплату и подтверждение e-mail
+                    if(Date.parse(job.start_at) > Date.now() || !inWindow(Date.now()) || !["paid", "in_progress"].includes(o.status) || !o.email_ok) continue;           // ждём оплату и подтверждение e-mail
                     try { await prepare(job, o); } catch(e){
                         await q(`UPDATE jobs SET last_error = $1 WHERE id = $2`, [String(e.message).slice(0, 300), job.id]);
                         alertOnce("prep:" + job.id, `⚠️ Не удалось подготовить рассылку по заказу №${o.num}: ${e.message}`, 120);
                     }
                     continue;
                 }
-                if(Date.now() - (lastSend.get(job.id) || 0) < GAP()) continue;
+                if(!inWindow(Date.now())) continue;                                            // вне окна 06:00–18:00 МСК и в выходные не отправляем
+                if(Date.now() - (lastSend.get(job.id) || 0) < Math.max(GAP(), MIN_HOURS * 3600e3 / Math.max(1, Number(job.total) || 1))) continue;   // темп: вся рассылка не быстрее 10 часов
                 lastSend.set(job.id, Date.now());
                 const more = await sendOne(job, o);
                 if(!more){
