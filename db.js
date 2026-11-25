@@ -40,8 +40,14 @@ module.exports = async function openDb(){
         `CREATE TABLE IF NOT EXISTS boxes(id TEXT PRIMARY KEY, order_id TEXT, job_id TEXT, email TEXT NOT NULL, domain TEXT, host TEXT, port INTEGER, pass_enc TEXT,
             insecure INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1, sent INTEGER NOT NULL DEFAULT 0, last_error TEXT, created_at TEXT NOT NULL, deleted_at TEXT)`,
         `CREATE TABLE IF NOT EXISTS names(name_key TEXT NOT NULL, local TEXT NOT NULL, at TEXT NOT NULL)`,
+        `CREATE TABLE IF NOT EXISTS order_docs(id TEXT PRIMARY KEY, order_id TEXT NOT NULL, name TEXT NOT NULL, size INTEGER NOT NULL DEFAULT 0, b64 TEXT NOT NULL, added_at TEXT NOT NULL)`,
+        `CREATE INDEX IF NOT EXISTS idx_docs_order ON order_docs(order_id)`,
+        `CREATE TABLE IF NOT EXISTS replies(id TEXT PRIMARY KEY, order_id TEXT NOT NULL, box TEXT NOT NULL, uid INTEGER NOT NULL, from_email TEXT, from_name TEXT, subject TEXT, text TEXT,
+            kind TEXT NOT NULL, at TEXT NOT NULL, created_at TEXT NOT NULL)`,
+        `CREATE INDEX IF NOT EXISTS idx_replies_order ON replies(order_id, at)`,
+        `CREATE TABLE IF NOT EXISTS imap_state(box_id TEXT PRIMARY KEY, last_uid INTEGER NOT NULL DEFAULT 0, checked_at TEXT, error TEXT)`,
         `CREATE TABLE IF NOT EXISTS mail_log(id TEXT PRIMARY KEY, at TEXT NOT NULL, to_email TEXT, subject TEXT, ok INTEGER NOT NULL, error TEXT)`
     ]) await db.query(s);
-    for(const c of ["subject TEXT", "letter_ok TEXT", "email_ok TEXT"]) await db.query(`ALTER TABLE orders ADD COLUMN ${c}`).catch(() => {});
+    for(const c of ["subject TEXT", "letter_ok TEXT", "email_ok TEXT", "details TEXT", "extra_base TEXT"]) await db.query(`ALTER TABLE orders ADD COLUMN ${c}`).catch(() => {});
     return db;
 };

@@ -3,6 +3,11 @@
     function $(id){ return document.getElementById(id); }
     function fmt(n){ return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " ₽"; }
 
+    /* часть документов не загрузилась */
+    var dm = /[?&]docs=(\d+)/.exec(location.search);
+    if(dm && document.querySelector(".page h1")){ var nb = document.createElement("div"); nb.className = "err"; nb.textContent = "Не все файлы удалось загрузить (" + dm[1] + "). Пришлите их менеджеру в WhatsApp или Telegram — резюме составим по анкете.";
+        document.querySelector(".page h1").insertAdjacentElement("afterend", nb); }
+
     /* копирование номера карты */
     [].forEach.call(document.querySelectorAll("[data-copy]"), function(b){
         b.addEventListener("click", function(){
@@ -59,12 +64,67 @@
 
     /* форма заказа */
     var f = $("f"); if(!f) return;
-    var sel = $("slug"), total = $("total");
-    if(sel) sel.addEventListener("change", function(){
-        var o = sel.options ? sel.options[sel.selectedIndex] : null, p = o ? o.getAttribute("data-price") : sel.getAttribute("data-price");
-        if(p) total.textContent = fmt(Number(p));
-        history.replaceState(null, "", "/order?s=" + sel.value);
+    var sel = $("slug"), total = $("total"), isCv = !!$("dob"), addBase = $("addBase"), extra = $("extra"), docs = [];
+    var LATIN = /^[A-Za-z][A-Za-z' .-]*$/, DOC_EXT = /\.(pdf|docx?|rtf|odt|xlsx?|ods|txt|jpe?g|png|webp)$/i, DOC_MAX = 15 * 1024 * 1024, DOC_TOTAL = 100 * 1024 * 1024, DOC_COUNT = 25;
+    var phoneOk = function(v){ return /^\+\d{9,15}$/.test(String(v).replace(/[\s()-]/g, "")); };
+    function timesOf(){ var m = /^rassylka-(\d)-/.exec(sel ? sel.value : ""); return m ? Number(m[1]) : 1; }
+    function recalc(){
+        var sum = 0;
+        if(isCv){
+            sum = Number(sel.getAttribute("data-price")) || 0;
+            if(addBase && addBase.value){ sum += Number(addBase.options[addBase.selectedIndex].getAttribute("data-p")) || 0; }
+            var mo = $("addMore"); if(mo) mo.hidden = !(addBase && addBase.value);
+        } else if(sel){
+            var o = sel.options[sel.selectedIndex]; sum = Number(o.getAttribute("data-price")) || 0;
+            if(extra){
+                [].forEach.call(extra.options, function(x){ x.disabled = !!x.value && sel.value === "rassylka-" + timesOf() + "-" + x.value; });
+                if(extra.value){ var eo = extra.options[extra.selectedIndex]; if(eo.disabled){ extra.value = ""; } else sum += Number((eo.getAttribute("data-p") || "").split(",")[timesOf() - 1]) || 0; }
+            }
+        }
+        if(total) total.textContent = fmt(sum);
+    }
+    if(sel && !isCv) sel.addEventListener("change", function(){ recalc(); history.replaceState(null, "", "/order?s=" + sel.value); });
+    if(addBase) addBase.addEventListener("change", recalc);
+    if(extra) extra.addEventListener("change", recalc);
+    recalc();
+
+    /* выбор должностей и судов */
+    [].forEach.call(document.querySelectorAll("[data-chips]"), function(box){
+        var name = box.getAttribute("data-chips"), max = Number(box.getAttribute("data-max")) || 0, hid = $(name);
+        box.addEventListener("change", function(ev){
+            var on = [].filter.call(box.querySelectorAll("input:checked"), function(x){ return true; });
+            if(max && on.length > max){ ev.target.checked = false; on = on.filter(function(x){ return x !== ev.target; }); fail("Можно выбрать не больше " + max + " должностей"); return; }
+            if(max) box.classList.toggle("lock", on.length >= max);
+            var vals = on.map(function(x){ return x.value; });
+            if(name === "position"){ var oth = $("positionOther"); if(oth) oth.hidden = vals.indexOf("Другая") < 0; }
+            hid.value = vals.join(", ");
+        });
     });
+    function positionValue(){
+        var v = $("position").value; if(v.split(", ").indexOf("Другая") < 0) return v;
+        var oth = $("positionOther").value.trim(); return v.split(", ").filter(function(x){ return x !== "Другая"; }).concat(oth ? [oth] : []).join(", ");
+    }
+
+    /* документы к резюме */
+    function renderDocs(){
+        var box = $("docList"); if(!box) return;
+        box.innerHTML = docs.map(function(d, i){ return '<div>📎 ' + d.name.replace(/[<>&]/g, "") + ' · ' + Math.max(1, Math.round(d.size / 1024)) + ' КБ <a href="#" data-rm="' + i + '">убрать</a></div>'; }).join("");
+        [].forEach.call(box.querySelectorAll("[data-rm]"), function(a){ a.onclick = function(e){ e.preventDefault(); docs.splice(Number(a.getAttribute("data-rm")), 1); renderDocs(); }; });
+    }
+    var dIn = $("docs");
+    if(dIn) dIn.addEventListener("change", function(){
+        var bad = [];
+        [].forEach.call(dIn.files, function(fl){
+            if(docs.some(function(d){ return d.name === fl.name && d.size === fl.size; })) return;
+            if(!DOC_EXT.test(fl.name)){ bad.push(fl.name + " — такой тип файла не принимаем"); return; }
+            if(fl.size > DOC_MAX){ bad.push(fl.name + " — больше 15 МБ"); return; }
+            if(docs.length >= DOC_COUNT){ bad.push("Можно приложить не больше " + DOC_COUNT + " файлов"); return; }
+            docs.push(fl);
+        });
+        if(docs.reduce(function(a, d){ return a + d.size; }, 0) > DOC_TOTAL){ docs.length = 0; bad.push("Общий размер файлов больше 100 МБ — приложите самые важные"); }
+        dIn.value = ""; renderDocs(); if(bad.length) fail(bad.join("; "));
+    });
+
     function fail(t){ var e = $("err"); e.textContent = t; e.hidden = false; e.scrollIntoView({behavior: "smooth", block: "center"}); }
     function readFile(file){
         return new Promise(function(ok, no){
@@ -74,23 +134,59 @@
             r.readAsDataURL(file);
         });
     }
+    var val = function(id){ var e = $(id); return e ? e.value.trim() : ""; };
+    function checkCv(){
+        if(!LATIN.test(val("first")) || !LATIN.test(val("last"))) return "Имя и фамилию укажите на английском (латиницей), как в паспорте моряка";
+        if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(val("email"))) return "Укажите корректный e-mail";
+        if(!phoneOk(val("phone"))) return "Телефон укажите с кодом страны, например +7 900 000 00 00";
+        if(!$("position").value) return "Выберите должность";
+        if($("position").value.split(", ").indexOf("Другая") >= 0 && !val("positionOther")) return "Укажите вашу должность";
+        if(!$("vessel").value) return "Выберите предпочитаемый вид судов";
+        if(!document.querySelector("input[name=msg]:checked")) return "Отметьте мессенджеры на этом номере";
+        var need = [["location", "местонахождение"], ["dob", "дату рождения"], ["english", "уровень английского"], ["school", "учебное заведение"], ["vesselExp", "суда, на которых есть опыт"], ["eyes", "цвет глаз"], ["height", "рост"],
+            ["weight", "вес"], ["overall", "размер робы"], ["shoe", "размер обуви"], ["nokName", "ближайшего родственника"], ["nokRel", "кем приходится родственник"], ["nokPhone", "телефон родственника"]];
+        for(var k = 0; k < need.length; k++) if(!val(need[k][0])){ $(need[k][0]).focus(); return "Заполните: " + need[k][1]; }
+        var age = (Date.now() - Date.parse(val("dob"))) / 31557600000; if(!(age >= 16 && age <= 80)) return "Проверьте дату рождения";
+        if(!phoneOk(val("nokPhone"))) return "Телефон родственника укажите с кодом страны";
+        return "";
+    }
     f.addEventListener("submit", function(ev){
         ev.preventDefault(); $("err").hidden = true;
         var go = $("go"), fileEl = $("file"), file = fileEl && fileEl.files && fileEl.files[0];
-        if(!$("first").value.trim() || !$("last").value.trim()) return fail("Укажите имя и фамилию");
-        if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test($("email").value.trim())) return fail("Укажите корректный e-mail");
-        if(fileEl && fileEl.hasAttribute("required") && !file) return fail("Загрузите ваше резюме (PDF или Word)");
-        if(file && file.size > 5 * 1024 * 1024) return fail("Файл больше 5 МБ — уменьшите его или пришлите в WhatsApp");
+        if(isCv){ var m = checkCv(); if(m) return fail(m); }
+        else {
+            if(!val("first") || !val("last")) return fail("Укажите имя и фамилию");
+            if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(val("email"))) return fail("Укажите корректный e-mail");
+            if(fileEl && fileEl.hasAttribute("required") && !file) return fail("Загрузите ваше резюме (PDF или Word)");
+            if(file && file.size > 5 * 1024 * 1024) return fail("Файл больше 5 МБ — уменьшите его или пришлите в WhatsApp");
+        }
         if(!$("agree").checked) return fail("Нужно согласие с офертой и политикой конфиденциальности");
         go.disabled = true; go.textContent = "Отправляем…";
-        var val = function(id){ var e = $(id); return e ? e.value : ""; };
         (file ? readFile(file) : Promise.resolve(null)).then(function(fl){
-            return fetch("/api/order", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({
-                slug: val("slug"), first: val("first"), last: val("last"), email: val("email"), phone: val("phone"), position: val("position"), vessel: val("vessel"),
-                letter: val("letter"), exclude: val("exclude"), comment: val("comment"), hp: val("hp"), agree: $("agree").checked, file: fl})});
+            var body = {slug: val("slug"), first: val("first"), last: val("last"), email: val("email"), phone: val("phone"), position: isCv ? positionValue() : val("position"), vessel: val("vessel"),
+                letter: val("letter"), exclude: val("exclude"), comment: val("comment"), hp: val("hp"), agree: $("agree").checked, file: fl};
+            if(extra && extra.value) body.extra = extra.value;
+            if(isCv){
+                if(addBase && addBase.value){ var ps = addBase.value.split(":"); body.addon = {base: ps[0], times: Number(ps[1])}; }
+                body.details = {linkedin: val("linkedin"), messengers: [].map.call(document.querySelectorAll("input[name=msg]:checked"), function(x){ return x.value; }), location: val("location"), dob: val("dob"),
+                    english: val("english"), minSalary: val("minSalary"), school: val("school"), vesselExp: val("vesselExp"), engines: val("engines"), eyes: val("eyes"), height: val("height"), weight: val("weight"),
+                    overall: val("overall"), shoe: val("shoe"), nokName: val("nokName"), nokRel: val("nokRel"), nokPhone: val("nokPhone")};
+            }
+            return fetch("/api/order", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
         }).then(function(r){ return r.json().then(function(j){ return {ok: r.ok, j: j}; }); }).then(function(x){
             if(!x.ok) throw new Error(x.j.error || "Не удалось оформить заказ");
-            location.href = x.j.url;
+            if(!isCv || !docs.length || !x.j.id) { location.href = x.j.url; return; }
+            var i = 0, bad = 0, base = "/api/order/" + encodeURIComponent(x.j.id);
+            var next = function(){
+                if(i >= docs.length){
+                    return fetch(base + "/docs-done?t=" + encodeURIComponent(x.j.token), {method: "POST"}).catch(function(){}).then(function(){ location.href = x.j.url + (bad ? "?docs=" + bad : ""); });
+                }
+                go.textContent = "Загружаем документы: " + (i + 1) + " из " + docs.length + "…";
+                var d = docs[i++];
+                return fetch(base + "/doc?t=" + encodeURIComponent(x.j.token), {method: "POST", headers: {"Content-Type": d.type || "application/octet-stream", "X-Name": encodeURIComponent(d.name)}, body: d})
+                    .then(function(r){ if(!r.ok) bad++; }).catch(function(){ bad++; }).then(next);
+            };
+            return next();
         }).catch(function(e){ go.disabled = false; go.textContent = "Оформить заказ"; fail(e.message); });
     });
 })();

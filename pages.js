@@ -77,12 +77,66 @@ function home(counts){
 }
 
 /* ---------- форма заказа ---------- */
+const ENGLISH = ["Elementary", "Pre-Intermediate", "Intermediate", "Upper-Intermediate", "Advanced"];
+const chips = (name, list, max) => `<div class="chips" data-chips="${name}"${max ? ` data-max="${max}"` : ""}>${list.map(x => `<label><input type="checkbox" value="${esc(x)}"><span>${esc(x)}</span></label>`).join("")}</div>`;
+/* Форма заказа резюме «Стандарт»: те же поля, что нужны для международной анкеты (Application Form) */
+function orderFormCv(counts){
+    const r = (id, label, extra = "", req = true) => `<label class="f">${label}${req ? ' <i class="rq">*</i>' : ""}<input class="in" id="${id}" ${extra}></label>`;
+    const body = `<div class="page"><h1>Заказ резюме «Стандарт»</h1>
+<p class="sub">Заполните анкету — мы составим резюме по международному образцу (Application Form). Поля со звёздочкой обязательны.</p>
+<form id="f" novalidate><div class="err" id="err" hidden></div>
+<input type="hidden" id="slug" value="${C.CV.slug}" data-price="${C.cvPrice()}">
+<div class="panel"><h3>Услуга</h3><p class="hint" style="margin-top:0">${esc(C.CV.title)} · <b>${rub(C.cvPrice())}</b></p></div>
+<div class="panel"><h3>👤 Основные данные</h3><div class="grid2">
+${r("first", "Имя (на английском)", 'autocomplete="given-name" placeholder="Ivan" lang="en"')}
+${r("last", "Фамилия (на английском)", 'autocomplete="family-name" placeholder="Petrov" lang="en"')}
+<label class="f">E-mail <i class="rq">*</i><small> — сюда придут письма и готовое резюме</small><input class="in" id="email" type="email" autocomplete="email"></label>
+${r("phone", "Телефон", 'type="tel" autocomplete="tel" placeholder="+7 900 000 00 00"')}
+</div>
+<div class="fld"><div class="lbl">Должность <i class="rq">*</i> <small>— до 3-х</small></div><input type="hidden" id="position">${chips("position", POSITIONS.concat(["Другая"]), 3)}
+<input class="in" id="positionOther" placeholder="Укажите вашу должность" hidden></div>
+<div class="fld"><div class="lbl">Предпочитаемый вид судов <i class="rq">*</i> <small>— можно выбрать несколько</small></div><input type="hidden" id="vessel">${chips("vessel", VESSELS)}</div>
+<div class="grid2" style="margin-top:16px">
+<label class="f">Ссылка на LinkedIn<input class="in" id="linkedin" placeholder="https://linkedin.com/in/…"></label>
+<div class="fld" style="margin:0"><div class="lbl">Мессенджеры на этом номере <i class="rq">*</i></div><div class="chips" id="msgs"><label><input type="checkbox" name="msg" value="WhatsApp"><span>WhatsApp</span></label><label><input type="checkbox" name="msg" value="Telegram"><span>Telegram</span></label><label><input type="checkbox" name="msg" value="Viber"><span>Viber</span></label></div></div>
+${r("location", "Ваше местонахождение", 'placeholder="Город, страна"')}
+${r("dob", "Дата рождения", 'type="date"')}</div></div>
+<div class="panel"><h3>⚓ Профессиональные данные</h3><div class="grid2">
+<label class="f">Уровень английского <i class="rq">*</i><select class="in" id="english"><option value="">Выберите уровень</option>${ENGLISH.map(x => `<option>${x}</option>`).join("")}</select></label>
+<label class="f">Минимальная зарплата (USD)<input class="in" id="minSalary" inputmode="numeric" placeholder="например, 6500"></label></div>
+<div style="margin-top:16px">${r("school", "Учебное заведение", 'placeholder="Название, город, годы обучения"')}</div>
+<div style="margin-top:16px">${r("vesselExp", "На каких судах у вас есть опыт", 'placeholder="например, PSV, AHTS, Bulk Carrier"')}</div>
+<div style="margin-top:16px">${r("engines", "Опыт с двигателями (для механиков)", 'placeholder="MAN B&amp;W, Wärtsilä, Caterpillar…"', false)}</div></div>
+<div class="panel"><h3>📏 Физические параметры</h3><div class="grid5">
+${r("eyes", "Цвет глаз")}${r("height", "Рост (см)", 'inputmode="numeric"')}${r("weight", "Вес (кг)", 'inputmode="numeric"')}${r("overall", "Размер робы", 'placeholder="L, 52…"')}${r("shoe", "Размер обуви", 'inputmode="numeric"')}</div></div>
+<div class="panel"><h3>👨‍👩‍👧 Ближайший родственник</h3><div class="grid3">
+${r("nokName", "Имя Фамилия")}${r("nokRel", "Кем приходится", 'placeholder="жена, мать…"')}${r("nokPhone", "Телефон родственника", 'type="tel" placeholder="+7 …"')}</div></div>
+<div class="panel"><h3>📎 Документы</h3>
+<label class="f">Старое резюме, паспорт моряка, дипломы, сертификаты<small> — по желанию: можно выбрать сразу несколько файлов (PDF, Word, Excel, JPG, PNG…), до 15 МБ каждый, не больше 25 файлов</small>
+<input class="in" type="file" id="docs" multiple accept=".pdf,.doc,.docx,.rtf,.odt,.xls,.xlsx,.ods,.txt,.jpg,.jpeg,.png,.webp"></label>
+<div id="docList" class="doclist"></div>
+<p class="hint">Можно оформить заказ и без файлов — резюме составим по анкете, а документы пришлёте менеджеру позже.</p>
+<div style="margin-top:16px"><label class="f">Дополнительно<small> — по желанию: опыт, пожелания к резюме</small><textarea class="in" id="comment" style="min-height:110px"></textarea></label></div></div>
+<div class="panel addon"><h3>➕ Добавить рассылку резюме <span class="badge">−${C.discPct()}%</span></h3>
+<p class="hint" style="margin-top:0">Разошлём готовое резюме в крюинговые компании со скидкой ${C.discPct()}%. Рассылка стартует сама, как только резюме будет готово и вы подтвердите e-mail.</p>
+<label class="f">База и количество рассылок<select class="in" id="addBase"><option value="" data-p="0">Не нужна</option>${C.BASES.map(b => `<optgroup label="${esc(b.name)}${(counts && counts.byBase && counts.byBase[b.key] > 0) ? " · " + addrCount(counts.byBase[b.key]) : ""}">${[1, 2, 3].map(n => `<option value="${b.key}:${n}" data-p="${C.addonPrice(C.priceOf(b, n))}">${C.TIMES[n - 1]} — ${numFmt(C.priceOf(b, n))} ₽ → ${numFmt(C.addonPrice(C.priceOf(b, n)))} ₽</option>`).join("")}</optgroup>`).join("")}</select></label>
+<div id="addMore" hidden style="margin-top:14px"><label class="f">Исключить компании<small> — по желанию: названия или домены, по одному в строке</small><textarea class="in" id="exclude" style="min-height:80px"></textarea></label></div></div>
+<div class="panel"><label class="check"><input type="checkbox" id="agree" required><span>Я принимаю условия <a href="/offer" target="_blank">публичной оферты</a> и согласен(на) на обработку персональных данных согласно <a href="/policy" target="_blank">политике конфиденциальности</a>.</span></label></div>
+<input type="text" id="hp" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true">
+<div class="sum"><div>К оплате<br><b id="total">${rub(C.cvPrice())}</b></div><button class="btn gold" id="go" type="submit">Оформить заказ</button></div></form></div>`;
+    return shell({title: "Заказ резюме «Стандарт» — Vreise.ru", desc: "Оформление заказа на Vreise.ru", path: "/order", noindex: true,
+        hero: `<header class="hero short">${navTop(false)}</header>`, body, scripts: `<script src="/static/order.js" defer></script>`});
+}
+
 function orderForm(slug, counts){
+    if(slug === C.CV.slug) return orderFormCv(counts);
     const sv = C.bySlug(slug) || C.SERVICES.find(s => s.base === "rossiya" && s.times === 1), cv = sv.kind === "cv";
     const cnt = counts && counts.byBase || {};
     const opts = C.BASES.map(b => `<optgroup label="${esc(b.name)}${cnt[b.key] > 0 ? " · " + addrCount(cnt[b.key]) : ""}">${[1, 2, 3].map(n => `<option value="${C.SERVICES.find(s => s.base === b.key && s.times === n).slug}" data-price="${C.priceOf(b, n)}"${sv.base === b.key && sv.times === n ? " selected" : ""}>${esc(b.name)} — ${n === 1 ? "1 рассылка" : n + " рассылки"} · ${rub(C.priceOf(b, n))}</option>`).join("")}</optgroup>`).join("");
     const pick = cv ? `<input type="hidden" id="slug" value="${C.CV.slug}" data-price="${C.cvPrice()}">` :
-        `<label class="f">База и количество рассылок<select class="in" id="slug">${opts}</select></label>`;
+        `<label class="f">База и количество рассылок<select class="in" id="slug">${opts}</select></label>
+<label class="f" style="margin-top:16px">Добавить ещё одну базу в те же рассылки <b style="color:#b9770e">−${C.discPct()}%</b><small> — например, к базе «Мир» добавить «Офшор». Адреса не повторяются</small>
+<select class="in" id="extra"><option value="">Не нужна</option>${C.BASES.map(b => `<option value="${b.key}" data-p="${[1, 2, 3].map(n => C.addonPrice(C.priceOf(b, n))).join(",")}">${esc(b.name)}${cnt[b.key] > 0 ? " · " + addrCount(cnt[b.key]) : ""}</option>`).join("")}</select></label>`;
     const body = `<div class="page"><h1>${cv ? "Заказ резюме «Стандарт»" : "Заказ рассылки"}</h1>
 <p class="sub">${cv ? "Заполните данные — мы подготовим резюме по международному образцу." : "Заполните форму и загрузите резюме. Оплата — на следующем шаге."}</p>
 <form id="f" novalidate><div class="err" id="err" hidden></div>
@@ -113,8 +167,8 @@ ${cv ? `<div class="panel"><h3>Данные для резюме</h3>
 /* ---------- страница заказа ---------- */
 const STATUS = {new: "Ожидает оплаты", claimed: "Проверяем оплату", paid: "Оплачен", in_progress: "В работе", done: "Выполнен", cancelled: "Отменён"};
 const fmtCard = c => String(c).replace(/\s+/g, "").replace(/(\d{4})(?=\d)/g, "$1 ");
-function orderPage(o, jobs, sent, msgs = [], std = null){
-    const cv = o.kind === "cv", pay = o.status === "new" || o.status === "claimed";
+function orderPage(o, jobs, sent, msgs = [], std = null, replies = []){
+    const cv = o.kind === "cv", mail = !!o.base, pay = o.status === "new" || o.status === "claimed";
     const card = env("PAY_CARD");
     const payBlock = pay ? `<div class="panel"><h3>Оплата картой в рублях</h3>
 ${o.status === "claimed" ? `<div class="ok">Спасибо! Мы проверяем ваш платёж — как только увидим перевод, заказ будет подтверждён, и вы получите письмо.</div>` : ""}
@@ -123,19 +177,20 @@ ${card ? `<p style="margin-top:12px">Переведите на карту${env("
  : `<div class="err">Реквизиты для оплаты пока не заданы. Напишите нам в WhatsApp или Telegram${phone() ? ": " + esc(phone()) : ""}.</div>`}
 <p class="hint" style="margin-top:14px">В комментарии к платежу, если есть такая возможность, укажите номер заказа <b>№${o.num}</b>. Переводите точную сумму.</p>
 ${o.status === "new" ? `<div style="margin-top:18px"><button class="btn gold" id="claim" type="button">Я оплатил(а)</button></div>` : ""}</div>` : "";
-    const progress = !cv && jobs.length ? `<div class="panel"><h3>Рассылка</h3>${jobs.map(j => {
+    const progress = mail && jobs.length ? `<div class="panel"><h3>Рассылка</h3>${jobs.map(j => {
         const pct = j.total ? Math.round((Number(j.sent) + Number(j.failed)) / j.total * 100) : 0;
         const st = {wait: "ожидает запуска", run: "идёт", pause: "на паузе", done: "завершена", stop: "остановлена"}[j.status] || j.status;
         return `<div style="margin-bottom:14px"><b>Рассылка №${j.m}</b> — ${st}${j.status === "wait" ? ` (старт ${new Date(j.start_at).toLocaleDateString("ru-RU")})` : ""}<div class="bar"><i style="width:${pct}%"></i></div>
 <span class="hint">Отправлено ${j.sent} из ${j.total || "—"}${Number(j.failed) ? `, не доставлено ${j.failed}` : ""}</span></div>`; }).join("")}</div>` : "";
-    const list = !cv && sent.length ? `<div class="panel"><h3>Куда отправлено</h3><table class="t"><thead><tr><th>Компания</th><th>E-mail</th><th>Когда</th></tr></thead><tbody>${sent.map(r =>
+    const list = mail && sent.length ? `<div class="panel nosel"><h3>Куда отправлено</h3><table class="t"><thead><tr><th>Компания</th><th>E-mail</th><th>Когда</th></tr></thead><tbody>${sent.map(r =>
         `<tr><td>${esc(r.company || "—")}</td><td>${esc(r.email)}</td><td>${esc(new Date(r.sent_at).toLocaleString("ru-RU", {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"}))}</td></tr>`).join("")}</tbody></table>
-<p class="hint">Показаны последние ${sent.length} писем.</p></div>` : "";
+<p class="hint">Показаны последние отправленные письма. Названия и адреса компаний частично скрыты — это защита базы.</p></div>` : "";
+    const repl = mail && (replies.length || jobs.length) ? `<div class="panel"><h3>Ответы компаний${replies.length ? ` · ${replies.length}` : ""}</h3>${replies.length ? replies.map(r => `<div class="rpl"><div class="h nosel"><b>${esc(r.from_name || r.from_email)}</b>${r.from_name ? ` · ${esc(r.from_email)}` : ""} · ${esc(new Date(r.at).toLocaleString("ru-RU", {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"}))}${r.kind === "auto" ? " · автоответ" : ""}</div><div style="font-weight:700;margin-top:4px">${esc(r.subject || "(без темы)")}</div><div class="b">${esc(r.text || "")}</div></div>`).join("") : `<p class="hint" style="margin:0">Пока ответов нет. Компании отвечают не сразу — как только придёт письмо, оно появится здесь, и мы сообщим на почту.</p>`}<p class="hint" style="margin-top:12px">Отвечать компаниям лучше со своей личной почты — на адрес, с которого вам написали. Ящик рассылки работает ещё сутки после окончания рассылки.</p></div>` : "";
     const res = cv && o.res_name ? `<div class="panel"><h3>Ваше резюме готово</h3><p><a class="btn gold" href="/o/${o.token}/file">Скачать: ${esc(o.res_name)}</a></p></div>` : "";
     const wait = cv && ["paid", "in_progress"].includes(o.status) && !o.res_name ? `<div class="ok">Оплата получена. Готовим ваше резюме — оно придёт на почту и появится здесь в течение 6 часов.</div>` : "";
     const emailBanner = !o.email_ok && o.status !== "cancelled" ? `<div class="err" style="background:#fff7dc;color:#6b4e00;border-color:#f0d78a;margin-bottom:18px">✉️ <b>Подтвердите e-mail.</b> Мы отправили письмо на <b>${esc(o.email)}</b> — нажмите в нём кнопку. ${cv ? "" : "Без подтверждения рассылка не начнётся. "}Письма нет? Проверьте «Спам» или <button class="btn gold sm" id="resend" type="button" style="margin:0 6px">отправьте ещё раз</button><span class="hint" id="rsmsg"></span></div>` : "";
     const running = jobs.some(j => j.status === "run");
-    const letterBlock = !cv && std && o.status !== "cancelled" ? `<div class="panel"><h3>Тема и сопроводительное письмо</h3>
+    const letterBlock = std && o.status !== "cancelled" ? `<div class="panel"><h3>Тема и сопроводительное письмо</h3>
 <p class="hint" style="margin:0 0 14px">${o.letter || o.subject ? "Здесь ваш вариант письма." : "Пока стоит стандартное письмо, составленное по вашим данным."} Именно оно уйдёт компаниям, резюме прикладывается автоматически. ${running ? "Рассылка идёт — изменить письмо можно после её окончания, для следующих рассылок." : "Поправьте текст как вам нужно — изменения применятся к рассылке."}</p>
 <form id="lf"><label class="f">Тема письма<input class="in" id="lsub" maxlength="200" value="${esc(std.cur.subject)}" ${running ? "disabled" : ""}></label>
 <div style="margin-top:14px"><label class="f">Текст письма<textarea class="in" id="ltxt" maxlength="4000" style="min-height:230px" ${running ? "disabled" : ""}>${esc(std.cur.text)}</textarea></label></div>
@@ -146,15 +201,15 @@ ${msgs.map(m => `<div style="margin-top:14px;padding:10px 14px;border-radius:12p
 <form id="msgf" style="margin-top:14px"><textarea class="in" id="msgt" maxlength="1500" placeholder="Ваш вопрос. Ответ придёт на ${esc(o.email)} и появится здесь." style="min-height:90px"></textarea>
 <div style="margin-top:10px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><button class="btn gold sm" id="msgb" type="submit">Отправить</button><span class="hint" id="msgs"></span></div></form></details></div>`;
     const body = `<div class="page"><h1>Заказ №${o.num}</h1><p class="sub">${esc(o.title)} · <span class="tag ${o.status}">${STATUS[o.status] || o.status}</span></p>
-${emailBanner}${payBlock}${wait}${res}${progress}${list}${letterBlock}${chat}
+${emailBanner}${payBlock}${wait}${res}${progress}${repl}${list}${letterBlock}${chat}
 <div class="panel"><h3>Данные заказа</h3><table class="t"><tbody>
 <tr><td>Клиент</td><td>${esc([o.first_name, o.last_name].filter(Boolean).join(" "))}</td></tr><tr><td>E-mail</td><td>${esc(o.email)}</td></tr>
 ${o.phone ? `<tr><td>Телефон</td><td>${esc(o.phone)}</td></tr>` : ""}${o.position ? `<tr><td>Должность</td><td>${esc(o.position)}</td></tr>` : ""}
 <tr><td>Сумма</td><td>${rub(o.price)}</td></tr><tr><td>Оформлен</td><td>${esc(new Date(o.created_at).toLocaleString("ru-RU"))}</td></tr></tbody></table>
 <p class="hint" style="margin-top:12px">Сохраните эту ссылку — по ней всегда можно посмотреть состояние заказа.${phone() ? ` Вопросы — WhatsApp / Telegram ${esc(phone())}.` : ""}</p></div></div>`;
-    const live = ["claimed", "paid", "in_progress"].includes(o.status) ? `<script>setTimeout(function(){location.reload()},45000)</script>` : "";
+    const live = ["claimed", "paid", "in_progress"].includes(o.status) ? `<script>setInterval(function(){var a=document.activeElement;if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))return;if(document.querySelector("textarea[data-dirty]"))return;location.reload()},45000);document.addEventListener("input",function(e){if(e.target&&e.target.tagName==="TEXTAREA")e.target.setAttribute("data-dirty","1")})</script>` : "";
     return shell({title: `Заказ №${o.num} — Vreise.ru`, desc: "Страница заказа", path: "/o/" + o.token, noindex: true, hero: `<header class="hero short">${navTop(false)}</header>`, body,
-        scripts: `<script>window.__tok=${JSON.stringify(o.token)}</script><script src="/static/order.js" defer></script>${live}`});
+        scripts: `<script>window.__tok=${JSON.stringify(o.token)}</script><script src="/static/order.js" defer></script><script src="/static/noselect.js" defer></script>${live}`});
 }
 
 /* ---------- политика и оферта ---------- */

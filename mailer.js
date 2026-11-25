@@ -24,7 +24,7 @@ function cfgs(){
         const url = E("URL").replace(/\/+$/, ""), k = E("KEY"), user = E("USER"), domain = E("DOMAIN").toLowerCase();
         if(!(url && k && user && domain) || out.some(c => c.domain === domain)) continue;
         out.push({n: n || 1, url, key: k, user, domain, insecure: E("INSECURE") === "1", quota: E("QUOTA") || "unlimited",
-            smtp: E("SMTP_HOST") || "mail." + domain, port: Number(E("SMTP_PORT")) || 465});
+            smtp: E("SMTP_HOST") || "mail." + domain, port: Number(E("SMTP_PORT")) || 465, imap: E("IMAP_HOST") || E("SMTP_HOST") || "mail." + domain, imapPort: Number(E("IMAP_PORT")) || 993});
     }
     return out;
 }

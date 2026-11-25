@@ -26,11 +26,12 @@ module.exports = function engine(db){
     async function pick(o){
         const rows = await q(`SELECT email, company, country, fleets, bases FROM base_rows`);
         const tokens = parseExclude(o.exclude), seen = new Set();
-        return rows.filter(r => hasBase(r, o.base) && !excluded(r, tokens) && !seen.has(r.email) && seen.add(r.email));
+        return rows.filter(r => (hasBase(r, o.base) || (o.extra_base && hasBase(r, o.extra_base))) && !excluded(r, tokens) && !seen.has(r.email) && seen.add(r.email));
     }
     async function baseCounts(){
         const rows = await q(`SELECT fleets, bases FROM base_rows`), out = {};
-        for(const k of require("./catalog.js").BASES.map(b => b.key)) out[k] = rows.filter(r => hasBase(r, k)).length;
+        /* пока базы не загружены в CRM, на карточках показываем ориентировочное число адресов из каталога */
+        for(const b of require("./catalog.js").BASES) out[b.key] = rows.filter(r => hasBase(r, b.key)).length || (rows.length ? 0 : b.count || 0);
         return {total: rows.length, byBase: out};
     }
 
@@ -46,7 +47,7 @@ module.exports = function engine(db){
         return `Dear Sir/Madam,\n\nI would like to apply for ${o.position ? `the position of ${o.position}` : "a seafarer position"}${o.vessel ? ` (vessel types: ${o.vessel})` : ""}. Please find my CV attached.\n\nI am available to join at short notice and would be glad to hear from you.\n\nContact details:\nE-mail: ${o.email}${phone}\n\nBest regards,\n${nm}`;
     }
     function letterFor(o){
-        const ru = o.base === "rossiya", name = [o.first_name, o.last_name].filter(Boolean).join(" ");
+        const ru = o.base === "rossiya" && !o.extra_base, name = [o.first_name, o.last_name].filter(Boolean).join(" ");
         const std = ru ? `Резюме: ${o.position || "моряк"} — ${name}` : `Application: ${o.position || "Seafarer"} — ${latin(name)}`;
         return {subject: String(o.subject || "").trim() || std, text: String(o.letter || "").trim() || defaultLetter(o, ru)};
     }
@@ -82,8 +83,8 @@ module.exports = function engine(db){
     }
 
     /* ---------- запуск после оплаты ---------- */
-    async function startOrder(o, who){
-        if(o.kind !== "mailing"){ await q(`UPDATE orders SET status = 'in_progress' WHERE id = $1`, [o.id]); return; }
+    async function startOrder(o, who, opt = {}){
+        if(o.kind !== "mailing" && !(o.kind === "cv" && o.base && opt.resume)){ await q(`UPDATE orders SET status = 'in_progress' WHERE id = $1`, [o.id]); return; }
         if(await one(`SELECT id FROM jobs WHERE order_id = $1`, [o.id])) return;
         for(let m = 1; m <= Number(o.times || 1); m++)
             await q(`INSERT INTO jobs(id, order_id, m, status, start_at) VALUES($1,$2,$3,'wait',$4)`, [uuid(), o.id, m, new Date(Date.now() + (m - 1) * WEEK).toISOString()]);
@@ -124,7 +125,8 @@ module.exports = function engine(db){
         const box = boxes[Number(job.rr) % boxes.length];
         await q(`UPDATE jobs SET rr = rr + 1 WHERE id = $1`, [job.id]);
         let pass; try { pass = M.decrypt(box.pass_enc); } catch(e){ await q(`UPDATE boxes SET active = 0, last_error = $1 WHERE id = $2`, [e.message, box.id]); return true; }
-        const L = letterFor(o), attach = o.cv_b64 ? {name: o.cv_name || "CV.pdf", mime: M.mimeOf(o.cv_name || "CV.pdf"), data: Buffer.from(o.cv_b64, "base64")} : null;
+        const L = letterFor(o), fb = o.kind === "cv" ? {n: o.res_name, d: o.res_b64} : {n: o.cv_name, d: o.cv_b64};
+        const attach = fb.d ? {name: fb.n || "CV.pdf", mime: M.mimeOf(fb.n || "CV.pdf"), data: Buffer.from(fb.d, "base64")} : null;
         const name = [o.first_name, o.last_name].filter(Boolean).join(" ");
         try {
             const raw = M.message({fromEmail: box.email, fromName: name, to: row.email, subject: L.subject, text: L.text, attach, replyTo: o.email});
@@ -188,7 +190,44 @@ module.exports = function engine(db){
         } catch(e){ console.error("engine:", e); } finally { busy = false; }
     }
     let timer = null;
-    const start = () => { if(!timer) timer = setInterval(() => tick().catch(() => {}), 5000); };
+    /* ---------- ответы компаний: раз в REPLY_MIN минут читаем входящие ящиков рассылки ---------- */
+    let replyAt = 0, replyBusy = false;
+    async function pollReplies(){
+        if(replyBusy) return; replyBusy = true;
+        try {
+            const IM = require("./imap.js"), cfgs = M.cfgs(), own = new Set(cfgs.map(c => c.domain)), fresh = new Map();
+            for(const b of await q(`SELECT * FROM boxes WHERE deleted_at IS NULL AND active = 1`)){
+                const c = cfgs.find(x => x.domain === b.domain); if(!c) continue;
+                const st = await one(`SELECT * FROM imap_state WHERE box_id = $1`, [b.id]) || {last_uid: 0};
+                let S = null, last = Number(st.last_uid) || 0, err = null;
+                try {
+                    S = await IM.session({host: c.imap, port: c.imapPort, user: b.email, pass: M.decrypt(b.pass_enc), insecure: !!Number(b.insecure)});
+                    await S.login(); await S.select("INBOX");
+                    const uids = (await S.search(`UID ${last + 1}:*`)).filter(u => u > last).slice(0, 60);
+                    for(const {uid, data} of await S.fetchMany(uids)){
+                        last = Math.max(last, uid);
+                        if(!data || !data.length) continue;
+                        const r = IM.parseMail(data);
+                        if(r.kind === "bounce" || !r.from || own.has(String(r.from).split("@")[1]) || own.has(String(r.fromRaw).split("@")[1])) continue;
+                        if(await one(`SELECT id FROM replies WHERE order_id = $1 AND box = $2 AND uid = $3`, [b.order_id, b.email, uid])) continue;
+                        await q(`INSERT INTO replies(id, order_id, box, uid, from_email, from_name, subject, text, kind, at, created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+                            [uuid(), b.order_id, b.email, uid, r.from, String(r.name || "").slice(0, 200), r.subject, r.text, r.kind, new Date(r.date).toISOString(), now()]);
+                        if(r.kind === "reply") fresh.set(b.order_id, (fresh.get(b.order_id) || 0) + 1);
+                    }
+                } catch(e){ err = String(e.message || e).slice(0, 300); }
+                finally { if(S) S.close(); }
+                await q(`DELETE FROM imap_state WHERE box_id = $1`, [b.id]);
+                await q(`INSERT INTO imap_state(box_id, last_uid, checked_at, error) VALUES($1,$2,$3,$4)`, [b.id, last, now(), err]);
+            }
+            for(const [oid, n] of fresh){
+                const o = await one(`SELECT * FROM orders WHERE id = $1`, [oid]); if(!o) continue;
+                await note(oid, `Ответов от компаний: ${n}`, "Система");
+                if(o.email_ok) Mail.T.newReplies(o, n).catch(() => {});
+            }
+        } catch(e){ console.error("replies:", e); } finally { replyBusy = false; }
+    }
+    const REPLY_MS = () => { const m = Number(env("REPLY_MIN")); return (m > 0 ? m : 5) * 60e3; };
+    const start = () => { if(!timer) timer = setInterval(() => { tick().catch(() => {}); if(Date.now() - replyAt > REPLY_MS()){ replyAt = Date.now(); pollReplies().catch(() => {}); } }, 5000); };
 
     async function jobCtl(job, action, who){
         const o = await one(`SELECT * FROM orders WHERE id = $1`, [job.order_id]);
@@ -213,5 +252,5 @@ module.exports = function engine(db){
         return c.domain;
     }
 
-    return {startOrder, tick, start, jobCtl, note, pick, baseCounts, testSend, letterFor, hasBase, parseExclude, deleteBox};
+    return {pollReplies, startOrder, tick, start, jobCtl, note, pick, baseCounts, testSend, letterFor, hasBase, parseExclude, deleteBox};
 };

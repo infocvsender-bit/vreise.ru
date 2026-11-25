@@ -1,7 +1,7 @@
 "use strict";
 /* Vreise.ru — сервер: сайт, заказы, CRM, рассылка. Только русский язык. */
 const http = require("http"), fs = require("fs"), path = require("path"), crypto = require("crypto");
-const openDb = require("./db.js"), makeEngine = require("./engine.js"), Mail = require("./mails.js"), M = require("./mailer.js"), C = require("./catalog.js"), P = require("./pages.js"), CRM = require("./crmpage.js");
+const openDb = require("./db.js"), makeEngine = require("./engine.js"), Mail = require("./mails.js"), M = require("./mailer.js"), C = require("./catalog.js"), P = require("./pages.js"), CRM = require("./crmpage.js"), Mask = require("./mask.js");
 const {env} = M;
 
 const PUB = path.join(__dirname, "public");
@@ -33,7 +33,35 @@ function body(req, limit = 9 * 1024 * 1024){
         req.on("error", no);
     });
 }
+function rawBody(req, limit){
+    return new Promise((ok, no) => {
+        let n = 0; const ch = [];
+        req.on("data", d => { n += d.length; if(n > limit){ no(Object.assign(new Error("файл слишком большой"), {status: 413})); req.destroy(); } else ch.push(d); });
+        req.on("end", () => ok(Buffer.concat(ch)));
+        req.on("error", no);
+    });
+}
 const clean = (s, n = 300) => String(s ?? "").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "").trim().slice(0, n);
+const LATIN = /^[A-Za-z][A-Za-z' .-]*$/, PHONE_OK = v => /^\+\d{9,15}$/.test(String(v).replace(/[\s()-]/g, ""));
+const ENG = ["Elementary", "Pre-Intermediate", "Intermediate", "Upper-Intermediate", "Advanced"];
+const DOC_EXT = /\.(pdf|docx?|rtf|odt|xlsx?|ods|txt|jpe?g|png|webp)$/i, DOC_MAX = 15 * 1024 * 1024, DOC_TOTAL = 100 * 1024 * 1024, DOC_COUNT = 25;
+/* анкета для резюме «Стандарт»: проверка и очистка */
+function cvDetails(b, first, last){
+    const d = b.details && typeof b.details === "object" ? b.details : {}, c = (k, n = 200) => clean(d[k], n);
+    if(!LATIN.test(first) || !LATIN.test(last)) return {error: "Имя и фамилию укажите на английском (латиницей), как в паспорте моряка"};
+    const o = {linkedin: c("linkedin"), messengers: (Array.isArray(d.messengers) ? d.messengers : []).filter(x => ["WhatsApp", "Telegram", "Viber"].includes(x)),
+        location: c("location"), dob: c("dob", 10), english: c("english", 30), minSalary: c("minSalary", 12), school: c("school"), vesselExp: c("vesselExp"), engines: c("engines"),
+        eyes: c("eyes", 40), height: c("height", 6), weight: c("weight", 6), overall: c("overall", 12), shoe: c("shoe", 6), nokName: c("nokName", 80), nokRel: c("nokRel", 60), nokPhone: c("nokPhone", 30)};
+    const need = {location: "местонахождение", dob: "дату рождения", english: "уровень английского", school: "учебное заведение", vesselExp: "суда, на которых есть опыт", eyes: "цвет глаз", height: "рост",
+        weight: "вес", overall: "размер робы", shoe: "размер обуви", nokName: "ближайшего родственника", nokRel: "кем приходится родственник", nokPhone: "телефон родственника"};
+    for(const k in need) if(!o[k]) return {error: "Заполните: " + need[k]};
+    if(!o.messengers.length) return {error: "Отметьте мессенджеры на номере"};
+    if(!ENG.includes(o.english)) return {error: "Выберите уровень английского"};
+    const age = (Date.now() - Date.parse(o.dob)) / 31557600e3; if(!(age >= 16 && age <= 80)) return {error: "Проверьте дату рождения"};
+    if(!PHONE_OK(b.phone)) return {error: "Телефон укажите с кодом страны, например +7 900 000 00 00"};
+    if(!PHONE_OK(o.nokPhone)) return {error: "Телефон родственника укажите с кодом страны"};
+    return {d: o};
+}
 
 /* ---------- CRM: вход по паролю, cookie с подписью ---------- */
 const secret = () => env("CRM_SECRET") || env("CRM_PASSWORD") + "|vreise";
@@ -123,9 +151,10 @@ function parseBase(text, defaultBase){
             }
             const jobs = await q(`SELECT * FROM jobs WHERE order_id = $1 ORDER BY m`, [o.id]);
             const msgs = await q(`SELECT at, author, text FROM notes WHERE order_id = $1 AND author IN ('Сообщение клиента', 'Ответ менеджера') ORDER BY at`, [o.id]);
-            const sent = jobs.length ? await q(`SELECT qu.company, qu.email, qu.sent_at FROM queue qu JOIN jobs j ON j.id = qu.job_id WHERE j.order_id = $1 AND qu.status = 'sent' ORDER BY qu.sent_at DESC LIMIT 200`, [o.id]) : [];
-            const std = o.kind === "mailing" ? {cur: engine.letterFor(o), def: engine.letterFor({...o, letter: "", subject: ""})} : null;
-            return send(res, 200, P.orderPage(o, jobs, sent, msgs, std), "text/html; charset=utf-8", {"Cache-Control": "no-store"});
+            const sent = (jobs.length ? await q(`SELECT qu.company, qu.email, qu.sent_at FROM queue qu JOIN jobs j ON j.id = qu.job_id WHERE j.order_id = $1 AND qu.status = 'sent' ORDER BY qu.sent_at DESC LIMIT 200`, [o.id]) : []).map(r => ({company: Mask.maskCompany(r.company || ""), email: Mask.maskEmail(r.email), sent_at: r.sent_at}));
+            const std = o.base ? {cur: engine.letterFor(o), def: engine.letterFor({...o, letter: "", subject: ""})} : null;
+            const replies = o.base ? await q(`SELECT from_email, from_name, subject, text, kind, at FROM replies WHERE order_id = $1 ORDER BY at DESC LIMIT 100`, [o.id]) : [];
+            return send(res, 200, P.orderPage(o, jobs, sent, msgs, std, replies), "text/html; charset=utf-8", {"Cache-Control": "no-store"});
         }
         return send(res, 404, P.notFound());
     }
@@ -150,25 +179,62 @@ function parseBase(text, defaultBase){
                 if(!/\.(pdf|docx?|jpe?g|png)$/i.test(cvName)) return json(res, 400, {error: "Допустимы файлы PDF, Word, JPG или PNG"});
             }
             if(sv.kind === "mailing" && !cvB64) return json(res, 400, {error: "Загрузите ваше резюме (PDF или Word)"});
-            if(sv.kind === "cv" && !cvB64 && clean(b.comment, 4000).length < 30) return json(res, 400, {error: "Расскажите о себе и опыте или приложите документы"});
+            let details = null, price = sv.price, title = sv.title, base = sv.base || null, times = sv.times || 1, extra = null;
+            if(sv.kind === "cv"){
+                const v = cvDetails(b, first, last); if(v.error) return json(res, 400, {error: v.error});
+                if(!clean(b.position, 160) || !clean(b.vessel, 300)) return json(res, 400, {error: "Выберите должность и вид судов"});
+                details = JSON.stringify(v.d);
+                if(b.addon && b.addon.base){
+                    const ms = C.bySlug(`rassylka-${Number(b.addon.times) || 1}-${clean(b.addon.base, 40)}`); if(!ms) return json(res, 400, {error: "Выберите рассылку"});
+                    base = ms.base; times = ms.times; price = sv.price + C.addonPrice(ms.price);
+                    title = `${sv.title} + рассылка ${C.TIMES[ms.times - 1]} · ${C.baseOf(ms.base).name} (−${C.discPct()}%)`;
+                }
+            } else if(b.extra){
+                const eb = C.baseOf(clean(b.extra, 40)); if(!eb || eb.key === sv.base) return json(res, 400, {error: "Выберите дополнительную базу"});
+                extra = eb.key; price = sv.price + C.addonPrice(C.priceOf(eb, sv.times));
+                title = `${sv.title} + «${eb.name}» (доп. база −${C.discPct()}%)`;
+            }
             const id = uuid(), token = crypto.randomBytes(18).toString("base64url");
             let o;
             for(let k = 0; k < 5 && !o; k++){
                 const num = Number((await one(`SELECT COALESCE(MAX(num), 1000) + 1 AS n FROM orders`)).n);
                 try {
-                    await q(`INSERT INTO orders(id, num, token, kind, slug, title, base, times, price, status, first_name, last_name, email, phone, position, vessel, letter, exclude, comment, cv_name, cv_b64, ip, created_at)
-                        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'new',$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
-                        [id, num, token, sv.kind, sv.slug, sv.title, sv.base || null, sv.times || 1, sv.price, first, last, email, clean(b.phone, 40), clean(b.position, 80), clean(b.vessel, 120),
-                         sv.kind === "mailing" ? clean(b.letter, 4000) : "", sv.kind === "mailing" ? clean(b.exclude, 1500) : "", sv.kind === "cv" ? clean(b.comment, 6000) : "", cvName, cvB64, ip, now()]);
+                    await q(`INSERT INTO orders(id, num, token, kind, slug, title, base, times, price, status, first_name, last_name, email, phone, position, vessel, letter, exclude, comment, cv_name, cv_b64, ip, created_at, details, extra_base)
+                        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'new',$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)`,
+                        [id, num, token, sv.kind, sv.slug, title, base, times, price, first, last, email, clean(b.phone, 40), clean(b.position, 160), clean(b.vessel, 300),
+                         sv.kind === "mailing" ? clean(b.letter, 4000) : "", base ? clean(b.exclude, 1500) : "", sv.kind === "cv" ? clean(b.comment, 6000) : "", cvName, cvB64, ip, now(), details, extra]);
                     o = await one(`SELECT * FROM orders WHERE id = $1`, [id]);
                 } catch(e){ if(!/unique|duplicate/i.test(e.message)) throw e; }
             }
             if(!o) return json(res, 500, {error: "Не удалось создать заказ, попробуйте ещё раз"});
             Mail.T.confirm(o).catch(() => {});
             Mail.owner(`🆕 Новый заказ №${o.num}\n${o.title} · ${Mail.rub(o.price)}\n${first} ${last} · ${email}${o.phone ? " · " + o.phone : ""}`);
-            return json(res, 200, {url: "/o/" + o.token});
+            return json(res, 200, {url: "/o/" + o.token, id: o.id, token: o.token});
         }
-        let m = p.match(/^\/api\/o\/([A-Za-z0-9_-]{10,80})\/claim$/);
+        let m = p.match(/^\/api\/order\/([\w-]{10,60})\/doc$/);
+        if(req.method === "POST" && m){
+            if(limited("doc:" + ipOf(req), 80, 3600e3)) return json(res, 429, {error: "Слишком много файлов, попробуйте позже"});
+            const o = await one(`SELECT id, token, kind, status FROM orders WHERE id = $1`, [m[1]]);
+            if(!o || o.kind !== "cv" || o.token !== u.searchParams.get("t") || o.status === "cancelled") return json(res, 404, {error: "Заказ не найден"});
+            const name = clean(decodeURIComponent(String(req.headers["x-name"] || "document")), 120) || "document";
+            if(!DOC_EXT.test(name)) return json(res, 400, {error: "Этот тип файла не принимаем"});
+            const st = await one(`SELECT COUNT(*) AS n, COALESCE(SUM(size), 0) AS s FROM order_docs WHERE order_id = $1`, [o.id]);
+            if(Number(st.n) >= DOC_COUNT) return json(res, 400, {error: "Слишком много файлов"});
+            const buf = await rawBody(req, DOC_MAX);
+            if(!buf.length) return json(res, 400, {error: "Пустой файл"});
+            if(Number(st.s) + buf.length > DOC_TOTAL) return json(res, 400, {error: "Превышен общий размер файлов"});
+            await q(`INSERT INTO order_docs(id, order_id, name, size, b64, added_at) VALUES($1,$2,$3,$4,$5,$6)`, [uuid(), o.id, name, buf.length, buf.toString("base64"), now()]);
+            return json(res, 200, {ok: true});
+        }
+        m = p.match(/^\/api\/order\/([\w-]{10,60})\/docs-done$/);
+        if(req.method === "POST" && m){
+            const o = await one(`SELECT * FROM orders WHERE id = $1`, [m[1]]);
+            if(!o || o.token !== u.searchParams.get("t") || limited("docsdone:" + o.id, 3, 3600e3)) return json(res, 200, {ok: true});
+            const n = Number((await one(`SELECT COUNT(*) AS n FROM order_docs WHERE order_id = $1`, [o.id])).n);
+            if(n){ await engine.note(o.id, `Клиент приложил файлов: ${n}`, "Клиент"); Mail.owner(`📎 К заказу №${o.num} приложено файлов: ${n}\n${Mail.siteUrl()}/crm`); }
+            return json(res, 200, {ok: true});
+        }
+        m = p.match(/^\/api\/o\/([A-Za-z0-9_-]{10,80})\/claim$/);
         if(req.method === "POST" && m){
             if(limited("claim:" + ipOf(req), 20, 3600e3)) return json(res, 429, {error: "Слишком много запросов"});
             const o = await byToken(m[1]); if(!o) return json(res, 404, {error: "Заказ не найден"});
@@ -188,7 +254,7 @@ function parseBase(text, defaultBase){
         m = p.match(/^\/api\/o\/([A-Za-z0-9_-]{10,80})\/letter$/);
         if(req.method === "POST" && m){
             if(limited("letter:" + m[1], 30, 3600e3)) return json(res, 429, {error: "Слишком много изменений, попробуйте позже"});
-            const o = await byToken(m[1]); if(!o || o.kind !== "mailing") return json(res, 404, {error: "Заказ не найден"});
+            const o = await byToken(m[1]); if(!o || !o.base) return json(res, 404, {error: "Заказ не найден"});
             if(o.status === "cancelled") return json(res, 400, {error: "Заказ отменён"});
             if(await one(`SELECT id FROM jobs WHERE order_id = $1 AND status = 'run'`, [o.id])) return json(res, 400, {error: "Рассылка идёт — письмо можно изменить после её окончания, для следующих рассылок."});
             const b = await body(req, 40000), std = engine.letterFor({...o, letter: "", subject: ""});
@@ -221,11 +287,13 @@ function parseBase(text, defaultBase){
             let rows = await q(`SELECT ${ORDER_LIST} FROM orders ORDER BY num DESC LIMIT 500`);
             if(st) rows = rows.filter(r => r.status === st);
             if(s) rows = rows.filter(r => [r.num, r.email, r.first_name, r.last_name, r.phone].join(" ").toLowerCase().includes(s));
+            const pr = await q(`SELECT order_id, SUM(sent) AS s, SUM(total) AS t, SUM(failed) AS f FROM jobs GROUP BY order_id`), pm = Object.fromEntries(pr.map(r => [r.order_id, r]));
+            for(const r of rows){ const x = pm[r.id]; r.sent = x ? Number(x.s) : 0; r.total = x ? Number(x.t) : 0; r.failed = x ? Number(x.f) : 0; }
             const sum = await q(`SELECT status, COUNT(*) AS n FROM orders GROUP BY status`);
             return json(res, 200, {orders: rows, summary: Object.fromEntries(sum.map(r => [r.status, Number(r.n)]))});
         }
         if(req.method === "GET" && (m = p.match(/^\/orders\/([\w-]+)$/))){
-            const o = await one(`SELECT ${ORDER_LIST}, letter, exclude, comment FROM orders WHERE id = $1`, [m[1]]); if(!o) return json(res, 404, {error: "нет заказа"});
+            const o = await one(`SELECT ${ORDER_LIST}, letter, exclude, comment, details, extra_base FROM orders WHERE id = $1`, [m[1]]); if(!o) return json(res, 404, {error: "нет заказа"});
             const jobs = await q(`SELECT * FROM jobs WHERE order_id = $1 ORDER BY m`, [o.id]);
             for(const j of jobs){
                 j.wait = Number((await one(`SELECT COUNT(*) AS n FROM queue WHERE job_id = $1 AND status = 'wait'`, [j.id])).n);
@@ -233,7 +301,21 @@ function parseBase(text, defaultBase){
             }
             const notes = await q(`SELECT at, author, text FROM notes WHERE order_id = $1 ORDER BY at DESC LIMIT 100`, [o.id]);
             const boxes = await q(`SELECT email, sent, active, last_error, deleted_at FROM boxes WHERE order_id = $1 ORDER BY created_at`, [o.id]);
-            return json(res, 200, {order: o, jobs, notes, boxes, link: Mail.orderLink(o)});
+            const sent = await q(`SELECT qu.company, qu.email, qu.country, qu.status, qu.error, qu.sent_at, j.m FROM queue qu JOIN jobs j ON j.id = qu.job_id WHERE j.order_id = $1 AND qu.status IN ('sent','fail') ORDER BY qu.sent_at DESC LIMIT 1000`, [o.id]);
+            const docs = await q(`SELECT id, name, size FROM order_docs WHERE order_id = $1 ORDER BY added_at`, [o.id]);
+            let det = null; try { det = o.details ? JSON.parse(o.details) : null; } catch(e){} delete o.details;
+            const replies = await q(`SELECT from_email, from_name, subject, text, kind, at FROM replies WHERE order_id = $1 ORDER BY at DESC LIMIT 200`, [o.id]);
+            return json(res, 200, {order: o, details: det, docs, replies, sent, jobs, notes, boxes, link: Mail.orderLink(o)});
+        }
+        if(req.method === "GET" && (m = p.match(/^\/orders\/([\w-]+)\/doc\/([\w-]+)$/))){
+            const d = await one(`SELECT name, b64 FROM order_docs WHERE id = $1 AND order_id = $2`, [m[2], m[1]]); if(!d) return json(res, 404, {error: "файла нет"});
+            return send(res, 200, Buffer.from(d.b64, "base64"), M.mimeOf(d.name), {"Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(d.name)}`});
+        }
+        if(req.method === "GET" && (m = p.match(/^\/orders\/([\w-]+)\/sent\.csv$/))){
+            const rows = await q(`SELECT j.m, qu.sent_at, qu.status, qu.company, qu.country, qu.email, qu.error FROM queue qu JOIN jobs j ON j.id = qu.job_id WHERE j.order_id = $1 AND qu.status IN ('sent','fail') ORDER BY j.m, qu.sent_at`, [m[1]]);
+            const cell = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+            const csv = "\ufeff" + ["рассылка;время;статус;компания;страна;email;ошибка"].concat(rows.map(r => [r.m, r.sent_at || "", r.status === "sent" ? "отправлено" : "ошибка", r.company, r.country, r.email, r.error].map(cell).join(";"))).join("\r\n");
+            return send(res, 200, csv, "text/csv; charset=utf-8", {"Content-Disposition": `attachment; filename="sent-${m[1].slice(0, 8)}.csv"`});
         }
         if(req.method === "GET" && (m = p.match(/^\/orders\/([\w-]+)\/(cv|res)$/))){
             const o = await one(`SELECT cv_name, cv_b64, res_name, res_b64 FROM orders WHERE id = $1`, [m[1]]); const name = o && o[m[2] + "_name"], b64 = o && o[m[2] + "_b64"];
@@ -262,9 +344,11 @@ function parseBase(text, defaultBase){
                 if(!["paid", "in_progress", "done"].includes(o.status)) return json(res, 400, {error: "Сначала подтвердите оплату"});
                 const name = clean(b.name, 120), b64 = String(b.b64 || "").replace(/^data:[^,]*,/, "").replace(/\s+/g, "");
                 if(!name || !/^[A-Za-z0-9+/=]+$/.test(b64) || Buffer.from(b64, "base64").length > 8 * 1024 * 1024) return json(res, 400, {error: "Файл не принят (до 8 МБ)"});
-                await q(`UPDATE orders SET res_name = $1, res_b64 = $2, status = 'done', done_at = $3 WHERE id = $4`, [name, b64, now(), o.id]);
+                const withMail = !!o.base && !(await one(`SELECT id FROM jobs WHERE order_id = $1`, [o.id]));
+                await q(`UPDATE orders SET res_name = $1, res_b64 = $2, status = $3, done_at = $4 WHERE id = $5`, [name, b64, withMail || o.base ? "in_progress" : "done", o.base ? null : now(), o.id]);
                 await engine.note(o.id, `Готовое резюме загружено: ${name}`, who);
                 if(b.notify !== false) Mail.T.cvReady(o).catch(() => {});
+                if(withMail) await engine.startOrder({...o, res_name: name, res_b64: b64, status: "in_progress"}, who, {resume: true});
             }
             return json(res, 200, {ok: true});
         }
@@ -275,9 +359,9 @@ function parseBase(text, defaultBase){
         }
         if(req.method === "POST" && (m = p.match(/^\/orders\/([\w-]+)\/reply$/))){
             const o = await one(`SELECT * FROM orders WHERE id = $1`, [m[1]]); if(!o) return json(res, 404, {error: "нет заказа"});
-            const text = clean((await body(req, 20000)).text, 2000); if(!text) return json(res, 400, {error: "Пустой ответ"});
-            await engine.note(o.id, text, "Ответ менеджера");
-            Mail.T.reply(o, text).catch(() => {});
+            const rb = await body(req, 20000), text = clean(rb.text, 5000), subject = clean(rb.subject, 150).replace(/[\r\n]+/g, " "); if(!text) return json(res, 400, {error: "Пустой ответ"});
+            await engine.note(o.id, subject ? `${subject}\n${text}` : text, "Ответ менеджера");
+            Mail.T.reply(o, text, subject).catch(() => {});
             return json(res, 200, {ok: true});
         }
         if(req.method === "POST" && (m = p.match(/^\/jobs\/([\w-]+)\/(pause|resume|stop|retry)$/))){
