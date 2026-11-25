@@ -4,7 +4,11 @@ const net = require("net"), tls = require("tls"), https = require("https"), cryp
 const env = k => String(process.env[k] || "").trim();
 
 /* ---------- шифрование паролей ящиков (ключ — MAILBOX_KEY) ---------- */
-const key = () => crypto.createHash("sha256").update(env("MAILBOX_KEY") || "vreise-boxes-dev").digest();
+const key = () => {
+    const k = env("MAILBOX_KEY");
+    if(!k && (env("RAILWAY_ENVIRONMENT") || process.env.NODE_ENV === "production")) throw new Error("MAILBOX_KEY не задан в Railway — пароли ящиков рассылки не шифруются, отправка остановлена");
+    return crypto.createHash("sha256").update(k || "vreise-boxes-dev").digest();
+};
 function encrypt(t){
     const iv = crypto.randomBytes(12), c = crypto.createCipheriv("aes-256-gcm", key(), iv);
     const e = Buffer.concat([c.update(String(t), "utf8"), c.final()]);

@@ -10,7 +10,7 @@ const uuid = () => crypto.randomUUID(), now = () => new Date().toISOString();
 const MAX_FILE = 5 * 1024 * 1024;
 
 /* ---------- мелочи ---------- */
-const ipOf = req => String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
+const SECM = require("./security.js"), ipOf = SECM.ipOf;
 const hits = new Map();
 function limited(key, max, ms){
     const t = Date.now(), a = (hits.get(key) || []).filter(x => t - x < ms);
@@ -20,7 +20,7 @@ function limited(key, max, ms){
 setInterval(() => { const t = Date.now(); for(const [k, a] of hits) if(!a.some(x => t - x < 3600e3)) hits.delete(k); }, 600e3).unref();
 
 const send = (res, code, body, type = "text/html; charset=utf-8", extra = {}) => {
-    res.writeHead(code, {"Content-Type": type, "X-Content-Type-Options": "nosniff", "Referrer-Policy": "same-origin", ...extra});
+    res.writeHead(code, {"Content-Type": type, "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer", ...extra});
     res.end(body);
 };
 const json = (res, code, obj) => send(res, code, JSON.stringify(obj), "application/json; charset=utf-8", {"Cache-Control": "no-store"});
@@ -114,7 +114,9 @@ function parseBase(text, defaultBase){
     let counts = null, countsAt = 0;
     const askAssistant = require("./assistant.js")({json, body, limited, ipOf, getCounts: () => getCounts()});
     const getCounts = async () => { if(!counts || Date.now() - countsAt > 300e3){ counts = await engine.baseCounts(); countsAt = Date.now(); } return counts; };
-    const byToken = t => one(`SELECT * FROM orders WHERE token = $1`, [clean(t, 80)]);
+    const SEC = SECM.create({one, q, now, Mail, env, siteUrl: Mail.siteUrl});
+    await SEC.rotate().catch(e => console.error("🔐 CRM-ключ:", e.message)); setInterval(() => SEC.rotate().catch(() => {}), 3600e3).unref();
+    const byToken = async t => { const o = await one(`SELECT * FROM orders WHERE token = $1`, [clean(t, 80)]); if(!o) SEC.badToken((SEC.als.getStore() || {}).ip); return o; };
     const ORDER_LIST = `id, num, email_ok, token, kind, slug, title, base, times, price, status, first_name, last_name, email, phone, position, vessel, created_at, claimed_at, paid_at, done_at, cv_name, res_name, cover`;
 
     /* ---------- сайт ---------- */
@@ -506,16 +508,19 @@ function parseBase(text, defaultBase){
     }
 
     /* ---------- маршрутизатор ---------- */
-    const server = http.createServer(async (req, res) => {
+    const server = http.createServer((req, res) => SEC.als.run({ip: ipOf(req)}, async () => {
         try {
             const u = new URL(req.url, "http://x");
+            if(await SEC.guard(req, res, u, send, P.notFound())) return;
             if(u.pathname === "/crm/login" && req.method === "POST"){
                 if(!env("CRM_PASSWORD")) return json(res, 503, {error: "CRM_PASSWORD не задан в Railway"});
-                if(limited("login:" + ipOf(req), 8, 600e3)) return json(res, 429, {error: "Слишком много попыток, подождите 10 минут"});
+                if(SEC.loginLocked()) return json(res, 429, {error: "Вход временно закрыт, попробуйте через 15 минут"});
+                if(limited("login:" + ipOf(req), 6, 600e3)) return json(res, 429, {error: "Слишком много попыток, подождите 10 минут"});
                 const b = await body(req, 10000);
-                if(!passOk(b.password || "")) return json(res, 401, {error: "Неверный пароль"});
-                const exp = String(Date.now() + 30 * 864e5);
-                res.setHeader("Set-Cookie", `vr_crm=${encodeURIComponent(exp + "." + sign(exp))}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${30 * 86400}${/^https/.test(Mail.siteUrl()) ? "; Secure" : ""}`);
+                if(!passOk(b.password || "")){ SEC.loginFail(ipOf(req)); await new Promise(r => setTimeout(r, 700)); return json(res, 401, {error: "Неверный пароль"}); }
+                SEC.loginOk(ipOf(req), req.headers["user-agent"]);
+                const exp = String(Date.now() + 7 * 864e5);
+                res.setHeader("Set-Cookie", `vr_crm=${encodeURIComponent(exp + "." + sign(exp))}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${7 * 86400}${/^https/.test(Mail.siteUrl()) ? "; Secure" : ""}`);
                 return json(res, 200, {ok: true});
             }
             if(u.pathname === "/crm/logout"){ res.setHeader("Set-Cookie", "vr_crm=; Path=/; Max-Age=0"); return redirect(res, "/crm"); }
@@ -527,8 +532,10 @@ function parseBase(text, defaultBase){
             }
             if(u.pathname.startsWith("/api/hook/")){                         // управление заказами из админ-бота: по общему ключу, только список разрешённых действий
                 const K = env("ADMIN_HOOK_KEY"), k = String(req.headers["x-hook-key"] || ""), ka = Buffer.from(k), kb = Buffer.from(K);
-                if(K.length < 16 || ka.length !== kb.length || !crypto.timingSafeEqual(ka, kb)){ if(limited("hookbad:" + ipOf(req), 20, 3600e3)) return json(res, 429, {error: "limit"}); return json(res, 403, {error: "key"}); }
+                if(K.length < 16 || ka.length !== kb.length || !crypto.timingSafeEqual(ka, kb)){ if(SEC.hit("hookbad:" + ipOf(req), 10, 3600e3)) SEC.ban(ipOf(req), "подбор ключа админ-бота"); return json(res, 403, {error: "key"}); }
                 const rest = u.pathname.slice("/api/hook".length);
+                if(req.method === "GET" && rest === "/crm-link") return json(res, 200, {link: SEC.link()});
+                if(req.method === "POST" && rest === "/crm-rotate"){ await SEC.rotate(true); return json(res, 200, {link: SEC.link()}); }
                 if(!/^\/(orders|orders\/[\w-]+|orders\/[\w-]+\/(confirm|cancel|note|reply|email-ok|cover-skip)|jobs\/[\w-]+|jobs\/[\w-]+\/(pause|resume|stop|retry))$/.test(rest)) return json(res, 404, {error: "not found"});
                 if(req.method === "GET" && /^\/jobs\/[\w-]+$/.test(rest)){ const j = await one(`SELECT id, order_id, m, status FROM jobs WHERE id = $1`, [rest.slice(6)]); return j ? json(res, 200, j) : json(res, 404, {error: "нет задания"}); }
                 const u2 = new URL(u); u2.pathname = "/crm/api" + rest; u2.viaBot = true;
@@ -541,7 +548,7 @@ function parseBase(text, defaultBase){
             console.error("http:", req.method, req.url, e.message);
             if(!res.headersSent) json(res, e.status || 500, {error: e.status ? e.message : "Ошибка сервера"}); else res.end();
         }
-    });
+    }));
     server.requestTimeout = 60000;
     const port = Number(env("PORT")) || 3000;
     server.listen(port, () => { console.log(`✅ Vreise.ru на порту ${port} · БД: ${db.kind} · серверов рассылки: ${M.sendCfgs().length}`); engine.start(); });
