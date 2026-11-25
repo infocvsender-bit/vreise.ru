@@ -11,16 +11,27 @@ const WA = () => digits() ? `https://wa.me/${digits()}` : "";
 const TGL = () => digits() ? `https://t.me/+${digits()}` : "";
 
 function layout(title, body, btn, url){
-    return `<!doctype html><html lang="ru"><body style="margin:0;background:#eef3f4;font-family:Arial,Helvetica,sans-serif;color:#10262c">
+    const site = siteUrl(), host = site.replace(/^https?:\/\//, "");
+    const A = "text-decoration:none;color:#ffffff";
+    return `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"></head><body style="margin:0;background:#eef3f4;font-family:Arial,Helvetica,sans-serif;color:#10262c">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#eef3f4;padding:24px 12px"><tr><td align="center">
 <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#ffffff;border-radius:14px;overflow:hidden">
-<tr><td style="background:#0A3340;padding:20px 28px;color:#ffffff;font-size:22px;font-weight:bold">Vreise<span style="color:#F2B705;font-size:14px">.ru</span></td></tr>
+<tr><td style="background:#0A3340;padding:22px 28px 18px">
+<table cellpadding="0" cellspacing="0"><tr>
+<td valign="middle" style="padding-right:14px"><a href="${esc(site)}" style="${A}"><img src="${esc(site)}/static/icon-192.png" width="52" height="52" alt="Vreise.ru" style="display:block;border:0;border-radius:50%"></a></td>
+<td valign="middle"><a href="${esc(site)}" style="${A};font-size:26px;font-weight:bold;letter-spacing:.3px;line-height:1.1;display:block">Vreise<span style="color:#F2B705;font-size:16px">.ru</span></a>
+<div style="color:#b9d3da;font-size:13px;line-height:1.4;margin-top:4px">Составление и рассылка резюме для моряков</div></td>
+</tr></table></td></tr>
+<tr><td style="background:#F2B705;height:4px;line-height:4px;font-size:0">&nbsp;</td></tr>
 <tr><td style="padding:28px">
 <h2 style="margin:0 0 14px;font-size:20px;color:#0A3340">${esc(title)}</h2>
 <div style="font-size:15px;line-height:1.6">${body}</div>
 ${btn && url ? `<p style="margin:24px 0 4px"><a href="${esc(url)}" style="background:#F2B705;color:#1b1500;text-decoration:none;font-weight:bold;padding:13px 24px;border-radius:999px;display:inline-block">${esc(btn)}</a></p>` : ""}
 </td></tr>
-<tr><td style="padding:16px 28px;background:#f6f9fa;color:#5b727a;font-size:12.5px;line-height:1.5">Если есть вопросы — напишите нам${phone() ? ` в WhatsApp или Telegram: <b>${esc(phone())}</b>` : ""}.<br>Это письмо отправлено автоматически сайтом Vreise.ru.</td></tr>
+<tr><td style="padding:18px 28px;background:#f6f9fa;color:#5b727a;font-size:12.5px;line-height:1.6;border-top:1px solid #e3ebee">
+<b style="color:#0A3340">Vreise.ru</b> — составление резюме и рассылка его в крюинговые компании.<br>
+Сайт: <a href="${esc(site)}" style="color:#0F4C5C;font-weight:bold;text-decoration:none">${esc(host)}</a>${phone() ? `<br>Вопросы — WhatsApp или Telegram: <b>${esc(phone())}</b>` : ""}<br>
+<span style="color:#8aa0a7">Это письмо отправлено автоматически, отвечать на него не нужно.</span></td></tr>
 </table></td></tr></table></body></html>`;
 }
 const strip = h => String(h).replace(/<br\s*\/?>/gi, "\n").replace(/<\/p>/gi, "\n\n").replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/\n{3,}/g, "\n\n").trim();
