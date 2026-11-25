@@ -291,3 +291,7 @@ button#go[disabled]{opacity:.5;cursor:not-allowed}
 .pc-seg button{border:0;background:transparent;color:var(--muted);font:inherit;font-weight:700;font-size:14px;width:38px;height:30px;border-radius:999px;cursor:pointer;transition:background .15s,color .15s}
 .pc-seg button:hover{color:var(--deep)}.pc-seg button.on{background:var(--ac2);color:#fff;box-shadow:0 4px 10px -4px var(--ac2)}
 .pc-cnt{margin-bottom:14px}
+
+.pc-old{font-size:15px;color:#9aa9ae;font-weight:600;text-decoration-thickness:1.5px}.pc-old[hidden],.pc-save[hidden]{display:none}
+.pc-pr{flex-wrap:wrap}
+.pc-save{align-self:flex-start;background:#DDF3EE;color:#17806d;font-size:12.5px;font-weight:700;border-radius:999px;padding:4px 11px;margin-top:-2px}
