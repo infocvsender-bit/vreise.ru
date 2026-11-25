@@ -1,5 +1,5 @@
 "use strict";
-/* Каталог услуг и цены в рублях. Рассылки: 8 готовых баз × 1/2/3 рассылки. Резюме «Стандарт» — 1979 ₽.
+/* Каталог услуг и цены в рублях. Рассылки: 8 готовых баз × 1/2/3 рассылки. Резюме «Стандарт» — 1999 ₽, персональное сопроводительное письмо — 449 ₽.
    Поменять цену можно переменной Railway PRICE_<slug>=1500 (дефис в slug → _). */
 const BASES = [
     {key: "rossiya", count: 541, name: "Россия", note: "Крюинговые компании и судовладельцы России", prices: [1439, 2249, 3329]},
@@ -11,7 +11,7 @@ const BASES = [
     {key: "mir-ofsor", count: 9146, name: "Мир + Офшор", note: "Крюинговые компании и судовладельцы по всему миру, включая офшорный флот", prices: [2879, 3779, 4679]}
 ];
 const TIMES = ["разовая", "двухразовая", "трёхразовая"];
-const CV = {slug: "reziume-standart", title: "Составление резюме «Стандарт»", price: 1979,
+const CV = {slug: "reziume-standart", title: "Составление резюме «Стандарт»", price: 1999,
     bullets: ["Резюме в международном формате (Application Form) с нуля — по вашим данным", "Корректное оформление морского стажа (Sea Service), документов и сертификатов",
         "Новый фирменный дизайн, файлы Word и PDF", "Готово в течение 6 часов после оплаты — придёт на вашу почту и в личную страницу заказа", "Одна бесплатная правка"]};
 
@@ -36,4 +36,6 @@ const addonPrice = full => Math.max(1, Math.round(full * (100 - discPct()) / 100
 const extraDiscPct = () => { const v = String(process.env.EXTRA_DISC ?? "").trim(); return v !== "" && Number(v) >= 0 && Number(v) < 90 ? Number(v) : 20; };
 const extraPrice = full => Math.max(1, Math.round(full * (100 - extraDiscPct()) / 100 / 10) * 10 - 1);
 
-module.exports = {discPct, addonPrice, extraDiscPct, extraPrice, BASES, TIMES, CV, SERVICES, bySlug, baseOf, priceOf, fmt, cvPrice: () => envPrice(CV.slug) || CV.price};
+const coverPrice = () => envPrice("cover") || 449;
+
+module.exports = {coverPrice, discPct, addonPrice, extraDiscPct, extraPrice, BASES, TIMES, CV, SERVICES, bySlug, baseOf, priceOf, fmt, cvPrice: () => envPrice(CV.slug) || CV.price};

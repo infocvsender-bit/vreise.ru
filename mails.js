@@ -58,6 +58,10 @@ const T = {
     newReplies: (o, n) => toClient(o.email, `Ответ компании по заказу №${o.num}`,
         `<p>Здравствуйте, ${esc(o.first_name || "")}!</p><p>На вашу рассылку пришл${n === 1 ? "о новое письмо" : "и новые письма"} от компаний (${n}). Прочитать ${n === 1 ? "его" : "их"} можно на странице заказа.</p>
          <p style="color:#5b727a;font-size:13.5px">Отвечать компаниям лучше со своей личной почты — на ту, с которой вам написали.</p>`, "Открыть ответы", orderLink(o)),
+    coverDraft: (o, subject, text) => toClient(o.email, `Ваше персональное письмо готово — подтвердите, заказ №${o.num}`,
+        `<p>Здравствуйте, ${esc(o.first_name || "")}!</p><p>Мы составили для вас персональное сопроводительное письмо. Вот как оно выглядит:</p>
+         <div style="margin:16px 0;padding:16px 18px;border:1px solid #d5e3e6;border-radius:12px;background:#f6fafb"><div style="font-size:13px;color:#5b727a">Тема письма</div><div style="font-weight:700;margin:2px 0 12px">${esc(subject)}</div><div style="font-size:13px;color:#5b727a">Текст письма</div><div style="margin-top:4px">${esc(text).replace(/\n/g, "<br>")}</div></div>
+         <p><b>Рассылка начнётся только после вашего подтверждения.</b> Откройте личный кабинет, проверьте письмо и нажмите «Подтвердить». Нужны правки — поправьте текст там же или напишите менеджеру.</p>`, "Проверить и подтвердить", orderLink(o)),
     preview: (o, L, file) => toClient(o.email, `Как будет выглядеть ваша рассылка — заказ №${o.num}`,
         `<p>Здравствуйте, ${esc(o.first_name || "")}!</p><p>Всё готово к рассылке по заказу <b>№${o.num}</b>. Ниже — письмо ровно в том виде, в каком его получат работодатели${file ? `; резюме <b>${esc(file)}</b> прикладывается к нему файлом` : ""}.</p>
          <div style="margin:16px 0;padding:16px 18px;border:1px solid #d5e3e6;border-radius:12px;background:#f6fafb"><div style="font-size:13px;color:#5b727a">Тема письма</div><div style="font-weight:700;margin:2px 0 12px">${esc(L.subject)}</div><div style="font-size:13px;color:#5b727a">Текст письма</div><div style="margin-top:4px">${esc(L.text).replace(/\n/g, "<br>")}</div></div>

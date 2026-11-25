@@ -34,6 +34,14 @@
     });
 
     /* тема и письмо */
+    var cok = $("cvok");
+    if(cok) cok.addEventListener("click", function(){
+        var msg = $("cvmsg"); cok.disabled = true; msg.textContent = "Подтверждаем…";
+        fetch("/api/o/" + window.__tok + "/cover-approve", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({subject: $("cvsub").value, text: $("cvtxt").value})})
+            .then(function(r){ return r.json().then(function(j){ return {ok: r.ok, j: j}; }); })
+            .then(function(x){ if(!x.ok) throw new Error(x.j.error || "Не удалось подтвердить"); msg.textContent = "✅ Подтверждено — рассылка скоро начнётся"; setTimeout(function(){ location.reload(); }, 900); })
+            .catch(function(e){ cok.disabled = false; msg.textContent = "❌ " + e.message; });
+    });
     var lf = $("lf");
     if(lf){
         var std = {}; try { std = JSON.parse($("lstd").textContent); } catch(e){}
@@ -82,6 +90,7 @@
     var LATIN = /^[A-Za-z][A-Za-z' .-]*$/, DOC_EXT = /\.(pdf|docx?|rtf|odt|xlsx?|ods|txt|jpe?g|png|webp)$/i, DOC_MAX = 15 * 1024 * 1024, DOC_TOTAL = 100 * 1024 * 1024, DOC_COUNT = 25;
     var phoneOk = function(v){ return /^\+\d{9,15}$/.test(String(v).replace(/[\s()-]/g, "")); };
     function timesOf(){ var m = /^rassylka-(\d)-/.exec(sel ? sel.value : ""); return m ? Number(m[1]) : 1; }
+    var lastSum = 0;
     function recalc(){
         var sum = 0;
         if(isCv){
@@ -103,7 +112,25 @@
                 }
             }
         }
+        lastSum = sum;
         if(total) total.textContent = fmt(sum);
+    }
+    /* предложение персонального сопроводительного письма — после нажатия «Оформить заказ» */
+    function askCover(cb){
+        var m = $("coverModal"); if(!m) return cb(false);
+        var price = Number(m.getAttribute("data-price")) || 0, std = $("coverStd");
+        $("coverTotal").textContent = fmt(lastSum + price);
+        var mail = !isCv || !!(addBase && addBase.value), okh = $("coverOk");
+        if(std) std.hidden = !mail; if(okh) okh.hidden = !mail; $("coverNo").textContent = mail ? "Нет, стандартное письмо" : "Нет, спасибо";
+        var prev = document.activeElement;
+        function close(){ m.hidden = true; document.body.classList.remove("modal-open"); document.removeEventListener("keydown", esc); if(prev && prev.focus) prev.focus(); }
+        function esc(e){ if(e.key === "Escape") close(); }
+        $("coverYes").onclick = function(){ close(); cb(true); };
+        $("coverNo").onclick = function(){ close(); cb(false); };
+        $("coverBack").onclick = close;
+        m.onclick = function(e){ if(e.target === m) close(); };
+        document.addEventListener("keydown", esc);
+        m.hidden = false; document.body.classList.add("modal-open"); $("coverYes").focus();
     }
     var seg = $("timesSeg");
     if(seg) seg.addEventListener("click", function(e){
@@ -195,10 +222,11 @@
             if(file && file.size > 5 * 1024 * 1024) return fail("Файл больше 5 МБ — уменьшите его или пришлите в WhatsApp");
         }
         if(!$("agree").checked) return fail("Нужно согласие с офертой и политикой конфиденциальности");
+        askCover(function(cover){
         go.disabled = true; go.textContent = "Отправляем…";
         (file ? readFile(file) : Promise.resolve(null)).then(function(fl){
             var body = {slug: val("slug"), first: val("first"), last: val("last"), email: val("email"), phone: val("phone"), position: positionValue(), vessel: val("vessel"),
-                letter: val("letter"), exclude: val("exclude"), comment: val("comment"), hp: val("hp"), agree: $("agree").checked, file: fl};
+                letter: val("letter"), exclude: val("exclude"), comment: val("comment"), hp: val("hp"), agree: $("agree").checked, file: fl, cover: cover ? 1 : 0};
             if(extra && extra.value) body.extra = extra.value;
             if(isCv){
                 if(addBase && addBase.value){ var ps = addBase.value.split(":"); body.addon = {base: ps[0], times: Number(ps[1])}; }
@@ -222,5 +250,6 @@
             };
             return next();
         }).catch(function(e){ go.disabled = false; go.textContent = "Оформить заказ"; fail(e.message); });
+        });
     });
 })();

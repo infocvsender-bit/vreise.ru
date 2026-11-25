@@ -45,6 +45,11 @@
                 (o.comment ? '<p class="mut" style="margin-top:12px">Данные для резюме:</p><div class="pre">' + esc(o.comment) + "</div>" : "") +
                 '<div class="acts">' + (["new", "claimed"].indexOf(o.status) >= 0 ? '<button class="btn gold sm" id="confirm">✔ Подтвердить оплату и запустить</button>' : "") +
                 (["done", "cancelled"].indexOf(o.status) < 0 ? '<button class="btn sm red" id="cancel">Отменить заказ</button>' : "") + "</div></div>";
+            if(Number(o.cover)) h += '<div class="panel" style="border:2px solid #f2b400"><h3>💌 Персональное письмо (оплачено клиентом)</h3>' + (d.def ?
+                (o.cover_ok ? '<p class="mut">✅ Клиент подтвердил письмо ' + dt(o.cover_ok) + '. Новое сохранение снова уйдёт ему на подтверждение, но на уже идущую рассылку не повлияет.</p>' : o.draft_letter ? '<p class="mut" style="color:#b9770e">Письмо отправлено клиенту — <b>ждём его подтверждения</b>, рассылка стоит. Можно поправить и отправить заново.</p>' : '<p class="mut" style="color:#b9770e">Письмо ещё не написано — <b>рассылка ждёт</b>. Отредактируйте текст ниже (подставлен стандартный), сохраните — клиент получит его на подтверждение.</p>') +
+                '<input class="in" id="cvs" value="' + esc((o.subject && String(o.subject).trim()) || d.def.subject) + '" placeholder="Тема письма"><textarea class="in" id="cvt" style="min-height:260px;margin-top:10px">' + esc(o.draft_letter || o.letter || d.def.text) + '</textarea>' +
+                '<div class="acts"><button class="btn gold sm" id="cvgo">Отправить клиенту на подтверждение</button>' + (o.cover_ok ? "" : '<button class="btn sm line" id="cvskip" style="color:var(--deep);border-color:#9fb6bb">Запустить без подтверждения (стандартное письмо)</button>') + '</div>' :
+                '<p class="mut">У заказа нет рассылки: напишите письмо и отправьте клиенту файлом через блок «Переписка и история» → «Письмо клиенту».</p>') + '</div>';
             if(cv && ["paid", "in_progress", "done"].indexOf(o.status) >= 0) h += '<div class="panel"><h3>Готовое резюме</h3>' + (o.res_name ? '<p>Загружено: <a href="/crm/api/orders/' + o.id + '/res">' + esc(o.res_name) + "</a></p>" : "<p class=\"mut\">Файл ещё не загружен.</p>") +
                 '<input type="file" id="resf" class="in"><div class="acts"><button class="btn gold sm" id="resgo">Загрузить и отправить клиенту</button></div></div>';
             if(d.jobs.length) h += '<div class="panel"><h3>Рассылки</h3><table class="t"><thead><tr><th>№</th><th>Статус</th><th>Старт</th><th>Отправлено</th><th>Ошибок</th><th>Осталось</th><th></th></tr></thead><tbody>' +
@@ -69,6 +74,11 @@
             if($("confirm")) $("confirm").onclick = function(){ post("/orders/" + id + "/confirm", {}, "Деньги на карте? Подтвердить оплату заказа №" + o.num + " и запустить работу?"); };
             if($("cancel")) $("cancel").onclick = function(){ post("/orders/" + id + "/cancel", {}, "Отменить заказ №" + o.num + "? Рассылки будут остановлены."); };
             if($("emok")) $("emok").onclick = function(){ post("/orders/" + id + "/email-ok", {}, "Отметить e-mail клиента подтверждённым вручную?"); };
+            if($("cvgo")) $("cvgo").onclick = function(){
+                if(!confirm("Отправить письмо клиенту на подтверждение? Рассылка начнётся после его «Подтвердить».")) return;
+                api("/orders/" + id + "/cover-letter", {body: {subject: $("cvs").value, text: $("cvt").value}}).then(function(){ order(id); }).catch(alertErr);
+            };
+            if($("cvskip")) $("cvskip").onclick = function(){ post("/orders/" + id + "/cover-skip", {}, "Снять ожидание и запустить рассылку со стандартным письмом, без подтверждения клиента?"); };
             $("ntgo").onclick = function(){ if($("nt").value.trim()) post("/orders/" + id + "/note", {text: $("nt").value}); };
             $("rpgo").onclick = function(){
                 if(!$("rp").value.trim()) return alert("Напишите текст письма");

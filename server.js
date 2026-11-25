@@ -114,7 +114,7 @@ function parseBase(text, defaultBase){
     let counts = null, countsAt = 0;
     const getCounts = async () => { if(!counts || Date.now() - countsAt > 300e3){ counts = await engine.baseCounts(); countsAt = Date.now(); } return counts; };
     const byToken = t => one(`SELECT * FROM orders WHERE token = $1`, [clean(t, 80)]);
-    const ORDER_LIST = `id, num, email_ok, token, kind, slug, title, base, times, price, status, first_name, last_name, email, phone, position, vessel, created_at, claimed_at, paid_at, done_at, cv_name, res_name`;
+    const ORDER_LIST = `id, num, email_ok, token, kind, slug, title, base, times, price, status, first_name, last_name, email, phone, position, vessel, created_at, claimed_at, paid_at, done_at, cv_name, res_name, cover`;
 
     /* ---------- сайт ---------- */
     async function site(req, res, u){
@@ -194,15 +194,17 @@ function parseBase(text, defaultBase){
                 extra = eb.key; price = sv.price + C.extraPrice(C.priceOf(eb, sv.times));
                 title = `${sv.title} + «${eb.name}» (доп. база −${C.extraDiscPct()}%)`;
             }
+            const cover = b.cover ? 1 : 0;
+            if(cover){ price += C.coverPrice(); title += " + персональное сопроводительное письмо"; }
             const id = uuid(), token = crypto.randomBytes(18).toString("base64url");
             let o;
             for(let k = 0; k < 5 && !o; k++){
                 const num = Number((await one(`SELECT COALESCE(MAX(num), 1000) + 1 AS n FROM orders`)).n);
                 try {
-                    await q(`INSERT INTO orders(id, num, token, kind, slug, title, base, times, price, status, first_name, last_name, email, phone, position, vessel, letter, exclude, comment, cv_name, cv_b64, ip, created_at, details, extra_base)
-                        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'new',$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)`,
+                    await q(`INSERT INTO orders(id, num, token, kind, slug, title, base, times, price, status, first_name, last_name, email, phone, position, vessel, letter, exclude, comment, cv_name, cv_b64, ip, created_at, details, extra_base, cover)
+                        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'new',$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)`,
                         [id, num, token, sv.kind, sv.slug, title, base, times, price, first, last, email, clean(b.phone, 40), clean(b.position, 160), clean(b.vessel, 300),
-                         sv.kind === "mailing" ? clean(b.letter, 4000) : "", base ? clean(b.exclude, 1500) : "", sv.kind === "cv" ? clean(b.comment, 6000) : "", cvName, cvB64, ip, now(), details, extra]);
+                         sv.kind === "mailing" ? clean(b.letter, 4000) : "", base ? clean(b.exclude, 1500) : "", sv.kind === "cv" ? clean(b.comment, 6000) : "", cvName, cvB64, ip, now(), details, extra, cover]);
                     o = await one(`SELECT * FROM orders WHERE id = $1`, [id]);
                 } catch(e){ if(!/unique|duplicate/i.test(e.message)) throw e; }
             }
@@ -250,6 +252,20 @@ function parseBase(text, defaultBase){
             const o = await byToken(m[1]); if(!o) return json(res, 404, {error: "Заказ не найден"});
             if(o.email_ok) return json(res, 200, {ok: true});
             Mail.T.confirm(o).catch(() => {}); return json(res, 200, {ok: true});
+        }
+        m = p.match(/^\/api\/o\/([A-Za-z0-9_-]{10,80})\/cover-approve$/);
+        if(req.method === "POST" && m){
+            const o = await byToken(m[1]); if(!o) return json(res, 404, {error: "Заказ не найден"});
+            if(limited("capp:" + m[1], 20, 3600e3)) return json(res, 429, {error: "Слишком много попыток, попробуйте позже"});
+            if(!Number(o.cover) || !o.base || !String(o.draft_letter || "").trim()) return json(res, 400, {error: "Письмо ещё не готово"});
+            if(o.cover_ok) return json(res, 200, {ok: true});
+            const b = await body(req, 40000), text = clean(b.text, 4000) || o.draft_letter, subject = clean(b.subject, 200) || o.draft_subject || "";
+            if(text.length < 40) return json(res, 400, {error: "Текст письма слишком короткий"});
+            await q(`UPDATE orders SET letter = $1, subject = $2, letter_ok = $3, cover_ok = $3 WHERE id = $4`, [text, subject, now(), o.id]);
+            await engine.note(o.id, "Клиент подтвердил персональное письмо" + (text !== o.draft_letter ? " (с правками)" : ""), "Клиент");
+            Mail.owner(`✅ Клиент подтвердил персональное письмо — заказ №${o.num}${text !== o.draft_letter ? " (с правками)" : ""}\nРассылка стартует.`);
+            engine.tick().catch(() => {});
+            return json(res, 200, {ok: true});
         }
         m = p.match(/^\/api\/o\/([A-Za-z0-9_-]{10,80})\/letter$/);
         if(req.method === "POST" && m){
@@ -305,7 +321,7 @@ function parseBase(text, defaultBase){
             return json(res, 200, {orders: rows, summary: Object.fromEntries(sum.map(r => [r.status, Number(r.n)]))});
         }
         if(req.method === "GET" && (m = p.match(/^\/orders\/([\w-]+)$/))){
-            const o = await one(`SELECT ${ORDER_LIST}, letter, exclude, comment, details, extra_base FROM orders WHERE id = $1`, [m[1]]); if(!o) return json(res, 404, {error: "нет заказа"});
+            const o = await one(`SELECT ${ORDER_LIST}, letter, subject, draft_letter, draft_subject, cover_ok, exclude, comment, details, extra_base FROM orders WHERE id = $1`, [m[1]]); if(!o) return json(res, 404, {error: "нет заказа"});
             const jobs = await q(`SELECT * FROM jobs WHERE order_id = $1 ORDER BY m`, [o.id]);
             for(const j of jobs){
                 j.wait = Number((await one(`SELECT COUNT(*) AS n FROM queue WHERE job_id = $1 AND status = 'wait'`, [j.id])).n);
@@ -317,7 +333,8 @@ function parseBase(text, defaultBase){
             const docs = await q(`SELECT id, name, size FROM order_docs WHERE order_id = $1 ORDER BY added_at`, [o.id]);
             let det = null; try { det = o.details ? JSON.parse(o.details) : null; } catch(e){} delete o.details;
             const replies = await q(`SELECT from_email, from_name, subject, text, kind, at FROM replies WHERE order_id = $1 ORDER BY at DESC LIMIT 200`, [o.id]);
-            return json(res, 200, {order: o, details: det, docs, replies, sent, jobs, notes, boxes, link: Mail.orderLink(o)});
+            const def = o.base ? engine.letterFor({...o, letter: "", subject: ""}) : null;
+            return json(res, 200, {order: o, details: det, def, docs, replies, sent, jobs, notes, boxes, link: Mail.orderLink(o)});
         }
         if(req.method === "GET" && (m = p.match(/^\/orders\/([\w-]+)\/doc\/([\w-]+)$/))){
             const d = await one(`SELECT name, b64 FROM order_docs WHERE id = $1 AND order_id = $2`, [m[2], m[1]]); if(!d) return json(res, 404, {error: "файла нет"});
@@ -333,6 +350,25 @@ function parseBase(text, defaultBase){
             const o = await one(`SELECT cv_name, cv_b64, res_name, res_b64 FROM orders WHERE id = $1`, [m[1]]); const name = o && o[m[2] + "_name"], b64 = o && o[m[2] + "_b64"];
             if(!b64) return json(res, 404, {error: "файла нет"});
             return send(res, 200, Buffer.from(b64, "base64"), M.mimeOf(name), {"Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(name)}`});
+        }
+        if(req.method === "POST" && (m = p.match(/^\/orders\/([\w-]+)\/cover-letter$/))){
+            const o = await one(`SELECT * FROM orders WHERE id = $1`, [m[1]]); if(!o) return json(res, 404, {error: "нет заказа"});
+            if(!o.base) return json(res, 400, {error: "У заказа нет рассылки — отправьте письмо файлом через «Письмо клиенту»"});
+            const b = await body(req, 40000), text = clean(b.text, 4000), subject = clean(b.subject, 200);
+            if(text.length < 40) return json(res, 400, {error: "Напишите текст письма"});
+            const subj = subject || engine.letterFor({...o, letter: "", subject: ""}).subject;
+            await q(`UPDATE orders SET draft_letter = $1, draft_subject = $2 WHERE id = $3`, [text, subj, o.id]);
+            await engine.note(o.id, `Персональное письмо отправлено клиенту на подтверждение (тема: ${subj})`, who);
+            const o2 = await one(`SELECT * FROM orders WHERE id = $1`, [o.id]);
+            Mail.T.coverDraft(o2, subj, text).catch(() => {});
+            return json(res, 200, {ok: true});
+        }
+        if(req.method === "POST" && (m = p.match(/^\/orders\/([\w-]+)\/cover-skip$/))){
+            const o = await one(`SELECT * FROM orders WHERE id = $1`, [m[1]]); if(!o) return json(res, 404, {error: "нет заказа"});
+            await q(`UPDATE orders SET cover_ok = $1 WHERE id = $2`, [now(), o.id]);
+            await engine.note(o.id, "Рассылка разблокирована без подтверждения персонального письма (стандартное письмо)", who);
+            engine.tick().catch(() => {});
+            return json(res, 200, {ok: true});
         }
         if(req.method === "POST" && (m = p.match(/^\/orders\/([\w-]+)\/(confirm|cancel|note|result)$/))){
             const o = await one(`SELECT * FROM orders WHERE id = $1`, [m[1]]); if(!o) return json(res, 404, {error: "нет заказа"});

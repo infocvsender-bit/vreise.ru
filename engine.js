@@ -95,7 +95,10 @@ module.exports = function engine(db){
             await q(`INSERT INTO jobs(id, order_id, m, status, start_at) VALUES($1,$2,$3,'wait',$4)`, [uuid(), o.id, m, new Date(Date.now() + (m - 1) * WEEK).toISOString()]);
         await q(`UPDATE orders SET status = 'in_progress' WHERE id = $1`, [o.id]);
         await note(o.id, `Рассылка поставлена в очередь: ${o.times} шт. (интервал — неделя)`, who || "Система");
-        try { const L = letterFor(o); Mail.T.preview(o, L, o.kind === "cv" ? o.res_name : o.cv_name).catch(() => {}); } catch(e){}
+        if(Number(o.cover) && !o.cover_ok){
+            await note(o.id, "💌 Заказано персональное сопроводительное письмо — составьте его в CRM (карточка заказа), клиент подтвердит. Рассылка стартует после подтверждения.", "Система");
+            Mail.owner(`💌 Нужно персональное письмо — заказ №${o.num}\n${[o.first_name, o.last_name].filter(Boolean).join(" ")} · ${o.position || ""}\nCRM → заказ №${o.num} → «Персональное письмо». Рассылка ждёт.`);
+        } else try { const L = letterFor(o); Mail.T.preview(o, L, o.kind === "cv" ? o.res_name : o.cv_name).catch(() => {}); } catch(e){}
         setTimeout(() => tick().catch(() => {}), 1500);
     }
 
@@ -169,6 +172,7 @@ module.exports = function engine(db){
             for(const job of jobs){
                 const o = await one(`SELECT * FROM orders WHERE id = $1`, [job.order_id]); if(!o) continue;
                 if(job.status === "wait"){
+                    if(Number(o.cover) && !o.cover_ok) continue;                       // ждём персональное письмо и подтверждение клиента
                     if(Date.parse(job.start_at) > Date.now() || !["paid", "in_progress"].includes(o.status) || !o.email_ok) continue;           // ждём оплату и подтверждение e-mail
                     try { await prepare(job, o); } catch(e){
                         await q(`UPDATE jobs SET last_error = $1 WHERE id = $2`, [String(e.message).slice(0, 300), job.id]);

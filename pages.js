@@ -83,6 +83,14 @@ function home(counts){
 const ENGLISH = ["Elementary", "Pre-Intermediate", "Intermediate", "Upper-Intermediate", "Advanced"];
 const chips = (name, list, max, ph) => `<div class="msel" data-chips="${name}"${max ? ` data-max="${max}"` : ""} data-ph="${esc(ph)}"><button type="button" class="ms-btn">${esc(ph)}</button><div class="ms-pop" hidden>${list.map(x => `<label><input type="checkbox" value="${esc(x)}"><span>${esc(x)}</span></label>`).join("")}</div></div>`;
 /* Форма заказа резюме «Стандарт»: те же поля, что нужны для международной анкеты (Application Form) */
+const coverModal = () => `<div class="modal" id="coverModal" data-price="${C.coverPrice()}" hidden role="dialog" aria-modal="true" aria-labelledby="cvmT"><div class="mbox">
+<div class="mico">💌</div><h3 id="cvmT">Добавить персональное сопроводительное письмо?</h3>
+<p>Составим письмо лично под вас: с вашей должностью, опытом и сильными сторонами. Стоимость — <b>${rub(C.coverPrice())}</b>. Итого к оплате будет <b id="coverTotal"></b>.</p>
+<p class="hint" id="coverStd">Если нажмёте «Нет», рассылка уйдёт со стандартным письмом — таким, как у большинства заказчиков. Его всегда можно поменять в личном кабинете.</p>
+<p class="hint" id="coverOk">Персональное письмо мы пришлём вам на подтверждение — рассылка начнётся после вашего «Подтвердить».</p>
+<div class="macts"><button type="button" class="btn gold" id="coverYes">Да, добавить за ${rub(C.coverPrice())}</button><button type="button" class="btn line" id="coverNo">Нет, без письма</button></div>
+<button type="button" class="mback" id="coverBack">← Вернуться к форме</button></div></div>`;
+
 function orderFormCv(counts){
     const r = (id, label, extra = "", req = true) => `<label class="f">${label}${req ? ' <i class="rq">*</i>' : ""}<input class="in" id="${id}" ${extra}></label>`;
     const body = `<div class="page"><h1>Заказ резюме «Стандарт»</h1>
@@ -126,7 +134,7 @@ ${r("nokName", "Имя Фамилия")}${r("nokRel", "Кем приходитс
 <div id="addMore" hidden style="margin-top:14px"><label class="f">Исключить компании<small> — по желанию, по одному в строке. Можно указать название компании, но лучше домен — так точнее: например, <b>@marlownavigation.com</b></small><textarea class="in" id="exclude" style="min-height:80px" placeholder="@marlownavigation.com"></textarea></label></div></div>
 <div class="panel"><label class="check"><input type="checkbox" id="agree" required><span>Я принимаю условия <a href="/offer" target="_blank">публичной оферты</a> и согласен(на) на обработку персональных данных согласно <a href="/policy" target="_blank">политике конфиденциальности</a>.</span></label></div>
 <input type="text" id="hp" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true">
-<div class="sum"><div>К оплате<br><b id="total">${rub(C.cvPrice())}</b></div><button class="btn gold" id="go" type="submit">Оформить заказ</button></div></form></div>`;
+<div class="sum"><div>К оплате<br><b id="total">${rub(C.cvPrice())}</b></div><button class="btn gold" id="go" type="submit">Оформить заказ</button></div></form></div>${coverModal()}`;
     return shell({title: "Заказ резюме «Стандарт» — Vreise.ru", desc: "Оформление заказа на Vreise.ru", path: "/order", noindex: true,
         hero: `<header class="hero short">${navTop(false)}</header>`, body, scripts: `<script src="/static/order.js?v=${V}" defer></script>`});
 }
@@ -169,7 +177,7 @@ ${cv ? `<div class="panel"><h3>Данные для резюме</h3>
 ${extraPanel}
 <div class="panel"><label class="check"><input type="checkbox" id="agree" required><span>Я принимаю условия <a href="/offer" target="_blank">публичной оферты</a> и согласен(на) на обработку персональных данных согласно <a href="/policy" target="_blank">политике конфиденциальности</a>.</span></label></div>
 <input type="text" id="hp" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true">
-<div class="sum"><div>К оплате<br><b id="total">${rub(cv ? C.cvPrice() : sv.price)}</b></div><button class="btn gold" id="go" type="submit">Оформить заказ</button></div></form></div>`;
+<div class="sum"><div>К оплате<br><b id="total">${rub(cv ? C.cvPrice() : sv.price)}</b></div><button class="btn gold" id="go" type="submit">Оформить заказ</button></div></form></div>${coverModal()}`;
     return shell({title: (cv ? "Заказ резюме «Стандарт»" : "Заказ рассылки") + " — Vreise.ru", desc: "Оформление заказа на Vreise.ru", path: "/order", noindex: true,
         hero: `<header class="hero short">${navTop(false)}</header>`, body, scripts: `<script src="/static/order.js?v=${V}" defer></script>`});
 }
@@ -200,6 +208,13 @@ ${o.status === "new" ? `<div style="margin-top:18px"><button class="btn gold" id
     const wait = cv && ["paid", "in_progress"].includes(o.status) && !o.res_name ? `<div class="ok">Оплата получена. Готовим ваше резюме — оно придёт на почту и появится здесь в течение 6 часов.</div>` : "";
     const emailBanner = !o.email_ok && o.status !== "cancelled" ? `<div class="err" style="background:#fff7dc;color:#6b4e00;border-color:#f0d78a;margin-bottom:18px">✉️ <b>Подтвердите e-mail.</b> Мы отправили письмо на <b>${esc(o.email)}</b> — нажмите в нём кнопку. ${cv ? "" : "Без подтверждения рассылка не начнётся. "}Письма нет? Проверьте «Спам» или <button class="btn gold sm" id="resend" type="button" style="margin:0 6px">отправьте ещё раз</button><span class="hint" id="rsmsg"></span></div>` : "";
     const running = jobs.some(j => j.status === "run");
+    const draftReady = Number(o.cover) && o.base && !o.cover_ok && String(o.draft_letter || "").trim() && o.status !== "cancelled";
+    const coverBanner = Number(o.cover) && o.status !== "cancelled" && !draftReady ? `<div class="err" style="background:#eef8f5;color:#0b3641;border-color:#bfe0d6;margin-bottom:18px">💌 <b>Персональное сопроводительное письмо</b> — ${!o.base ? "заказано. Пришлём его вместе с готовым резюме." : o.cover_ok ? "готово и подтверждено вами ✅" : "заказано. Мы составляем его для вас. Когда оно будет готово, мы пришлём его вам на почту и покажем на этой странице — рассылка начнётся только после вашего подтверждения."}</div>` : "";
+    const coverDraft = draftReady ? `<div class="panel" style="border:2px solid #f2b400"><h3>💌 Ваше персональное письмо готово — подтвердите</h3>
+<p class="hint" style="margin:0 0 14px">Проверьте письмо. Всё устраивает — нажмите «Подтвердить», и рассылка начнётся. Нужны правки — поправьте текст прямо здесь или напишите менеджеру внизу страницы.</p>
+<label class="f">Тема письма<input class="in" id="cvsub" maxlength="200" value="${esc(o.draft_subject || "")}"></label>
+<div style="margin-top:14px"><label class="f">Текст письма<textarea class="in" id="cvtxt" maxlength="4000" style="min-height:260px">${esc(o.draft_letter)}</textarea></label></div>
+<div style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><button class="btn gold" id="cvok" type="button">Подтвердить и запустить рассылку</button><span class="hint" id="cvmsg"></span></div></div>` : "";
     const resumeBlock = o.kind === "mailing" && o.status !== "cancelled" ? `<div class="panel"><h3>Ваше резюме</h3>
 <p class="hint" style="margin:0 0 12px">Сейчас компаниям уходит файл <b>${esc(o.cv_name || "резюме")}</b>. Можно заменить его в любой момент${running ? " — новый файл будет приложен к письмам, которые ещё не отправлены" : ""}.</p>
 <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><input class="in" type="file" id="rsfile" accept=".pdf,.doc,.docx" style="max-width:360px"><button class="btn gold sm" id="rsgo" type="button">Заменить резюме</button><span class="hint" id="rsmsg2"></span></div>
@@ -215,7 +230,7 @@ ${msgs.map(m => `<div style="margin-top:14px;padding:10px 14px;border-radius:12p
 <form id="msgf" style="margin-top:14px"><textarea class="in" id="msgt" maxlength="1500" placeholder="Ваш вопрос. Ответ придёт на ${esc(o.email)} и появится здесь." style="min-height:90px"></textarea>
 <div style="margin-top:10px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><button class="btn gold sm" id="msgb" type="submit">Отправить</button><span class="hint" id="msgs"></span></div></form></details></div>`;
     const body = `<div class="page"><h1>Заказ №${o.num}</h1><p class="sub">${esc(o.title)} · <span class="tag ${o.status}">${STATUS[o.status] || o.status}</span></p>
-${emailBanner}${payBlock}${wait}${res}${progress}${repl}${list}${letterBlock}${resumeBlock}${chat}
+${emailBanner}${coverBanner}${coverDraft}${payBlock}${wait}${res}${progress}${repl}${list}${letterBlock}${resumeBlock}${chat}
 <div class="panel"><h3>Данные заказа</h3><table class="t"><tbody>
 <tr><td>Клиент</td><td>${esc([o.first_name, o.last_name].filter(Boolean).join(" "))}</td></tr><tr><td>E-mail</td><td>${esc(o.email)}</td></tr>
 ${o.phone ? `<tr><td>Телефон</td><td>${esc(o.phone)}</td></tr>` : ""}${o.position ? `<tr><td>Должность</td><td>${esc(o.position)}</td></tr>` : ""}
