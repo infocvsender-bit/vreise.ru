@@ -25,6 +25,19 @@
         });
     });
 
+    /* пауза / продолжение рассылки */
+    [].forEach.call(document.querySelectorAll(".jbtn"), function(b){
+        b.addEventListener("click", function(){
+            var act = b.getAttribute("data-a");
+            if(act === "pause" && !confirm("Поставить рассылку на паузу? Письма перестанут уходить, пока вы не нажмёте «Продолжить».")) return;
+            var msg = b.parentNode.querySelector(".jmsg"); b.disabled = true;
+            fetch("/api/o/" + window.__tok + "/job", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({id: b.getAttribute("data-j"), action: act})})
+                .then(function(r){ return r.json(); })
+                .then(function(d){ if(d && d.ok) location.reload(); else { b.disabled = false; if(msg) msg.textContent = (d && d.error) || "Не получилось, попробуйте ещё раз"; } })
+                .catch(function(){ b.disabled = false; if(msg) msg.textContent = "Нет связи, попробуйте ещё раз"; });
+        });
+    });
+
     /* «Я оплатил(а)» */
     var claim = $("claim");
     if(claim) claim.addEventListener("click", function(){

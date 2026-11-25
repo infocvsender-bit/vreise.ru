@@ -316,6 +316,22 @@ function parseBase(text, defaultBase){
             await engine.note(o.id, `Клиент заменил резюме: ${nm}`, "Клиент");
             return json(res, 200, {ok: true});
         }
+        /* пауза / продолжение рассылки самим клиентом */
+        m = p.match(/^\/api\/o\/([A-Za-z0-9_-]{10,80})\/job$/);
+        if(req.method === "POST" && m){
+            if(limited("jobctl:" + m[1], 30, 3600e3)) return json(res, 429, {error: "Слишком много нажатий, попробуйте позже"});
+            const o = await byToken(m[1]); if(!o || !o.base) return json(res, 404, {error: "Заказ не найден"});
+            if(o.status === "cancelled") return json(res, 400, {error: "Заказ отменён"});
+            const b = await body(req, 2000), act = String(b.action || "");
+            if(!["pause", "resume"].includes(act)) return json(res, 400, {error: "Неизвестное действие"});
+            const j = await one(`SELECT * FROM jobs WHERE id = $1 AND order_id = $2`, [String(b.id || ""), o.id]);
+            if(!j) return json(res, 404, {error: "Рассылка не найдена"});
+            if(act === "pause" && !["wait", "run"].includes(j.status)) return json(res, 400, {error: "Эту рассылку нельзя поставить на паузу"});
+            if(act === "resume" && (j.status !== "pause" || j.last_error)) return json(res, 400, {error: "Эту рассылку нельзя продолжить самостоятельно — напишите менеджеру"});
+            await engine.jobCtl(j, act, "Клиент");
+            Mail.owner(`${act === "pause" ? "⏸ Клиент поставил рассылку на паузу" : "▶️ Клиент продолжил рассылку"}\nЗаказ №${o.num} · рассылка №${j.m} · ${o.email}`, o.id);
+            return json(res, 200, {ok: true});
+        }
         m = p.match(/^\/api\/o\/([A-Za-z0-9_-]{10,80})\/message$/);
         if(req.method === "POST" && m){
             if(limited("msg:" + m[1], 10, 3600e3)) return json(res, 429, {error: "Слишком много сообщений. Напишите нам в WhatsApp или Telegram."});
