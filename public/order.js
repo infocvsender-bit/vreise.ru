@@ -96,6 +96,61 @@
             .then(function(x){ if(!x.ok) throw new Error(x.j.error || "Не удалось подтвердить"); msg.textContent = "✅ Подтверждено — рассылка скоро начнётся"; setTimeout(function(){ location.reload(); }, 900); })
             .catch(function(e){ cok.disabled = false; msg.textContent = "❌ " + e.message; });
     });
+    /* пуш-уведомления: плашка «Включить», состояние на этом устройстве */
+    var PUSH_OK = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window, IOS = /iphone|ipad|ipod/i.test(navigator.userAgent), STANDALONE = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
+    function pk(s){ var b = atob((s + "===".slice((s.length + 3) % 4)).replace(/-/g, "+").replace(/_/g, "/")), a = new Uint8Array(b.length); for(var i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
+    function pushApi(body){ return fetch("/api/o/" + window.__tok + "/push", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)}).then(function(r){ return r.json().catch(function(){ return {}; }).then(function(d){ if(!r.ok) throw new Error(d.error || "Ошибка"); return d; }); }); }
+    function pushBar(){
+        var box = $("pushbar"); if(!box) return;
+        var hid = 0; try { hid = Number(localStorage.getItem("vr-push-hide") || 0); } catch(e){}
+        var draw = function(st){
+            if(st === "none" || ((st === "off" || st === "ios") && hid > Date.now())){ box.innerHTML = ""; return; }
+            var x = '<button class="pb-x" data-push="hide" title="Скрыть" type="button">✕</button>';
+            box.innerHTML = st === "on" ? '<div class="pushbar on">✅ Уведомления включены на этом устройстве <button class="pb-l" data-push="off" type="button">Отключить</button></div>'
+                : st === "denied" ? '<div class="pushbar on">🔕 Уведомления для сайта заблокированы в браузере. Чтобы включить: нажмите на значок 🔒 слева от адреса сайта → «Уведомления» → «Разрешить».</div>'
+                : st === "ios" ? '<div class="pushbar">' + x + '<div class="pb-i">🔔</div><div><b>Уведомления на iPhone</b><small>Safari → «Поделиться» → «На экран „Домой“». Откройте кабинет со значка на экране и нажмите «Включить уведомления».</small></div></div>'
+                : '<div class="pushbar">' + x + '<div class="pb-i">🔔</div><div><b>Включите уведомления</b><small>Сообщим, когда компании ответят на рассылку — в том числе автоответом, — даже если сайт закрыт.</small></div><button class="btn gold sm pb-b" data-push="on" type="button">Включить</button></div>';
+        };
+        if(!PUSH_OK){ draw(IOS && !STANDALONE ? "ios" : "none"); return; }
+        if(Notification.permission === "denied"){ draw("denied"); return; }
+        navigator.serviceWorker.register("/sw.js").then(function(reg){ return reg.pushManager.getSubscription(); })
+            .then(function(sub){ if(sub) pushApi({sub: sub.toJSON()}).catch(function(){}); draw(sub ? "on" : "off"); }).catch(function(){ draw("none"); });
+    }
+    document.addEventListener("click", function(e){
+        var f = e.target.closest && e.target.closest(".rfwd");
+        if(f){
+            var c = prompt("Что кажется вам неправильным в этом письме? (необязательно — можно оставить пустым)", "");
+            if(c === null) return;
+            f.disabled = true;
+            fetch("/api/o/" + window.__tok + "/reply-forward", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({id: f.getAttribute("data-id"), comment: c})})
+                .then(function(r){ return r.json().then(function(j){ return {ok: r.ok, j: j}; }); })
+                .then(function(x){ if(!x.ok) throw new Error(x.j.error || "Не удалось переслать"); f.parentNode.innerHTML = '<span class="hint">✅ Переслано администратору — мы разберёмся</span>'; })
+                .catch(function(err){ f.disabled = false; alert(err.message); });
+            return;
+        }
+        var b = e.target.closest && e.target.closest("[data-push]"); if(!b) return;
+        var a = b.getAttribute("data-push");
+        if(a === "hide"){ try { localStorage.setItem("vr-push-hide", String(Date.now() + 7 * 864e5)); } catch(x){} $("pushbar").innerHTML = ""; return; }
+        b.disabled = true;
+        navigator.serviceWorker.register("/sw.js").then(function(){ return navigator.serviceWorker.ready; }).then(function(reg){
+            if(a === "off") return reg.pushManager.getSubscription().then(function(sub){ if(!sub) return; return pushApi({off: true, endpoint: sub.endpoint}).catch(function(){}).then(function(){ return sub.unsubscribe(); }); });
+            return Notification.requestPermission().then(function(perm){
+                if(perm !== "granted") return;
+                return fetch("/api/push/key").then(function(r){ return r.json(); }).then(function(k){ if(!k.key) throw new Error("Уведомления временно недоступны"); return reg.pushManager.subscribe({userVisibleOnly: true, applicationServerKey: pk(k.key)}); })
+                    .then(function(sub){ return pushApi({sub: sub.toJSON(), hello: true}); });
+            });
+        }).catch(function(err){ alert(err.message); }).then(pushBar);
+    });
+    pushBar();
+    var rok = $("resok");
+    if(rok) rok.addEventListener("click", function(){
+        if(!confirm("Подтвердить резюме? После этого рассылка начнётся по выбранным датам.")) return;
+        var msg = $("resmsg"); rok.disabled = true; msg.textContent = "Подтверждаем…";
+        fetch("/api/o/" + window.__tok + "/resume-approve", {method: "POST", headers: {"Content-Type": "application/json"}, body: "{}"})
+            .then(function(r){ return r.json().then(function(j){ return {ok: r.ok, j: j}; }); })
+            .then(function(x){ if(!x.ok) throw new Error(x.j.error || "Не удалось подтвердить"); msg.textContent = "✅ Подтверждено"; setTimeout(function(){ location.reload(); }, 800); })
+            .catch(function(e){ rok.disabled = false; msg.textContent = "❌ " + e.message; });
+    });
     var lf = $("lf");
     if(lf){
         var std = {}; try { std = JSON.parse($("lstd").textContent); } catch(e){}

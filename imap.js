@@ -84,14 +84,19 @@ function textOf(p){
 const addr = v => { const m = String(v || "").match(/<([^>]+)>/); return (m ? m[1] : String(v || "").split(/[\s,]/).find(x => x.includes("@")) || "").trim().toLowerCase(); };
 const nameOf = v => words(String(v || "").replace(/<[^>]*>/, "").replace(/"/g, "").trim());
 
-const BOUNCE_FROM = /mailer-daemon|postmaster|mail[ ._-]?delivery|bounce|no-?reply-?dsn|mdaemon|mail\.?system|microsoftexchange/i;
-const BOUNCE_SUBJ = /undeliver|not delivered|delivery (status|failure|failed|has failed|incomplete|notification|problem)|returned mail|failure notice|could not be delivered|message (blocked|rejected|bounced)|mailbox (is )?(full|unavailable)|user unknown|non ?delivery|не доставлен|недоставлен|не удалось доставить/i;
-const AUTO_SUBJ = /automatic reply|auto(matic)?[- ]?(reply|response|antwort)|out of (the )?office|away from|on leave|vacation|abwesen|автоответ|автоматический ответ|в отпуске|we (have )?received your|thank you for (your|contacting)|acknowledg/i;
+/* что это за письмо — те же правила, что на CV-Sender: недоставленное (бан, ошибка, квота) моряку не показываем, автоответы показываем */
+const BOUNCE_FROM = /mailer-daemon|postmaster|mail[ ._-]?delivery|maildelivery|bounce|no-?reply-?dsn|mdaemon|mail\.?system|microsoftexchange/i;
+const BOUNCE_SUBJ = /undeliver|not delivered|delivery (status|failure|failed|has failed|incomplete|notification|problem)|returned mail|failure notice|mail delivery (failed|subsystem)|could not be delivered|delivery report|message (blocked|rejected|bounced)|rejected|blocked|spam|quota|mailbox (is )?(full|unavailable)|over quota|address (not found|rejected)|user unknown|non ?delivery|nondeliverable|ndr\b|не доставлен|недоставлен|не удалось доставить|ящик (переполнен|заполнен)|возвращ[её]нн|отклонен/i;
+const AUTO_SUBJ = /automatic reply|auto(matic)?[- ]?(reply|response|antwort|réponse)|out of (the )?office|away from|on leave|vacation|abwesen|автоответ|автоматический ответ|нет на месте|в отпуске|we (have )?received your|thank you for (your|contacting)|acknowledg/i;
+/* 15.11: «Your message has expired without being delivered» и подобные — служебное письмо о недоставке, а не ответ компании */
+const BOUNCE_TEXT = /(your|the) (e-?mail|message)[^.\n]{0,100}\b(has |had )?(expired|not been delivered|could not be delivered|couldn.?t be delivered|was not delivered|is delayed|has been delayed|was delayed)|expired without|message (delivery )?(has )?expired|delivery (is |has been )?delayed|(still|continue[sd]?) (trying|attempting) to deliver|will (continue|keep) (to )?(try|retry)|your message (has )?not (yet )?been delivered|undelivered mail returned|сообщение (не )?(было )?(доставлено|просрочено)|повідомлення (не )?(було )?(доставлено|прострочено)/i;
 function classify(h, type, text){
-    const subj = words(h.subject || "");
-    if(BOUNCE_FROM.test(String(h.from || "")) || /multipart\/report|delivery-status/i.test(h["content-type"] || "")) return "bounce";
+    const from = String(h.from || ""), subj = words(h.subject || "");
+    if(BOUNCE_FROM.test(from) || /multipart\/report/i.test(h["content-type"] || "") || /delivery-status/i.test(h["content-type"] || "")) return "bounce";
     if(BOUNCE_SUBJ.test(subj) && !AUTO_SUBJ.test(subj)) return "bounce";
-    if(/auto-replied|auto-generated|auto-notified/i.test(h["auto-submitted"] || "") || h["x-autoreply"] || /^(auto_reply|bulk|junk)$/i.test(h.precedence || "") || AUTO_SUBJ.test(subj)) return "auto";
+    if(BOUNCE_TEXT.test(subj + "\n" + String(text || "").slice(0, 1500))) return "bounce";
+    if(/^\s*(5\.\d\.\d|4\.\d\.\d)\b/m.test(text || "") && /(smtp|recipient|delivery)/i.test(text || "")) return "bounce";
+    if(/auto-replied|auto-generated|auto-notified/i.test(h["auto-submitted"] || "") || h["x-autoreply"] || h["x-autorespond"] || /^(auto_reply|bulk|junk)$/i.test(h.precedence || "") || AUTO_SUBJ.test(subj)) return "auto";
     return "reply";
 }
 function parseMail(buf){

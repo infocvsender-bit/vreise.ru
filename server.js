@@ -164,6 +164,7 @@ function parseBase(text, defaultBase){
             const s = Mail.siteUrl(), urls = ["/", "/policy", "/offer"].map(x => `<url><loc>${s}${x === "/" ? "" : x}</loc></url>`).join("");
             return send(res, 200, `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`, "application/xml; charset=utf-8");
         }
+        if(p === "/sw.js") return send(res, 200, fs.readFileSync(path.join(PUB, "sw.js")), "text/javascript; charset=utf-8", {"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"});
         if(p === "/favicon.ico") return redirect(res, "/static/favicon.png", 301);
         if(p.startsWith("/static/")){
             const f = path.normalize(path.join(PUB, p.slice(8)));
@@ -192,7 +193,8 @@ function parseBase(text, defaultBase){
             const msgs = await q(`SELECT at, author, text FROM notes WHERE order_id = $1 AND author IN ('Сообщение клиента', 'Ответ менеджера') ORDER BY at`, [o.id]);
             const sent = (jobs.length ? await q(`SELECT qu.company, qu.email, qu.sent_at FROM queue qu JOIN jobs j ON j.id = qu.job_id WHERE j.order_id = $1 AND qu.status = 'sent' ORDER BY qu.sent_at DESC LIMIT 200`, [o.id]) : []).map(r => ({company: Mask.maskCompany(r.company || ""), email: Mask.maskEmail(r.email), sent_at: r.sent_at}));
             const std = o.base ? {cur: engine.letterFor(o), def: engine.letterFor({...o, letter: "", subject: ""})} : null;
-            const replies = o.base ? await q(`SELECT from_email, from_name, subject, text, kind, at FROM replies WHERE order_id = $1 ORDER BY at DESC LIMIT 100`, [o.id]) : [];
+            const replies = o.base ? await q(`SELECT id, from_email, from_name, subject, text, kind, at FROM replies WHERE order_id = $1 AND kind <> 'bounce' ORDER BY at DESC LIMIT 100`, [o.id]) : [];
+            if(replies.length){ const fw = new Set((await q(`SELECT reply_id FROM reply_fwd WHERE order_id = $1`, [o.id])).map(x => x.reply_id)); for(const r of replies) r.fwd = fw.has(r.id); }
             return send(res, 200, P.orderPage(o, jobs, sent, msgs, std, replies), "text/html; charset=utf-8", {"Cache-Control": "no-store"});
         }
         return send(res, 404, P.notFound());
@@ -324,6 +326,19 @@ function parseBase(text, defaultBase){
             engine.tick().catch(() => {});
             return json(res, 200, {ok: true});
         }
+        m = p.match(/^\/api\/o\/([A-Za-z0-9_-]{10,80})\/resume-approve$/);
+        if(req.method === "POST" && m){
+            if(limited("rapp:" + m[1], 20, 3600e3)) return json(res, 429, {error: "Слишком много попыток, попробуйте позже"});
+            const o = await byToken(m[1]); if(!o) return json(res, 404, {error: "Заказ не найден"});
+            if(o.kind !== "cv" || !o.base || !o.res_name || o.status === "cancelled") return json(res, 400, {error: "Резюме ещё не готово"});
+            if(o.res_ok) return json(res, 200, {ok: true});
+            await q(`UPDATE orders SET res_ok = $1 WHERE id = $2`, [now(), o.id]);
+            await engine.note(o.id, "Клиент проверил и подтвердил готовое резюме" + (o.email_ok ? "" : " (e-mail ещё не подтверждён — рассылка стартует после подтверждения почты)"), "Клиент");
+            Mail.owner(`✅ Клиент подтвердил резюме — заказ №${o.num}\n${o.email_ok ? "Рассылка стартует по выбранным датам." : "⚠️ E-mail клиента ещё не подтверждён — рассылка ждёт."}`, o.id);
+            if(o.email_ok){ const jb = await q(`SELECT id FROM jobs WHERE order_id = $1`, [o.id]); if(jb.length){ try { const L = engine.letterFor({...o, res_ok: now()}); Mail.T.preview(o, L, o.res_name).catch(() => {}); } catch(e){} } }
+            engine.tick().catch(() => {});
+            return json(res, 200, {ok: true});
+        }
         m = p.match(/^\/api\/o\/([A-Za-z0-9_-]{10,80})\/letter$/);
         if(req.method === "POST" && m){
             if(limited("letter:" + m[1], 30, 3600e3)) return json(res, 429, {error: "Слишком много изменений, попробуйте позже"});
@@ -403,6 +418,33 @@ function parseBase(text, defaultBase){
             await engine.note(o.id, `Клиент изменил список «куда не отправлять»${removed ? ` (убрано из очереди адресов: ${removed})` : ""}`, "Клиент");
             return json(res, 200, {ok: true, removed});
         }
+        /* пуш-уведомления: открытый ключ, подписка устройства клиента, пересылка письма админу */
+        if(p === "/api/push/key" && req.method === "GET") return json(res, 200, {key: await engine.push.publicKey()}, {"Cache-Control": "no-store"});
+        m = p.match(/^\/api\/o\/([A-Za-z0-9_-]{10,80})\/push$/);
+        if(req.method === "POST" && m){
+            if(limited("push:" + m[1], 30, 3600e3)) return json(res, 429, {error: "Слишком много попыток, попробуйте позже"});
+            const o = await byToken(m[1]); if(!o) return json(res, 404, {error: "Заказ не найден"});
+            const b = await body(req, 8000);
+            try {
+                if(b.off) await engine.push.unsubscribe(o.email, b.endpoint);
+                else { await engine.push.subscribe(o.email, b.sub, req.headers["user-agent"]); if(b.hello) engine.push.notify(o.email, {title: "🔔 Уведомления включены", body: "Сообщим, когда компании ответят на вашу рассылку — в том числе автоответом.", url: Mail.orderLink(o), tag: "hello"}).catch(() => {}); }
+            } catch(e){ return json(res, 400, {error: e.message}); }
+            return json(res, 200, {ok: true});
+        }
+        m = p.match(/^\/api\/o\/([A-Za-z0-9_-]{10,80})\/reply-forward$/);
+        if(req.method === "POST" && m){
+            if(limited("rfwd:" + m[1], 30, 3600e3)) return json(res, 429, {error: "Слишком часто — попробуйте позже"});
+            const o = await byToken(m[1]); if(!o || !o.base) return json(res, 404, {error: "Заказ не найден"});
+            const b = await body(req, 5000), r = await one(`SELECT * FROM replies WHERE id = $1 AND order_id = $2 AND kind <> 'bounce'`, [clean(b.id, 80), o.id]);
+            if(!r) return json(res, 404, {error: "Письмо не найдено"});
+            if(await one(`SELECT reply_id FROM reply_fwd WHERE reply_id = $1`, [r.id])) return json(res, 200, {ok: true, already: true});
+            const cm = clean(b.comment, 600), who = r.from_name && String(r.from_name).toLowerCase() !== String(r.from_email).toLowerCase() ? `${r.from_name} <${r.from_email}>` : r.from_email;
+            await q(`INSERT INTO reply_fwd(reply_id, order_id, comment, at) VALUES($1,$2,$3,$4)`, [r.id, o.id, cm, now()]);
+            const name = [o.first_name, o.last_name].filter(Boolean).join(" ") || o.email;
+            await engine.note(o.id, `📤 Клиент переслал письмо администратору${cm ? `\nКомментарий клиента: ${cm}` : ""}\n\nОт: ${who}\nТема: ${r.subject || "(без темы)"}\n\n${String(r.text || "(текст пустой)").slice(0, 3000)}`, "Клиент");
+            Mail.owner(`📤 Клиент переслал письмо — заказ №${o.num}, ${name}\nОт: ${who}\nТема: ${String(r.subject || "(без темы)").slice(0, 200)}${r.kind === "auto" ? " (автоответ)" : ""}${cm ? `\nКомментарий: ${cm.slice(0, 300)}` : ""}\n\n${String(r.text || "").slice(0, 1500)}\n\nCRM → заказ №${o.num}`, o.id);
+            return json(res, 200, {ok: true});
+        }
         /* адрес, куда придут ответы компаний */
         m = p.match(/^\/api\/o\/([A-Za-z0-9_-]{10,80})\/reply-to$/);
         if(req.method === "POST" && m){
@@ -434,7 +476,7 @@ function parseBase(text, defaultBase){
         let m;
         if(req.method === "GET" && p === "/orders"){
             const st = clean(u.searchParams.get("status"), 20), s = clean(u.searchParams.get("q"), 80).toLowerCase();
-            let rows = await q(`SELECT ${ORDER_LIST}, cover_ok, schedule, reply_to, CASE WHEN letter IS NOT NULL AND letter <> '' THEN 1 ELSE 0 END AS own_letter FROM orders ORDER BY num DESC LIMIT 500`);
+            let rows = await q(`SELECT ${ORDER_LIST}, cover_ok, res_ok, schedule, reply_to, CASE WHEN letter IS NOT NULL AND letter <> '' THEN 1 ELSE 0 END AS own_letter FROM orders ORDER BY num DESC LIMIT 500`);
             if(st) rows = rows.filter(r => r.status === st);
             if(s) rows = rows.filter(r => [r.num, r.email, r.first_name, r.last_name, r.phone].join(" ").toLowerCase().includes(s));
             const pr = await q(`SELECT order_id, SUM(sent) AS s, SUM(total) AS t, SUM(failed) AS f FROM jobs GROUP BY order_id`), pm = Object.fromEntries(pr.map(r => [r.order_id, r]));
@@ -446,7 +488,7 @@ function parseBase(text, defaultBase){
             return json(res, 200, {orders: rows, summary: Object.fromEntries(sum.map(r => [r.status, Number(r.n)]))});
         }
         if(req.method === "GET" && (m = p.match(/^\/orders\/([\w-]+)$/))){
-            const o = await one(`SELECT ${ORDER_LIST}, letter, subject, draft_letter, draft_subject, cover_ok, exclude, comment, details, extra_base FROM orders WHERE id = $1`, [m[1]]); if(!o) return json(res, 404, {error: "нет заказа"});
+            const o = await one(`SELECT ${ORDER_LIST}, letter, subject, draft_letter, draft_subject, cover_ok, res_ok, exclude, comment, details, extra_base FROM orders WHERE id = $1`, [m[1]]); if(!o) return json(res, 404, {error: "нет заказа"});
             const jobs = await q(`SELECT * FROM jobs WHERE order_id = $1 ORDER BY m`, [o.id]);
             for(const j of jobs){
                 j.wait = Number((await one(`SELECT COUNT(*) AS n FROM queue WHERE job_id = $1 AND status = 'wait'`, [j.id])).n);
@@ -457,7 +499,8 @@ function parseBase(text, defaultBase){
             const sent = await q(`SELECT qu.company, qu.email, qu.country, qu.status, qu.error, qu.sent_at, j.m FROM queue qu JOIN jobs j ON j.id = qu.job_id WHERE j.order_id = $1 AND qu.status IN ('sent','fail') ORDER BY qu.sent_at DESC LIMIT 1000`, [o.id]);
             const docs = await q(`SELECT id, name, size FROM order_docs WHERE order_id = $1 ORDER BY added_at`, [o.id]);
             let det = null; try { det = o.details ? JSON.parse(o.details) : null; } catch(e){} delete o.details;
-            const replies = await q(`SELECT from_email, from_name, subject, text, kind, at FROM replies WHERE order_id = $1 ORDER BY at DESC LIMIT 200`, [o.id]);
+            const replies = await q(`SELECT id, from_email, from_name, subject, text, kind, at FROM replies WHERE order_id = $1 ORDER BY at DESC LIMIT 200`, [o.id]);
+            const fw2 = new Set((await q(`SELECT reply_id FROM reply_fwd WHERE order_id = $1`, [o.id])).map(x => x.reply_id)); for(const r of replies) r.fwd = fw2.has(r.id);
             const def = o.base ? engine.letterFor({...o, letter: "", subject: ""}) : null;
             return json(res, 200, {order: o, details: det, def, docs, replies, sent, jobs, notes, boxes, link: Mail.orderLink(o)});
         }
@@ -486,6 +529,13 @@ function parseBase(text, defaultBase){
             await engine.note(o.id, `Персональное письмо отправлено клиенту на подтверждение (тема: ${subj})`, who);
             const o2 = await one(`SELECT * FROM orders WHERE id = $1`, [o.id]);
             Mail.T.coverDraft(o2, subj, text).catch(() => {});
+            return json(res, 200, {ok: true});
+        }
+        if(req.method === "POST" && (m = p.match(/^\/orders\/([\w-]+)\/res-skip$/))){
+            const o = await one(`SELECT * FROM orders WHERE id = $1`, [m[1]]); if(!o) return json(res, 404, {error: "нет заказа"});
+            await q(`UPDATE orders SET res_ok = $1 WHERE id = $2`, [now(), o.id]);
+            await engine.note(o.id, "Рассылка разблокирована без подтверждения резюме клиентом", who);
+            engine.tick().catch(() => {});
             return json(res, 200, {ok: true});
         }
         if(req.method === "POST" && (m = p.match(/^\/orders\/([\w-]+)\/cover-skip$/))){
@@ -518,8 +568,9 @@ function parseBase(text, defaultBase){
                 const name = clean(b.name, 120), b64 = String(b.b64 || "").replace(/^data:[^,]*,/, "").replace(/\s+/g, "");
                 if(!name || !/^[A-Za-z0-9+/=]+$/.test(b64) || Buffer.from(b64, "base64").length > 8 * 1024 * 1024) return json(res, 400, {error: "Файл не принят (до 8 МБ)"});
                 const withMail = !!o.base && !(await one(`SELECT id FROM jobs WHERE order_id = $1`, [o.id]));
-                await q(`UPDATE orders SET res_name = $1, res_b64 = $2, status = $3, done_at = $4 WHERE id = $5`, [name, b64, withMail || o.base ? "in_progress" : "done", o.base ? null : now(), o.id]);
-                await engine.note(o.id, `Готовое резюме загружено: ${name}`, who);
+                const began = !!(await one(`SELECT id FROM jobs WHERE order_id = $1 AND started_at IS NOT NULL`, [o.id]));
+                await q(`UPDATE orders SET res_name = $1, res_b64 = $2, status = $3, done_at = $4${o.base && !began ? ", res_ok = NULL" : ""} WHERE id = $5`, [name, b64, withMail || o.base ? "in_progress" : "done", o.base ? null : now(), o.id]);
+                await engine.note(o.id, `Готовое резюме загружено: ${name}` + (o.base && !began ? " — отправлено клиенту на проверку; рассылка стартует после его подтверждения резюме (и подтверждённой почты)" : ""), who);
                 if(b.notify !== false) Mail.T.cvReady(o).catch(() => {});
                 if(withMail) await engine.startOrder({...o, res_name: name, res_b64: b64, status: "in_progress"}, who, {resume: true});
             }

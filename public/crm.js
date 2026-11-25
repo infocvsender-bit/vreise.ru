@@ -37,7 +37,7 @@
     /* ---------- доска заказов (канбан) ---------- */
     function modeSwitch(){ return '<div class="flt" id="msw"><button data-m="board"' + (mode === "board" ? ' class="on"' : "") + '>🗂 Доска</button><button data-m="list"' + (mode === "list" ? ' class="on"' : "") + ">📋 Список</button></div>"; }
     function bindMode(){ [].forEach.call(document.querySelectorAll("#msw [data-m]"), function(b){ b.onclick = function(){ mode = b.getAttribute("data-m"); orders(); }; }); }
-    var COLS = [["new", "🆕 Новый, ждёт оплаты", "#e0a030"], ["claimed", "💬 Сообщил об оплате", "#e05a2a"], ["paid", "💰 Оплачен", "#2f9e63"], ["work", "🛠 В работе", "#3b78c9"],
+    var COLS = [["new", "🆕 Ждёт оплаты", "#e0a030"], ["claimed", "💬 Сообщил об оплате", "#e05a2a"], ["paid", "💰 Оплачен", "#2f9e63"], ["work", "🛠 В работе", "#3b78c9"],
         ["run", "📨 Рассылка идёт", "#6b4fd8"], ["done", "✅ Выполнен", "#0A3340"], ["cancelled", "✖ Отменён", "#a33"]];
     var COLORS = ["#b04a3c", "#3f51b5", "#2f9e8f", "#8e5bb5", "#c77d1a", "#3a7ca5", "#6b8e23"];
     function colOf(o){ if(o.status === "in_progress") return (o.jobs || []).some(function(j){ return j.status === "run"; }) ? "run" : "work"; return o.status; }
@@ -46,8 +46,9 @@
     function card(o){
         var js = o.jobs || [], run = js.filter(function(j){ return j.status === "run"; }), pause = js.some(function(j){ return j.status === "pause"; }), wait = js.filter(function(j){ return j.status === "wait"; });
         var col = COLORS[(o.num || 0) % COLORS.length], pct = o.total ? Math.round((o.sent + o.failed) / o.total * 100) : 0, b = [];
-        b.push(o.email_ok ? pill("ok", "✉️ Почта: ✅ подтверждена") : pill("bad", "✉️ Почта: ⚠️ не подтверждена"));
+        b.push(o.email_ok ? pill("ok", "✉️ Почта: ✅ подтверждена") : pill("bad", "✉️ Почта не подтверждена" + (o.base ? " — рассылка ждёт" : "")));
         if(o.base){
+            if(o.kind === "cv" && o.res_name) b.push(o.res_ok ? pill("ok", "📄 Резюме: ✅ подтверждено клиентом") : pill("warn", "📄 Резюме: ⏳ ждёт подтверждения клиента"));
             if(Number(o.cover)) b.push(o.cover_ok ? pill("ok", "💌 Персональное письмо: ✅ подтверждено") : pill("warn", "💌 Персональное письмо: ⏳ " + (o.status === "new" || o.status === "claimed" ? "после оплаты" : "нужно составить / подтвердить")));
             else b.push(pill("", o.own_letter ? "📝 своё письмо" : "📝 стандартное письмо"));
         }
@@ -56,15 +57,19 @@
         if(wait.length && !run.length) b.push(pill("", "📅 Старт: " + wait.map(function(j){ return dt(j.start_at); }).join(", ")));
         if(o.replies) b.push(pill("ok", "💬 Ответов компаний: " + o.replies));
         var ti = [o.position, o.vessel].filter(Boolean).join(" · ");
-        return '<div class="kb-c" data-id="' + o.id + '"><div class="kb-h"><span>№' + o.num + (o.base ? " · 📨" : "") + (o.kind === "cv" ? " · 📄" : "") + "</span><span class=\"mut\">" + dt(o.created_at) + "</span></div>" +
-            '<div class="kb-who"><span class="kb-av" style="background:' + col + '">' + esc(initials(o)) + '</span><div class="kb-n"><b>' + esc(o.first_name + " " + o.last_name) + "</b><small>" + esc(ti) + "</small></div><b class=\"kb-pr\">" + rub(o.price) + "</b></div>" +
-            '<div class="kb-t">' + esc(o.title) + "</div>" + b.join("") + "</div>";
+        return '<div class="kb-c" data-id="' + o.id + '"><div class="kb-h"><span>№' + o.num + (o.base ? " · 📨" : "") + (o.kind === "cv" ? " · 📄" : "") + "</span><b class=\"kb-pr\">" + rub(o.price) + "</b></div>" +
+            '<div class="kb-who"><span class="kb-av" style="background:' + col + '">' + esc(initials(o)) + '</span><div class="kb-n"><b>' + esc(o.first_name + " " + o.last_name) + "</b><small>" + esc(ti) + "</small></div></div>" +
+            '<div class="kb-t">' + esc(o.title) + ' <span class="mut">· ' + dt(o.created_at) + "</span></div>" + b.join("") + "</div>";
     }
     function board(d){
         var by = {}; COLS.forEach(function(c){ by[c[0]] = []; }); d.orders.forEach(function(o){ (by[colOf(o)] || (by[colOf(o)] = [])).push(o); });
-        var h = modeSwitch() + '<div class="flt"><input class="in" id="q" placeholder="Поиск: №, имя, e-mail" style="max-width:260px;padding:7px 12px" value="' + esc(search) + '"></div><div class="kb">';
+        /* пустые колонки сворачиваются в узкую полоску — доска помещается на экран без прокрутки */
+        var tpl = COLS.map(function(c){ return by[c[0]].length ? "minmax(185px,1fr)" : "46px"; }).join(" ");
+        var open = COLS.filter(function(c){ return by[c[0]].length; }).length;
+        var h = modeSwitch() + '<div class="flt"><input class="in" id="q" placeholder="Поиск: №, имя, e-mail" style="max-width:260px;padding:7px 12px" value="' + esc(search) + '"><span class="mut">Всего заказов: ' + d.orders.length + (open ? "" : " · заказов пока нет") + "</span></div>" + '<div class="kb" style="grid-template-columns:' + tpl + '">';
         COLS.forEach(function(c){
             var list = by[c[0]], sum = list.reduce(function(a, o){ return a + o.price; }, 0), cap = c[0] === "cancelled" ? 10 : c[0] === "done" ? 20 : 500;
+            if(!list.length){ h += '<div class="kb-col mini" title="' + esc(c[1]) + ': пусто" style="border-top-color:' + c[2] + '"><b class="kb-cnt">0</b><div class="kb-v">' + esc(c[1]) + "</div></div>"; return; }
             h += '<div class="kb-col" style="border-top-color:' + c[2] + '"><div class="kb-ch"><span><i style="background:' + c[2] + '"></i>' + c[1] + '</span><b>' + list.length + "</b></div>" + (list.length ? '<div class="mut" style="margin:-4px 0 8px 2px">' + rub(sum) + "</div>" : "") +
                 (list.length ? list.slice(0, cap).map(card).join("") + (list.length > cap ? '<p class="mut" style="text-align:center">…ещё ' + (list.length - cap) + " (смотрите во вкладке «Список»)</p>" : "") : '<div class="kb-empty">Пусто</div>') + "</div>";
         });
@@ -87,6 +92,7 @@
                 (o.comment ? '<p class="mut" style="margin-top:12px">Данные для резюме:</p><div class="pre">' + esc(o.comment) + "</div>" : "") +
                 '<div class="acts">' + (["new", "claimed"].indexOf(o.status) >= 0 ? '<button class="btn gold sm" id="confirm">✔ Подтвердить оплату и запустить</button>' : "") +
                 (["done", "cancelled"].indexOf(o.status) < 0 ? '<button class="btn sm red" id="cancel">Отменить заказ</button>' : "") + "</div></div>";
+            if(cv && o.base && o.res_name && !o.res_ok) h += '<div class="panel" style="border:2px solid #f2b400"><h3>📄 Резюме отправлено клиенту — ждём его подтверждения</h3><p class="mut">Рассылка стартует только после того, как клиент проверит резюме в кабинете и нажмёт «Подтвердить» (и подтвердит e-mail). Нужна правка — загрузите новый файл в блоке результата: клиент получит его снова.</p><div class="acts"><button class="btn sm line" id="resskip" style="color:var(--deep);border-color:#9fb6bb">Запустить без подтверждения клиента</button></div></div>';
             if(Number(o.cover)) h += '<div class="panel" style="border:2px solid #f2b400"><h3>💌 Персональное письмо (оплачено клиентом)</h3>' + (d.def ?
                 (o.cover_ok ? '<p class="mut">✅ Клиент подтвердил письмо ' + dt(o.cover_ok) + '. Новое сохранение снова уйдёт ему на подтверждение, но на уже идущую рассылку не повлияет.</p>' : o.draft_letter ? '<p class="mut" style="color:#b9770e">Письмо отправлено клиенту — <b>ждём его подтверждения</b>, рассылка стоит. Можно поправить и отправить заново.</p>' : '<p class="mut" style="color:#b9770e">Письмо ещё не написано — <b>рассылка ждёт</b>. Отредактируйте текст ниже (подставлен стандартный), сохраните — клиент получит его на подтверждение.</p>') +
                 '<input class="in" id="cvs" value="' + esc((o.subject && String(o.subject).trim()) || d.def.subject) + '" placeholder="Тема письма"><textarea class="in" id="cvt" style="min-height:260px;margin-top:10px">' + esc(o.draft_letter || o.letter || d.def.text) + '</textarea>' +
@@ -120,6 +126,7 @@
                 if(!confirm("Отправить письмо клиенту на подтверждение? Рассылка начнётся после его «Подтвердить».")) return;
                 api("/orders/" + id + "/cover-letter", {body: {subject: $("cvs").value, text: $("cvt").value}}).then(function(){ order(id); }).catch(alertErr);
             };
+            if($("resskip")) $("resskip").onclick = function(){ post("/orders/" + id + "/res-skip", {}, "Запустить рассылку без подтверждения резюме клиентом?"); };
             if($("cvskip")) $("cvskip").onclick = function(){ post("/orders/" + id + "/cover-skip", {}, "Снять ожидание и запустить рассылку со стандартным письмом, без подтверждения клиента?"); };
             $("ntgo").onclick = function(){ if($("nt").value.trim()) post("/orders/" + id + "/note", {text: $("nt").value}); };
             $("rpgo").onclick = function(){

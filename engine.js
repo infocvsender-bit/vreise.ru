@@ -29,6 +29,8 @@ const parseMsk = s => { const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.ex
 
 module.exports = function engine(db){
     const q = (s, p) => db.query(s, p), one = (s, p) => db.one(s, p);
+    const Push = require("./push.js")({getDb: () => db, now, subject: (process.env.SITE_URL || "").startsWith("https://") ? process.env.SITE_URL : "https://vreise.ru"});
+    Push.init().catch(e => console.error("push init:", e.message));
     const note = (orderId, text, author = "Система") => q(`INSERT INTO notes(id, order_id, at, author, text) VALUES($1,$2,$3,$4,$5)`, [uuid(), orderId, now(), author, text]);
 
     /* ---------- выбор адресов ---------- */
@@ -44,6 +46,24 @@ module.exports = function engine(db){
         const rows = await q(`SELECT email, company, country, fleets, bases FROM base_rows`);
         const tokens = parseExclude(o.exclude), seen = new Set();
         return rows.filter(r => (hasBase(r, o.base) || (o.extra_base && hasBase(r, o.extra_base))) && !excluded(r, tokens) && !seen.has(r.email) && seen.add(r.email));
+    }
+    /* порядок отправки: сначала компании, чей флот совпадает с видами судов, выбранными моряком; внутри группы — вперемешку.
+       Далее — компании без указанного флота, в конце — с другим флотом. «Любые суда» / нет выбора — просто вперемешку. */
+    const FLEET_OF = [[/офшор/i, "offshore"], [/танкер|газовоз/i, "tanker"], [/пассажир|яхт|ро-ро|паром/i, "passenger"], [/контейнер|балкер|генеральн/i, "merchant"]];
+    function wantFleets(o){
+        const v = String(o.vessel || ""); if(!v || /любые суда/i.test(v)) return [];
+        return [...new Set(FLEET_OF.filter(([re]) => re.test(v)).map(x => x[1]))];
+    }
+    function byFleet(rows, o){
+        const want = wantFleets(o), rnd = () => Math.random() - .5;
+        if(!want.length) return rows.slice().sort(rnd);
+        const score = r => {
+            const f = String(r.fleets || "").toLowerCase().split(/[;,\s\/]+/).filter(Boolean);
+            if(!f.length) return 1;
+            const hit = want.filter(w => f.some(x => x.includes(w) || (w === "tanker" && /gas|lng|lpg/.test(x)))).length;
+            return hit ? 3 + hit : 0;
+        };
+        return rows.map(r => ({r, s: score(r), k: Math.random()})).sort((a, b) => b.s - a.s || a.k - b.k).map(x => x.r);
     }
     async function baseCounts(){
         const rows = await q(`SELECT fleets, bases FROM base_rows`), out = {};
@@ -121,7 +141,7 @@ module.exports = function engine(db){
         if(Number(o.cover) && !o.cover_ok){
             await note(o.id, "💌 Заказано персональное сопроводительное письмо — составьте его в CRM (карточка заказа), клиент подтвердит. Рассылка стартует после подтверждения.", "Система");
             Mail.owner(`💌 Нужно персональное письмо — заказ №${o.num}\n${[o.first_name, o.last_name].filter(Boolean).join(" ")} · ${o.position || ""}\nCRM → заказ №${o.num} → «Персональное письмо». Рассылка ждёт.`, o.id);
-        } else try { const L = letterFor(o); Mail.T.preview(o, L, o.kind === "cv" ? o.res_name : o.cv_name).catch(() => {}); } catch(e){}
+        } else if(!(o.kind === "cv" && o.base && !o.res_ok)) try { const L = letterFor(o); Mail.T.preview(o, L, o.kind === "cv" ? o.res_name : o.cv_name).catch(() => {}); } catch(e){}
         setTimeout(() => tick().catch(() => {}), 1500);
     }
 
@@ -132,8 +152,8 @@ module.exports = function engine(db){
         const {ids, errs} = await createBoxes(o, job);
         if(!ids.length) throw new Error("ящики не созданы: " + errs.join("; "));
         if(errs.length) await note(o.id, `⚠️ Часть серверов не дала ящик: ${errs.join("; ")}`);
-        rows.sort(() => Math.random() - .5);
-        for(const r of rows) await q(`INSERT INTO queue(id, job_id, email, company, country, ord, status) VALUES($1,$2,$3,$4,$5,$6,'wait')`, [uuid(), job.id, r.email, r.company || "", r.country || "", Math.random()]);
+        const ordered = byFleet(rows, o);
+        for(let i = 0; i < ordered.length; i++){ const r = ordered[i]; await q(`INSERT INTO queue(id, job_id, email, company, country, ord, status) VALUES($1,$2,$3,$4,$5,$6,'wait')`, [uuid(), job.id, r.email, r.company || "", r.country || "", i]); }
         await q(`UPDATE jobs SET status = 'run', total = $1, started_at = $2, last_error = NULL WHERE id = $3`, [rows.length, now(), job.id]);
         await note(o.id, `Рассылка №${job.m} началась: ${rows.length} адресов, ящиков: ${ids.length}`);
         Mail.T.started(o, {...job, total: rows.length}).catch(() => {});
@@ -171,7 +191,7 @@ module.exports = function engine(db){
             else if(PERM(e) || Number(row.tries) >= 1){
                 await q(`UPDATE queue SET status = 'fail', error = $1, tries = tries + 1, box = $2 WHERE id = $3`, [msg, box.email, row.id]);
                 await q(`UPDATE jobs SET failed = failed + 1 WHERE id = $1`, [job.id]);
-            } else await q(`UPDATE queue SET tries = tries + 1, error = $1, ord = ord + 1 WHERE id = $2`, [msg, row.id]);
+            } else await q(`UPDATE queue SET tries = tries + 1, error = $1, ord = ord + 10000000 WHERE id = $2`, [msg, row.id]);
             await q(`UPDATE boxes SET last_error = $1 WHERE id = $2`, [msg, box.id]);
         }
         return true;
@@ -196,6 +216,7 @@ module.exports = function engine(db){
                 const o = await one(`SELECT * FROM orders WHERE id = $1`, [job.order_id]); if(!o) continue;
                 if(job.status === "wait"){
                     if(Number(o.cover) && !o.cover_ok) continue;                       // ждём персональное письмо и подтверждение клиента
+                    if(o.kind === "cv" && o.base && !o.res_ok) continue;               // резюме «Стандарт» + рассылка: ждём, пока клиент проверит и подтвердит готовое резюме
                     if(Date.parse(job.start_at) > Date.now() || !inWindow(Date.now()) || !["paid", "in_progress"].includes(o.status) || !o.email_ok) continue;           // ждём оплату и подтверждение e-mail
                     try { await prepare(job, o); } catch(e){
                         await q(`UPDATE jobs SET last_error = $1 WHERE id = $2`, [String(e.message).slice(0, 300), job.id]);
@@ -242,21 +263,25 @@ module.exports = function engine(db){
                         last = Math.max(last, uid);
                         if(!data || !data.length) continue;
                         const r = IM.parseMail(data);
-                        if(r.kind === "bounce" || !r.from || own.has(String(r.from).split("@")[1]) || own.has(String(r.fromRaw).split("@")[1])) continue;
+                        /* недоставленное (бан, ошибка, квота) — клиенту не показываем, храним для CRM; автоответы и ответы — показываем */
+                        if(r.kind !== "bounce" && (!r.from || own.has(String(r.from).split("@")[1]) || own.has(String(r.fromRaw).split("@")[1]))) continue;
                         if(await one(`SELECT id FROM replies WHERE order_id = $1 AND box = $2 AND uid = $3`, [b.order_id, b.email, uid])) continue;
                         await q(`INSERT INTO replies(id, order_id, box, uid, from_email, from_name, subject, text, kind, at, created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
                             [uuid(), b.order_id, b.email, uid, r.from, String(r.name || "").slice(0, 200), r.subject, r.text, r.kind, new Date(r.date).toISOString(), now()]);
-                        if(r.kind === "reply") fresh.set(b.order_id, (fresh.get(b.order_id) || 0) + 1);
+                        if(r.kind !== "bounce"){ const f = fresh.get(b.order_id) || {reply: 0, auto: 0, last: ""}; f[r.kind === "reply" ? "reply" : "auto"]++; f.last = r.subject || f.last; fresh.set(b.order_id, f); }
                     }
                 } catch(e){ err = String(e.message || e).slice(0, 300); }
                 finally { if(S) S.close(); }
                 await q(`DELETE FROM imap_state WHERE box_id = $1`, [b.id]);
                 await q(`INSERT INTO imap_state(box_id, last_uid, checked_at, error) VALUES($1,$2,$3,$4)`, [b.id, last, now(), err]);
             }
-            for(const [oid, n] of fresh){
+            for(const [oid, f] of fresh){
                 const o = await one(`SELECT * FROM orders WHERE id = $1`, [oid]); if(!o) continue;
-                await note(oid, `Ответов от компаний: ${n}`, "Система");
-                if(o.email_ok) Mail.T.newReplies(o, n).catch(() => {});
+                await note(oid, `Ответов от компаний: ${f.reply}` + (f.auto ? `, автоответов: ${f.auto}` : ""), "Система");
+                if(f.reply && o.email_ok) Mail.T.newReplies(o, f.reply).catch(() => {});
+                const n = f.reply + f.auto, link = Mail.orderLink(o) + "#replies";
+                Push.notify(o.email, {title: f.reply ? `💬 Ответ компании · заказ №${o.num}` : `✉️ Автоответ компании · заказ №${o.num}`,
+                    body: n > 1 ? `Новых писем: ${n}. Нажмите, чтобы прочитать.` : String(f.last || "Нажмите, чтобы прочитать").slice(0, 120), url: link, tag: "reply-" + o.id}).catch(() => {});
             }
         } catch(e){ console.error("replies:", e); } finally { replyBusy = false; }
     }
@@ -349,5 +374,5 @@ module.exports = function engine(db){
         return c.domain;
     }
 
-    return {pollReplies, pollInbox, startOrder, tick, start, jobCtl, applyExclude, setJobTime, note, pick, baseCounts, testSend, letterFor, hasBase, parseExclude, deleteBox};
+    return {pollReplies, pollInbox, startOrder, tick, start, jobCtl, applyExclude, setJobTime, note, pick, baseCounts, testSend, letterFor, hasBase, parseExclude, deleteBox, byFleet, push: Push};
 };
