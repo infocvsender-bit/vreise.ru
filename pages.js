@@ -31,10 +31,10 @@ const numFmt = n => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, "\u00
 const addrCount = n => n > 0 ? `${numFmt(n)}\u00a0${plAddr(n)}` : "";
 function home(counts){
     const n = counts && counts.byBase || {};
-    const rows = C.BASES.map(b => `<li class="row" data-p="${b.prices.map((_, i) => C.priceOf(b, i + 1)).join(",")}" data-b="${b.key}">
-      <div class="r-name"><b>${esc(b.name)}${n[b.key] > 0 ? `<span class="r-cnt">${addrCount(n[b.key])}</span>` : ""}</b><span>${esc(b.note)}</span></div>
-      <div class="r-price" data-price>${rub(C.priceOf(b, 1))}</div>
-      <a class="btn gold sm" data-order href="/order?s=${C.SERVICES.find(s => s.base === b.key && s.times === 1).slug}">Заказать</a></li>`).join("");
+    const rows = C.BASES.map((b, i) => `<li class="pc a${i % 4}" data-p="${b.prices.map((_, k) => C.priceOf(b, k + 1)).join(",")}" data-b="${b.key}">
+      <h4>${esc(b.name)}</h4><p class="pc-note">${esc(b.note)}</p>
+      ${n[b.key] > 0 ? `<div class="pc-cnt"><b>${numFmt(n[b.key])}</b><span>${plAddr(n[b.key])} в базе</span></div>` : `<div class="pc-cnt"></div>`}
+      <div class="pc-foot"><div class="pc-price" data-price>${rub(C.priceOf(b, 1))}</div><a class="btn gold" data-order href="/order?s=${C.SERVICES.find(s => s.base === b.key && s.times === 1).slug}">Заказать</a></div></li>`).join("");
     const hero = `<header class="hero">${navTop()}<div class="wrap"><div>
 <div class="pill"><b></b>Онлайн-сервис для моряков</div>
 <h1>Ваше резюме — <span>сразу в крюинговые компании</span></h1>
@@ -47,10 +47,11 @@ function home(counts){
     const body = `<section class="sec" id="services"><div class="c">
 <div class="kick">Услуги</div><h2>Рассылка резюме по базам</h2>
 <p class="sub">Выберите базу и количество рассылок. Письма уходят с отдельного почтового ящика на ваше имя, а ответы компаний приходят прямо вам на почту.</p>
-<div class="board" id="board"><div class="board-head"><h3>Рассылка резюме</h3>
+<div class="board" id="board"><div class="board-head"><h3>Выберите базу и количество рассылок</h3>
 <div class="seg" role="group" aria-label="Количество рассылок"><button type="button" data-n="1" class="on">1 рассылка</button><button type="button" data-n="2">2 рассылки</button><button type="button" data-n="3">3 рассылки</button></div></div>
-<ul class="rows">${rows}</ul></div>
-<div class="included"><span>Сопроводительное письмо входит — своё или готовое</span><span>Личный кабинет: ход рассылки и список компаний</span><span>Тему и письмо можно поправить до старта</span><span>Можно исключить компании</span><span>Ответы компаний — вам на почту</span><span>Вопросы менеджеру — прямо из кабинета</span></div>
+<ul class="pcs">${rows}</ul></div>
+<div class="included"><h3>Что входит в заказ</h3><ul>
+<li>Рассылка вашего резюме по выбранной базе компаний</li><li>Сопроводительное письмо — своё или готовое</li><li>Отдельный почтовый ящик на ваше имя на время рассылки</li><li>Личный кабинет: ход рассылки и отправленные письма</li><li>Тему и текст письма можно поправить до старта</li><li>Можно исключить ненужные компании</li><li>Ответы компаний — в кабинете и на вашу почту</li><li>Вопросы менеджеру — прямо из кабинета</li></ul></div>
 <div class="strip"><div><h3>Составление резюме «Стандарт»</h3><ul>${C.CV.bullets.map(b => `<li>${esc(b)}</li>`).join("")}</ul></div>
 <div class="pr"><b>${rub(C.cvPrice())}</b><a class="btn gold" href="/order?s=${C.CV.slug}">Заказать резюме</a></div></div>
 </div></section>

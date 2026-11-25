@@ -1,6 +1,6 @@
 /* Главная: переключатель 1 / 2 / 3 рассылки на таблице цен */
 (function(){
-    var rows = [].slice.call(document.querySelectorAll("#board .row"));
+    var rows = [].slice.call(document.querySelectorAll("#board .pc"));
     var btns = [].slice.call(document.querySelectorAll("#board .seg button"));
     var slugs = {1: "rassylka-1-", 2: "rassylka-2-", 3: "rassylka-3-"};
     function fmt(n){ return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " ₽"; }
