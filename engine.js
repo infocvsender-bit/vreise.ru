@@ -72,6 +72,28 @@ module.exports = function engine(db){
         return {total: rows.length, byBase: out};
     }
 
+    /* Уведомления клиенту об ответах не на каждое письмо: копим и сообщаем, когда (1) пришёл живой ответ, (2) набралось 5 писем,
+       (3) рассылка дошла до 50% и (4) до 75% — тогда показываем всё накопленное. Пустых уведомлений нет. */
+    async function flushReplies(o, why){
+        const rows = await q(`SELECT id, kind, subject FROM replies WHERE order_id = $1 AND kind IN ('reply', 'auto') AND notified IS NULL ORDER BY at`, [o.id]);
+        if(!rows.length) return 0;
+        const live = rows.filter(r => r.kind === "reply").length, n = rows.length, t = now();
+        for(const r of rows) await q(`UPDATE replies SET notified = $1 WHERE id = $2`, [t, r.id]);
+        await note(o.id, `Клиенту сообщили о новых письмах компаний: ${n}${live ? `, живых ответов: ${live}` : " (автоответы)"} — повод: ${why}`, "Система");
+        if(o.email_ok) Mail.T.newReplies(o, n, live).catch(() => {});
+        const last = rows[rows.length - 1];
+        Push.notify(o.email, {title: live ? `💬 Ответ компании · заказ №${o.num}` : `✉️ Автоответы компаний · заказ №${o.num}`,
+            body: n > 1 ? `Новых писем: ${n}${live ? `, живых ответов: ${live}` : ""}. Нажмите, чтобы прочитать.` : String(last.subject || "Нажмите, чтобы прочитать").slice(0, 120), url: Mail.orderLink(o) + "#replies", tag: "reply-" + o.id}).catch(() => {});
+        return n;
+    }
+    async function progressMark(job){
+        const j = await one(`SELECT sent, failed, total, notif_pct, order_id FROM jobs WHERE id = $1`, [job.id]); if(!j || !Number(j.total)) return;
+        const pct = (Number(j.sent) + Number(j.failed)) / Number(j.total) * 100, mark = pct >= 75 ? 75 : pct >= 50 ? 50 : 0;
+        if(mark <= Number(j.notif_pct || 0)) return;
+        await q(`UPDATE jobs SET notif_pct = $1 WHERE id = $2`, [mark, job.id]);
+        const o = await one(`SELECT * FROM orders WHERE id = $1`, [j.order_id]); if(o) await flushReplies(o, `рассылка №${job.m} дошла до ${mark}%`);
+    }
+
     /* ---------- письмо ---------- */
     const cap = s => String(s || "").replace(/(^|[\s-])(\p{L})/gu, (m, a, b) => a + b.toUpperCase());
     const VES_EN = {"Офшорные суда": "Offshore vessels", "Контейнеровозы": "Container ships", "Танкеры (нефть, продукты, химия)": "Tankers (oil, products, chemicals)", "Газовозы (LPG / LNG)": "Gas carriers (LPG / LNG)",
@@ -194,6 +216,7 @@ module.exports = function engine(db){
             } else await q(`UPDATE queue SET tries = tries + 1, error = $1, ord = ord + 10000000 WHERE id = $2`, [msg, row.id]);
             await q(`UPDATE boxes SET last_error = $1 WHERE id = $2`, [msg, box.id]);
         }
+        progressMark(job).catch(e => console.error("progress:", e.message));
         return true;
     }
 
@@ -277,11 +300,9 @@ module.exports = function engine(db){
             }
             for(const [oid, f] of fresh){
                 const o = await one(`SELECT * FROM orders WHERE id = $1`, [oid]); if(!o) continue;
-                await note(oid, `Ответов от компаний: ${f.reply}` + (f.auto ? `, автоответов: ${f.auto}` : ""), "Система");
-                if(f.reply && o.email_ok) Mail.T.newReplies(o, f.reply).catch(() => {});
-                const n = f.reply + f.auto, link = Mail.orderLink(o) + "#replies";
-                Push.notify(o.email, {title: f.reply ? `💬 Ответ компании · заказ №${o.num}` : `✉️ Автоответ компании · заказ №${o.num}`,
-                    body: n > 1 ? `Новых писем: ${n}. Нажмите, чтобы прочитать.` : String(f.last || "Нажмите, чтобы прочитать").slice(0, 120), url: link, tag: "reply-" + o.id}).catch(() => {});
+                await note(oid, `Пришло писем от компаний: ${f.reply + f.auto}` + (f.reply ? `, живых ответов: ${f.reply}` : " (автоответы)"), "Система");
+                if(f.reply) await flushReplies(o, "пришёл живой ответ");
+                else { const pend = Number((await one(`SELECT COUNT(*) AS c FROM replies WHERE order_id = $1 AND kind IN ('reply', 'auto') AND notified IS NULL`, [oid])).c); if(pend >= 5) await flushReplies(o, "накопилось 5 писем"); }
             }
         } catch(e){ console.error("replies:", e); } finally { replyBusy = false; }
     }
@@ -374,5 +395,5 @@ module.exports = function engine(db){
         return c.domain;
     }
 
-    return {pollReplies, pollInbox, startOrder, tick, start, jobCtl, applyExclude, setJobTime, note, pick, baseCounts, testSend, letterFor, hasBase, parseExclude, deleteBox, byFleet, push: Push};
+    return {pollReplies, pollInbox, startOrder, tick, start, jobCtl, applyExclude, setJobTime, note, pick, baseCounts, testSend, letterFor, hasBase, parseExclude, deleteBox, byFleet, push: Push, flushReplies, progressMark};
 };

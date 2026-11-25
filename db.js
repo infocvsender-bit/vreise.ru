@@ -54,5 +54,7 @@ module.exports = async function openDb(){
         `CREATE TABLE IF NOT EXISTS mail_log(id TEXT PRIMARY KEY, at TEXT NOT NULL, to_email TEXT, subject TEXT, ok INTEGER NOT NULL, error TEXT)`
     ]) await db.query(s);
     for(const c of ["subject TEXT", "letter_ok TEXT", "email_ok TEXT", "details TEXT", "extra_base TEXT", "cover INTEGER DEFAULT 0", "cover_ok TEXT", "draft_subject TEXT", "draft_letter TEXT", "schedule TEXT", "reply_to TEXT", "res_ok TEXT"]) await db.query(`ALTER TABLE orders ADD COLUMN ${c}`).catch(() => {});
+    try { await db.query(`ALTER TABLE replies ADD COLUMN notified TEXT`); await db.query(`UPDATE replies SET notified = created_at`); } catch(e){}     // при первом добавлении колонки старые письма считаем уже показанными
+    await db.query(`ALTER TABLE jobs ADD COLUMN notif_pct INTEGER NOT NULL DEFAULT 0`).catch(() => {});
     return db;
 };
