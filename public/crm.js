@@ -135,7 +135,7 @@
                         '<span style="flex:1;min-width:160px;' + (fresh ? "font-weight:bold" : "") + '">' + esc(m.subject || "(без темы)") + ' <span class="mut" style="font-weight:normal">— ' + esc(snip) + "</span></span>" +
                         '<span class="mut" style="white-space:nowrap">' + dt(m.at) + (kn[m.kind] || "") + "</span></summary>" +
                         '<div style="padding:4px 0 14px"><div class="mut" style="margin-bottom:6px">' + esc(who) + '</div><div style="white-space:pre-wrap;font-size:14px;background:#f6f9fa;border-radius:10px;padding:12px 14px">' + esc(String(m.text || "").slice(0, 4000)) + "</div>" +
-                        '<div class="acts">' + (m.kind === "bounce" ? "" : '<button class="btn sm gold" data-re="' + esc(m.id) + '">Ответить</button> ') + '<button class="btn sm line" data-close="1">Закрыть</button></div></div></details>'; }).join("") : '<p class="mut">Пока писем нет</p>') + "</div>" +
+                        '<div class="acts">' + (m.kind === "bounce" ? "" : '<button class="btn sm gold" data-re="' + esc(m.id) + '">Ответить</button> ') + '<button class="btn sm line" data-close="1">Закрыть</button> <button class="btn sm line" style="color:#c0392b;border-color:#e3b4ae" data-del="' + esc(m.id) + '">Удалить</button></div></div></details>'; }).join("") : '<p class="mut">Пока писем нет</p>') + "</div>" +
                 '<div class="panel" id="wr"><h3>Написать письмо</h3><p class="mut" style="margin-top:0">Любое письмо — тема и текст ваши, можно приложить файл. Уйдёт в фирменном оформлении Vreise.ru' + (d.from ? " от " + esc(d.from) : "") + '. Ответы придут на эту почту.</p>' +
                 '<input class="in" id="lto" type="email" placeholder="Кому (e-mail)" style="margin-bottom:8px"><input class="in" id="lsu" placeholder="Тема" style="margin-bottom:8px"><textarea class="in" id="ltx" placeholder="Текст письма" style="min-height:180px"></textarea>' +
                 '<input type="file" id="lfl" class="in" style="margin-top:8px"><p class="mut" style="margin:4px 0 0">Вложение — до 8 МБ.</p><div class="acts"><button class="btn gold" id="lgo">Отправить письмо</button> <span class="mut" id="lmg"></span></div></div>' +
@@ -143,6 +143,9 @@
                     return "<tr><td>" + dt(l.at) + "</td><td>" + esc(l.to_email) + "</td><td>" + esc(l.subject) + "</td><td>" + esc(l.file_name || "") + "</td><td>" + (l.ok ? "✅" : '<span style="color:#c0392b" title="' + esc(l.error || "") + '">❌ не ушло</span>') + "</td></tr>"; }).join("") + "</tbody></table>" : '<p class="mut">Пока ничего не отправляли</p>') + "</div>";
             var $ = function(i){ return document.getElementById(i); };
             [].forEach.call(document.querySelectorAll("[data-close]"), function(b){ b.onclick = function(){ var d = b.closest("details"); d.open = false; d.scrollIntoView({block: "nearest"}); }; });
+            [].forEach.call(document.querySelectorAll("[data-del]"), function(b){ b.onclick = function(){
+                if(!confirm("Удалить письмо из CRM? На самой почте info@ оно останется.")) return;
+                api("/inbox/delete", {body: {id: b.getAttribute("data-del")}}).then(letter).catch(alertErr); }; });
             [].forEach.call(document.querySelectorAll("details.ml > summary"), function(sm){ sm.style.outline = "none"; });
             [].forEach.call(document.querySelectorAll("details.ml[data-new]"), function(d){ d.addEventListener("toggle", function(){
                 if(!d.open || !d.getAttribute("data-new")) return; var id = d.getAttribute("data-new"); d.removeAttribute("data-new");

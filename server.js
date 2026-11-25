@@ -493,6 +493,7 @@ function parseBase(text, defaultBase){
             return json(res, 200, {inbox: rows, unread: rows.filter(r => !Number(r.seen) && r.kind === "reply").length, state, box: env("SYS_SMTP_USER") || ""});
         }
         if(req.method === "POST" && p === "/inbox/read"){ const b = await body(req); if(b.id) await q(`UPDATE inbox SET seen = 1 WHERE id = $1`, [clean(b.id, 60)]); else await q(`UPDATE inbox SET seen = 1 WHERE seen = 0`); return json(res, 200, {ok: true}); }
+        if(req.method === "POST" && p === "/inbox/delete"){ const b = await body(req); if(!b.id) return json(res, 400, {error: "id"}); await q(`DELETE FROM inbox WHERE id = $1`, [clean(b.id, 60)]); return json(res, 200, {ok: true}); }     // удаляется только из CRM, на почте письмо остаётся
         if(req.method === "POST" && p === "/inbox/refresh"){ await engine.pollInbox(); return json(res, 200, {ok: true}); }
         if(req.method === "GET" && p === "/letters"){
             return json(res, 200, {letters: await q(`SELECT id, at, to_email, subject, file_name, ok, error FROM crm_letters ORDER BY at DESC LIMIT 100`), from: env("SYS_SMTP_FROM") || env("SYS_SMTP_USER") || ""});
