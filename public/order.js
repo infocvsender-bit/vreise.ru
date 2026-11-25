@@ -94,7 +94,6 @@
             if(extra){
                 [].forEach.call(extra.options, function(x){ x.disabled = !!x.value && sel.value === "rassylka-" + timesOf() + "-" + x.value; });
                 var tn = timesOf() - 1;
-                [].forEach.call(extra.options, function(x){ if(!x.value) return; var f = Number((x.getAttribute("data-f") || "").split(",")[tn]), d = Number((x.getAttribute("data-p") || "").split(",")[tn]); x.textContent = x.getAttribute("data-t") + " — " + fmt(f) + " → " + fmt(d); });
                 var note = $("extraNote");
                 if(extra.value){ var eo = extra.options[extra.selectedIndex]; if(eo.disabled){ extra.value = ""; } else sum += Number((eo.getAttribute("data-p") || "").split(",")[tn]) || 0; }
                 if(note){
