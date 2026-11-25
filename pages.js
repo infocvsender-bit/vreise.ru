@@ -96,7 +96,7 @@ ${r("phone", "Телефон", 'type="tel" autocomplete="tel" placeholder="+7 90
 </div>
 <div class="fld"><div class="lbl">Должность <i class="rq">*</i> <small>— до 3-х</small></div><input type="hidden" id="position">${chips("position", POSITIONS.concat(["Другая"]), 3, "Выберите должность")}
 <input class="in" id="positionOther" placeholder="Укажите вашу должность" hidden></div>
-<div class="fld"><div class="lbl">Предпочитаемый вид судов <i class="rq">*</i> <small>— можно выбрать несколько</small></div><input type="hidden" id="vessel">${chips("vessel", VESSELS, 0, "Выберите типы судов")}</div>
+<div class="fld"><div class="lbl">Предпочитаемый вид судов <i class="rq">*</i> <small>— до 5 типов</small></div><input type="hidden" id="vessel">${chips("vessel", VESSELS, 5, "Выберите типы судов")}</div>
 <div class="grid2" style="margin-top:16px">
 <label class="f">Ссылка на LinkedIn<input class="in" id="linkedin" placeholder="https://linkedin.com/in/…"></label>
 <div class="fld" style="margin:0"><div class="lbl">Мессенджеры на этом номере <i class="rq">*</i></div><div class="chips" id="msgs"><label><input type="checkbox" name="msg" value="WhatsApp"><span>WhatsApp</span></label><label><input type="checkbox" name="msg" value="Telegram"><span>Telegram</span></label><label><input type="checkbox" name="msg" value="Viber"><span>Viber</span></label></div></div>
@@ -147,10 +147,10 @@ function orderForm(slug, counts){
 <label class="f">Фамилия<input class="in" id="last" autocomplete="family-name" required></label>
 <label class="f">E-mail<small> — сюда придут письма и ответы компаний</small><input class="in" id="email" type="email" autocomplete="email" required></label>
 <label class="f">Телефон / WhatsApp<input class="in" id="phone" type="tel" autocomplete="tel" placeholder="+7 …"></label>
-<label class="f">Должность<input class="in" id="position" list="pos" placeholder="например, Chief Officer"></label>
-<datalist id="pos">${POSITIONS.map(p => `<option value="${p}">`).join("")}</datalist>
-<label class="f">Типы судов<input class="in" id="vessel" list="ves" placeholder="например, танкеры, офшорные суда"></label>
-<datalist id="ves">${VESSELS.map(p => `<option value="${p}">`).join("")}</datalist></div></div>
+</div>
+<div class="fld"><div class="lbl">Должность <small>— до 3-х</small></div><input type="hidden" id="position">${chips("position", POSITIONS.concat(["Другая"]), 3, "Выберите должность")}
+<input class="in" id="positionOther" placeholder="Укажите вашу должность" hidden></div>
+<div class="fld"><div class="lbl">Предпочитаемый вид судов <small>— до 5 типов</small></div><input type="hidden" id="vessel">${chips("vessel", VESSELS, 5, "Выберите типы судов")}</div></div>
 ${cv ? `<div class="panel"><h3>Данные для резюме</h3>
 <label class="f">Расскажите о себе и опыте<small> — должности, суда, даты контрактов, образование, сертификаты, языки</small><textarea class="in" id="comment" style="min-height:190px"></textarea></label>
 <div style="margin-top:16px"><label class="f">Старое резюме или документы<small> — по желанию, PDF / Word / фото, до 5 МБ</small><input class="in" type="file" id="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"></label></div></div>` :

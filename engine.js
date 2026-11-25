@@ -37,14 +37,17 @@ module.exports = function engine(db){
 
     /* ---------- письмо ---------- */
     const cap = s => String(s || "").replace(/(^|[\s-])(\p{L})/gu, (m, a, b) => a + b.toUpperCase());
+    const VES_EN = {"Офшорные суда": "Offshore vessels", "Контейнеровозы": "Container ships", "Танкеры (нефть, продукты, химия)": "Tankers (oil, products, chemicals)", "Газовозы (LPG / LNG)": "Gas carriers (LPG / LNG)",
+        "Балкеры": "Bulk carriers", "Генеральные грузы": "General cargo", "Ро-ро / паромы": "Ro-Ro / ferries", "Пассажирские суда": "Passenger ships", "Яхты": "Yachts", "Любые суда": "Any vessel type"};
+    const vesEn = s => String(s || "").split(/,\s(?=[А-ЯЁA-Z])/).map(x => VES_EN[x.trim()] || x.trim()).join(", ");
     const latin = s => cap(M.translit(s).replace(/[^a-z\s'-]/g, " ").replace(/\s+/g, " ").trim());
     function defaultLetter(o, ru){
         const phone = o.phone ? (ru ? `\nТелефон / WhatsApp: ${o.phone}` : `\nPhone / WhatsApp: ${o.phone}`) : "";
         if(ru){
-            return `Здравствуйте!\n\nНаправляю своё резюме на рассмотрение${o.position ? ` по должности ${o.position}` : ""}${o.vessel ? ` (суда: ${o.vessel})` : ""}. Резюме во вложении.\n\nГотов(а) приступить к работе в удобные для вас сроки. Буду рад(а) ответу.\n\nКонтакты:\nE-mail: ${o.email}${phone}\n\nС уважением,\n${[o.first_name, o.last_name].filter(Boolean).join(" ")}`;
+            return `Здравствуйте!\n\nНаправляю своё резюме на рассмотрение${o.position ? (String(o.position).includes(",") ? ` по должностям: ${o.position}` : ` по должности ${o.position}`) : ""}${o.vessel ? ` (суда: ${o.vessel})` : ""}. Резюме во вложении.\n\nГотов(а) приступить к работе в удобные для вас сроки. Буду рад(а) ответу.\n\nКонтакты:\nE-mail: ${o.email}${phone}\n\nС уважением,\n${[o.first_name, o.last_name].filter(Boolean).join(" ")}`;
         }
         const nm = latin([o.first_name, o.last_name].filter(Boolean).join(" "));
-        return `Dear Sir/Madam,\n\nI would like to apply for ${o.position ? `the position of ${o.position}` : "a seafarer position"}${o.vessel ? ` (vessel types: ${o.vessel})` : ""}. Please find my CV attached.\n\nI am available to join at short notice and would be glad to hear from you.\n\nContact details:\nE-mail: ${o.email}${phone}\n\nBest regards,\n${nm}`;
+        return `Dear Sir/Madam,\n\nI would like to apply for ${o.position ? (String(o.position).includes(",") ? `one of the following positions: ${o.position}` : `the position of ${o.position}`) : "a seafarer position"}${o.vessel ? ` (vessel types: ${vesEn(o.vessel)})` : ""}. Please find my CV attached.\n\nI am available to join at short notice and would be glad to hear from you.\n\nContact details:\nE-mail: ${o.email}${phone}\n\nBest regards,\n${nm}`;
     }
     function letterFor(o){
         const ru = o.base === "rossiya" && !o.extra_base, name = [o.first_name, o.last_name].filter(Boolean).join(" ");

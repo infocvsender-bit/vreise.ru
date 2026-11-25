@@ -96,7 +96,7 @@
         document.addEventListener("keydown", function(e){ if(e.key === "Escape") pop.hidden = true; });
         box.addEventListener("change", function(ev){
             var on = [].filter.call(box.querySelectorAll("input:checked"), function(x){ return true; });
-            if(max && on.length > max){ ev.target.checked = false; on = on.filter(function(x){ return x !== ev.target; }); fail("Можно выбрать не больше " + max + " должностей"); return; }
+            if(max && on.length > max){ ev.target.checked = false; on = on.filter(function(x){ return x !== ev.target; }); fail("Можно выбрать не больше " + max + (name === "position" ? " должностей" : " типов судов")); return; }
             var vals = on.map(function(x){ return x.value; });
             box.querySelector(".ms-btn").textContent = vals.length ? vals.join(", ") : box.getAttribute("data-ph");
             box.classList.toggle("has", vals.length > 0);
@@ -106,6 +106,7 @@
     });
     function positionValue(){
         var v = $("position").value; if(v.split(", ").indexOf("Другая") < 0) return v;
+        if(!$("positionOther")) return v;
         var oth = $("positionOther").value.trim(); return v.split(", ").filter(function(x){ return x !== "Другая"; }).concat(oth ? [oth] : []).join(", ");
     }
 
@@ -161,13 +162,14 @@
         else {
             if(!val("first") || !val("last")) return fail("Укажите имя и фамилию");
             if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(val("email"))) return fail("Укажите корректный e-mail");
+            if($("position").value.split(", ").indexOf("Другая") >= 0 && !val("positionOther")) return fail("Укажите вашу должность");
             if(fileEl && fileEl.hasAttribute("required") && !file) return fail("Загрузите ваше резюме (PDF или Word)");
             if(file && file.size > 5 * 1024 * 1024) return fail("Файл больше 5 МБ — уменьшите его или пришлите в WhatsApp");
         }
         if(!$("agree").checked) return fail("Нужно согласие с офертой и политикой конфиденциальности");
         go.disabled = true; go.textContent = "Отправляем…";
         (file ? readFile(file) : Promise.resolve(null)).then(function(fl){
-            var body = {slug: val("slug"), first: val("first"), last: val("last"), email: val("email"), phone: val("phone"), position: isCv ? positionValue() : val("position"), vessel: val("vessel"),
+            var body = {slug: val("slug"), first: val("first"), last: val("last"), email: val("email"), phone: val("phone"), position: positionValue(), vessel: val("vessel"),
                 letter: val("letter"), exclude: val("exclude"), comment: val("comment"), hp: val("hp"), agree: $("agree").checked, file: fl};
             if(extra && extra.value) body.extra = extra.value;
             if(isCv){
