@@ -1,0 +1,16 @@
+{
+  "name": "vreise-ru",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Vreise.ru — рассылка резюме моряков в крюинговые компании и составление резюме Стандарт (только русский язык, оплата картой в рублях)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=22.5"
+  },
+  "dependencies": {
+    "pg": "^8.11.3"
+  }
+}

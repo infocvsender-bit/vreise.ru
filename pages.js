@@ -1,0 +1,174 @@
+"use strict";
+/* Страницы сайта (HTML на сервере). Только русский язык. */
+const C = require("./catalog.js");
+const {esc, siteUrl, phone, WA, TGL, rub} = require("./mails.js");
+const env = k => String(process.env[k] || "").trim();
+
+const POSITIONS = ["Master", "Chief Officer", "Second Officer", "Third Officer", "DPO", "SDPO", "Chief Engineer", "Second Engineer", "Third Engineer", "Fourth Engineer", "ETO", "Electrician",
+    "Bosun", "AB", "OS", "Crane Operator", "Deck Cadet", "Engine Cadet", "Motorman", "Fitter", "Welder", "Wiper", "Oiler", "Cook", "Steward", "Messman", "Medic"];
+const VESSELS = ["Офшорные суда", "Контейнеровозы", "Танкеры (нефть, продукты, химия)", "Газовозы (LPG / LNG)", "Балкеры", "Генеральные грузы", "Ро-ро / паромы", "Пассажирские суда", "Яхты", "Любые суда"];
+
+function shell({title, desc, body, path = "/", hero = "", noindex = false, scripts = ""}){
+    const url = siteUrl() + path, img = siteUrl() + "/static/ship.jpg";
+    return `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${esc(title)}</title><meta name="description" content="${esc(desc)}">
+${noindex ? '<meta name="robots" content="noindex,nofollow">' : `<link rel="canonical" href="${esc(url)}">`}
+<meta property="og:type" content="website"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(desc)}"><meta property="og:url" content="${esc(url)}"><meta property="og:image" content="${esc(img)}"><meta property="og:locale" content="ru_RU">
+<link rel="icon" type="image/png" href="/static/favicon.png"><link rel="apple-touch-icon" href="/static/icon-192.png"><meta name="theme-color" content="#0A3340">
+<link rel="stylesheet" href="/static/style.css"></head><body>
+${hero}${body}
+<footer class="f"><div class="c"><span>© Vreise.ru${env("LEGAL_NAME") ? " · " + esc(env("LEGAL_NAME")) : ""}</span><span><a href="/policy">Политика конфиденциальности</a><a href="/offer">Публичная оферта</a></span></div></footer>
+${scripts}</body></html>`;
+}
+
+const logo = `<a class="brand" href="/"><img src="/static/logo.svg" alt="" width="44" height="44"><span>Vreise<i>.ru</i></span></a>`;
+const navTop = (full = true) => `<nav class="top">${logo}<span class="sp"></span>${full ? `<a class="l" href="/#services">Услуги</a><a class="l" href="/#how">Как это работает</a><a class="l" href="/#pay">Оплата</a><a class="l" href="/#contacts">Контакты</a>` : ""}<a class="btn gold sm" href="/order">Заказать рассылку</a></nav>`;
+
+/* ---------- главная ---------- */
+function home(counts){
+    const n = counts && counts.byBase || {};
+    const rows = C.BASES.map(b => `<li class="row" data-p="${b.prices.map((_, i) => C.priceOf(b, i + 1)).join(",")}" data-b="${b.key}">
+      <div class="r-name"><b>${esc(b.name)}${n[b.key] >= 50 ? `<span class="r-cnt">≈ ${n[b.key]} адресов</span>` : ""}</b><span>${esc(b.note)}</span></div>
+      <div class="r-price" data-price>${rub(C.priceOf(b, 1))}</div>
+      <a class="btn gold sm" data-order href="/order?s=${C.SERVICES.find(s => s.base === b.key && s.times === 1).slug}">Заказать</a></li>`).join("");
+    const hero = `<header class="hero">${navTop()}<div class="wrap"><div>
+<div class="pill"><b></b>Онлайн-сервис для моряков</div>
+<h1>Ваше резюме — <span>сразу в крюинговые компании</span></h1>
+<p class="lead">Выберите базу, загрузите резюме — мы разошлём его в нужные компании и пришлём отчёт о рассылке. Сопроводительное письмо входит в услугу, а резюме «Стандарт» составим с нуля.</p>
+<div class="cta"><a class="btn gold" href="#services">Выбрать рассылку</a><a class="btn line" href="/order?s=${C.CV.slug}">Составить резюме · ${rub(C.cvPrice())}</a></div>
+<div class="facts"><div><b>${C.BASES.length} баз</b>Россия · Европа<br>Офшор · Мир</div><div><b>Отчёт</b>о каждой<br>рассылке</div><div><b>от ${rub(Math.min(...C.BASES.map(b => C.priceOf(b, 1))))}</b>оплата картой<br>в рублях</div></div>
+</div><div class="photo"><img src="/static/ship.jpg" alt="Контейнеровоз в море" width="1656" height="740">
+<div class="glass g1"><span class="ic">✉️</span><div><b>Рассылка резюме</b>в компании по вашей базе</div></div>
+<div class="glass g2"><span class="chip on">Россия</span><span class="chip">Европа</span><span class="chip">Офшор</span><span class="chip">Мир</span></div></div></div></header>`;
+    const body = `<section class="sec" id="services"><div class="c">
+<div class="kick">Услуги</div><h2>Рассылка резюме по базам</h2>
+<p class="sub">Выберите базу и количество рассылок. Письма уходят с отдельного почтового ящика на ваше имя, а ответы компаний приходят прямо вам на почту.</p>
+<div class="board" id="board"><div class="board-head"><h3>Рассылка резюме</h3>
+<div class="seg" role="group" aria-label="Количество рассылок"><button type="button" data-n="1" class="on">1 рассылка</button><button type="button" data-n="2">2 рассылки</button><button type="button" data-n="3">3 рассылки</button></div></div>
+<ul class="rows">${rows}</ul></div>
+<div class="included"><span>Сопроводительное письмо входит</span><span>Можно исключить компании</span><span>Ответы компаний — вам на почту</span><span>Отчёт: куда и когда ушло письмо</span></div>
+<div class="strip"><div><h3>Составление резюме «Стандарт»</h3><ul>${C.CV.bullets.map(b => `<li>${esc(b)}</li>`).join("")}</ul></div>
+<div class="pr"><b>${rub(C.cvPrice())}</b><a class="btn gold" href="/order?s=${C.CV.slug}">Заказать резюме</a></div></div>
+</div></section>
+<section class="sec alt" id="how"><div class="c"><div class="kick">Как это работает</div><h2>Четыре шага до рассылки</h2><p class="sub">Никакой регистрации и паролей — всё по ссылке из письма.</p>
+<ol class="steps"><li><b>Выберите базу</b><span>Россия, Европа, Офшор, Мир или сочетание — и число рассылок.</span></li>
+<li><b>Загрузите резюме</b><span>Укажите должность и типы судов, при желании — своё письмо и компании-исключения.</span></li>
+<li><b>Оплатите картой</b><span>Переводом на карту в рублях. Мы проверяем платёж и подтверждаем заказ.</span></li>
+<li><b>Получите отчёт</b><span>На странице заказа видно, куда ушли письма. Ответы приходят вам на почту.</span></li></ol></div></section>
+<section class="sec" id="pay"><div class="c"><div class="pay"><div><div class="kick">Оплата</div><h2>Картой, в рублях</h2>
+<p class="sub" style="margin-bottom:0">После оформления заказа вы увидите сумму и реквизиты карты для перевода. Платёж проверяем вручную и сразу запускаем работу.</p></div>
+<div class="note"><p><b>Что входит в стоимость.</b> Рассылка по выбранной базе, сопроводительное письмо, отдельный почтовый ящик на ваше имя на время рассылки и отчёт о каждом отправленном письме.</p>
+<p style="margin-top:10px"><b>Повторные рассылки.</b> При заказе двух и трёх рассылок следующая идёт через неделю после предыдущей.</p></div></div></div></section>
+<section class="sec alt"><div class="c faq"><div class="kick">Вопросы</div><h2>Коротко о главном</h2><div style="margin-top:20px">
+<details><summary>Куда приходят ответы компаний?</summary><p>На ту почту, которую вы указали в заказе. В письме компании видят ваше имя, а ответ уходит прямо вам.</p></details>
+<details><summary>Можно ли исключить некоторые компании?</summary><p>Да. При оформлении заказа впишите названия компаний или домены — мы не будем им писать.</p></details>
+<details><summary>Какое сопроводительное письмо уйдёт?</summary><p>Вы можете написать своё. Если не заполните — отправим стандартное письмо: на русском для российской базы и на английском для остальных.</p></details>
+<details><summary>Как быстро начнётся рассылка?</summary><p>Сразу после подтверждения оплаты. Письма уходят постепенно в течение нескольких часов, чтобы не попасть в спам.</p></details>
+<details><summary>Что нужно для резюме «Стандарт»?</summary><p>Заполните форму с вашими данными и приложите документы или старое резюме. Готовое резюме придёт на почту и появится на странице заказа в течение 6 часов после оплаты.</p></details>
+</div></div></section>
+<section class="sec" id="contacts"><div class="c"><div class="contacts"><div><h2>Остались вопросы?</h2><p>Напишите нам — ответим в WhatsApp или Telegram.</p>${phone() ? `<div class="tel">${esc(phone())}</div>` : ""}</div>
+<div class="btns">${WA() ? `<a class="btn gold" href="${WA()}" target="_blank" rel="noopener">WhatsApp</a>` : ""}${TGL() ? `<a class="btn line" href="${TGL()}" target="_blank" rel="noopener">Telegram</a>` : ""}</div></div></div></section>`;
+    const scripts = `<script src="/static/site.js" defer></script>`;
+    return shell({title: "Vreise.ru — рассылка резюме моряков в крюинговые компании", desc: "Рассылка резюме моряков по базам: Россия, Европа, Офшор, Мир. Резюме «Стандарт» с нуля. Оплата картой в рублях.", hero, body, scripts});
+}
+
+/* ---------- форма заказа ---------- */
+function orderForm(slug){
+    const sv = C.bySlug(slug) || C.SERVICES.find(s => s.base === "rossiya" && s.times === 1), cv = sv.kind === "cv";
+    const opts = C.BASES.map(b => `<optgroup label="${esc(b.name)}">${[1, 2, 3].map(n => `<option value="${C.SERVICES.find(s => s.base === b.key && s.times === n).slug}" data-price="${C.priceOf(b, n)}"${sv.base === b.key && sv.times === n ? " selected" : ""}>${esc(b.name)} — ${n === 1 ? "1 рассылка" : n + " рассылки"} · ${rub(C.priceOf(b, n))}</option>`).join("")}</optgroup>`).join("");
+    const pick = cv ? `<input type="hidden" id="slug" value="${C.CV.slug}" data-price="${C.cvPrice()}">` :
+        `<label class="f">База и количество рассылок<select class="in" id="slug">${opts}</select></label>`;
+    const body = `<div class="page"><h1>${cv ? "Заказ резюме «Стандарт»" : "Заказ рассылки"}</h1>
+<p class="sub">${cv ? "Заполните данные — мы подготовим резюме по международному образцу." : "Заполните форму и загрузите резюме. Оплата — на следующем шаге."}</p>
+<form id="f" novalidate><div class="err" id="err" hidden></div>
+<div class="panel"><h3>${cv ? "Услуга" : "Что отправляем"}</h3>${pick}${cv ? `<p class="hint" style="margin-top:0">${esc(C.CV.title)} · <b>${rub(C.cvPrice())}</b></p>` : ""}</div>
+<div class="panel"><h3>О вас</h3><div class="grid2">
+<label class="f">Имя<input class="in" id="first" autocomplete="given-name" required></label>
+<label class="f">Фамилия<input class="in" id="last" autocomplete="family-name" required></label>
+<label class="f">E-mail<small> — сюда придут письма и ответы компаний</small><input class="in" id="email" type="email" autocomplete="email" required></label>
+<label class="f">Телефон / WhatsApp<input class="in" id="phone" type="tel" autocomplete="tel" placeholder="+7 …"></label>
+<label class="f">Должность<input class="in" id="position" list="pos" placeholder="например, Chief Officer"></label>
+<datalist id="pos">${POSITIONS.map(p => `<option value="${p}">`).join("")}</datalist>
+<label class="f">Типы судов<input class="in" id="vessel" list="ves" placeholder="например, танкеры, офшорные суда"></label>
+<datalist id="ves">${VESSELS.map(p => `<option value="${p}">`).join("")}</datalist></div></div>
+${cv ? `<div class="panel"><h3>Данные для резюме</h3>
+<label class="f">Расскажите о себе и опыте<small> — должности, суда, даты контрактов, образование, сертификаты, языки</small><textarea class="in" id="comment" style="min-height:190px"></textarea></label>
+<div style="margin-top:16px"><label class="f">Старое резюме или документы<small> — по желанию, PDF / Word / фото, до 5 МБ</small><input class="in" type="file" id="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"></label></div></div>` :
+`<div class="panel"><h3>Резюме и письмо</h3>
+<label class="f">Ваше резюме<small> — PDF или Word, до 5 МБ</small><input class="in" type="file" id="file" accept=".pdf,.doc,.docx" required></label>
+<div style="margin-top:16px"><label class="f">Сопроводительное письмо<small> — по желанию</small><textarea class="in" id="letter" placeholder="Если оставить пустым, отправим стандартное письмо"></textarea></label></div>
+<div style="margin-top:16px"><label class="f">Исключить компании<small> — по желанию: названия или домены, по одному в строке</small><textarea class="in" id="exclude" style="min-height:80px"></textarea></label></div></div>`}
+<div class="panel"><label class="check"><input type="checkbox" id="agree" required><span>Я принимаю условия <a href="/offer" target="_blank">публичной оферты</a> и согласен(на) на обработку персональных данных согласно <a href="/policy" target="_blank">политике конфиденциальности</a>.</span></label></div>
+<input type="text" id="hp" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true">
+<div class="sum"><div>К оплате<br><b id="total">${rub(cv ? C.cvPrice() : sv.price)}</b></div><button class="btn gold" id="go" type="submit">Оформить заказ</button></div></form></div>`;
+    return shell({title: (cv ? "Заказ резюме «Стандарт»" : "Заказ рассылки") + " — Vreise.ru", desc: "Оформление заказа на Vreise.ru", path: "/order", noindex: true,
+        hero: `<header class="hero short">${navTop(false)}</header>`, body, scripts: `<script src="/static/order.js" defer></script>`});
+}
+
+/* ---------- страница заказа ---------- */
+const STATUS = {new: "Ожидает оплаты", claimed: "Проверяем оплату", paid: "Оплачен", in_progress: "В работе", done: "Выполнен", cancelled: "Отменён"};
+const fmtCard = c => String(c).replace(/\s+/g, "").replace(/(\d{4})(?=\d)/g, "$1 ");
+function orderPage(o, jobs, sent, msgs = []){
+    const cv = o.kind === "cv", pay = o.status === "new" || o.status === "claimed";
+    const card = env("PAY_CARD");
+    const payBlock = pay ? `<div class="panel"><h3>Оплата картой в рублях</h3>
+${o.status === "claimed" ? `<div class="ok">Спасибо! Мы проверяем ваш платёж — как только увидим перевод, заказ будет подтверждён, и вы получите письмо.</div>` : ""}
+<p>Сумма к оплате: <b style="font-size:22px">${rub(o.price)}</b></p>
+${card ? `<p style="margin-top:12px">Переведите на карту${env("PAY_BANK") ? " " + esc(env("PAY_BANK")) : ""}:</p><div><span class="card-num" id="card">${esc(fmtCard(card))}</span><button class="copy" type="button" data-copy="${esc(card.replace(/\s+/g, ""))}">Скопировать</button></div>${env("PAY_HOLDER") ? `<p class="hint">Получатель: ${esc(env("PAY_HOLDER"))}</p>` : ""}`
+ : `<div class="err">Реквизиты для оплаты пока не заданы. Напишите нам в WhatsApp или Telegram${phone() ? ": " + esc(phone()) : ""}.</div>`}
+<p class="hint" style="margin-top:14px">В комментарии к платежу, если есть такая возможность, укажите номер заказа <b>№${o.num}</b>. Переводите точную сумму.</p>
+${o.status === "new" ? `<div style="margin-top:18px"><button class="btn gold" id="claim" type="button">Я оплатил(а)</button></div>` : ""}</div>` : "";
+    const progress = !cv && jobs.length ? `<div class="panel"><h3>Рассылка</h3>${jobs.map(j => {
+        const pct = j.total ? Math.round((Number(j.sent) + Number(j.failed)) / j.total * 100) : 0;
+        const st = {wait: "ожидает запуска", run: "идёт", pause: "на паузе", done: "завершена", stop: "остановлена"}[j.status] || j.status;
+        return `<div style="margin-bottom:14px"><b>Рассылка №${j.m}</b> — ${st}${j.status === "wait" ? ` (старт ${new Date(j.start_at).toLocaleDateString("ru-RU")})` : ""}<div class="bar"><i style="width:${pct}%"></i></div>
+<span class="hint">Отправлено ${j.sent} из ${j.total || "—"}${Number(j.failed) ? `, не доставлено ${j.failed}` : ""}</span></div>`; }).join("")}</div>` : "";
+    const list = !cv && sent.length ? `<div class="panel"><h3>Куда отправлено</h3><table class="t"><thead><tr><th>Компания</th><th>E-mail</th><th>Когда</th></tr></thead><tbody>${sent.map(r =>
+        `<tr><td>${esc(r.company || "—")}</td><td>${esc(r.email)}</td><td>${esc(new Date(r.sent_at).toLocaleString("ru-RU", {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"}))}</td></tr>`).join("")}</tbody></table>
+<p class="hint">Показаны последние ${sent.length} писем.</p></div>` : "";
+    const res = cv && o.res_name ? `<div class="panel"><h3>Ваше резюме готово</h3><p><a class="btn gold" href="/o/${o.token}/file">Скачать: ${esc(o.res_name)}</a></p></div>` : "";
+    const wait = cv && ["paid", "in_progress"].includes(o.status) && !o.res_name ? `<div class="ok">Оплата получена. Готовим ваше резюме — оно придёт на почту и появится здесь в течение 6 часов.</div>` : "";
+    const chat = `<div class="faq" style="margin-bottom:22px"><details${msgs.length ? " open" : ""} style="border:1px solid var(--line);border-radius:16px;padding:16px 20px;background:#fff"><summary>💬 Что-то непонятно? Напишите менеджеру</summary>
+${msgs.map(m => `<div style="margin-top:14px;padding:10px 14px;border-radius:12px;background:${m.author === "Ответ менеджера" ? "#e9f6f3" : "#f3f6f7"}"><span class="hint">${m.author === "Ответ менеджера" ? "Менеджер" : "Вы"} · ${esc(new Date(m.at).toLocaleString("ru-RU", {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"}))}</span><div style="color:var(--ink);white-space:pre-wrap">${esc(m.text)}</div></div>`).join("")}
+<form id="msgf" style="margin-top:14px"><textarea class="in" id="msgt" maxlength="1500" placeholder="Ваш вопрос. Ответ придёт на ${esc(o.email)} и появится здесь." style="min-height:90px"></textarea>
+<div style="margin-top:10px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><button class="btn gold sm" id="msgb" type="submit">Отправить</button><span class="hint" id="msgs"></span></div></form></details></div>`;
+    const body = `<div class="page"><h1>Заказ №${o.num}</h1><p class="sub">${esc(o.title)} · <span class="tag ${o.status}">${STATUS[o.status] || o.status}</span></p>
+${payBlock}${wait}${res}${progress}${list}${chat}
+<div class="panel"><h3>Данные заказа</h3><table class="t"><tbody>
+<tr><td>Клиент</td><td>${esc([o.first_name, o.last_name].filter(Boolean).join(" "))}</td></tr><tr><td>E-mail</td><td>${esc(o.email)}</td></tr>
+${o.phone ? `<tr><td>Телефон</td><td>${esc(o.phone)}</td></tr>` : ""}${o.position ? `<tr><td>Должность</td><td>${esc(o.position)}</td></tr>` : ""}
+<tr><td>Сумма</td><td>${rub(o.price)}</td></tr><tr><td>Оформлен</td><td>${esc(new Date(o.created_at).toLocaleString("ru-RU"))}</td></tr></tbody></table>
+<p class="hint" style="margin-top:12px">Сохраните эту ссылку — по ней всегда можно посмотреть состояние заказа.${phone() ? ` Вопросы — WhatsApp / Telegram ${esc(phone())}.` : ""}</p></div></div>`;
+    const live = ["claimed", "paid", "in_progress"].includes(o.status) ? `<script>setTimeout(function(){location.reload()},45000)</script>` : "";
+    return shell({title: `Заказ №${o.num} — Vreise.ru`, desc: "Страница заказа", path: "/o/" + o.token, noindex: true, hero: `<header class="hero short">${navTop(false)}</header>`, body,
+        scripts: `<script>window.__tok=${JSON.stringify(o.token)}</script><script src="/static/order.js" defer></script>${live}`});
+}
+
+/* ---------- политика и оферта ---------- */
+const who = () => env("LEGAL_NAME") || "владелец сайта Vreise.ru (далее — Исполнитель)";
+function legal(kind){
+    const contact = `${phone() ? `WhatsApp / Telegram: ${esc(phone())}` : "через форму на сайте"}`;
+    const policy = `<h1>Политика конфиденциальности</h1>
+<p>Настоящая политика описывает, какие данные собирает сайт Vreise.ru и как они используются. Оператор данных — ${esc(who())}${env("LEGAL_INN") ? `, ИНН ${esc(env("LEGAL_INN"))}` : ""}.</p>
+<h2>Какие данные мы получаем</h2><ul><li>Имя, фамилия, e-mail, телефон, должность и типы судов — из формы заказа.</li><li>Файлы, которые вы загружаете: резюме, документы, текст письма.</li><li>Технические данные: IP-адрес и сведения о браузере — для защиты сайта от злоупотреблений.</li></ul>
+<h2>Для чего используем</h2><ul><li>Для выполнения заказа: рассылка вашего резюме в выбранные компании, составление резюме, связь с вами.</li><li>Для уведомлений о ходе заказа на указанную вами почту.</li></ul>
+<p>Ваше резюме и контактные данные передаются только тем компаниям, которым вы заказали рассылку, и только в составе отправляемого письма. Мы не продаём данные и не передаём их третьим лицам для рекламы.</p>
+<h2>Сколько храним</h2><p>Данные заказа хранятся столько, сколько нужно для выполнения услуги и разрешения возможных вопросов. По вашей просьбе мы удалим данные заказа — напишите нам: ${contact}.</p>
+<h2>Cookies</h2><p>Сайт не использует рекламные и аналитические cookies.</p>
+<h2>Контакты</h2><p>По вопросам обработки данных: ${contact}.</p>`;
+    const offer = `<h1>Публичная оферта</h1>
+<p>Настоящий документ — предложение ${esc(who())} (далее — Исполнитель) любому лицу (далее — Заказчик) заключить договор на оказание услуг на условиях ниже. Оформление заказа на сайте Vreise.ru означает согласие с этой офертой.</p>
+<h2>1. Услуги</h2><ul><li><b>Рассылка резюме</b> — отправка резюме Заказчика на адреса электронной почты компаний из выбранной базы с сопроводительным письмом. Количество рассылок (одна, две или три) выбирается при заказе; повторные рассылки проходят с интервалом около недели.</li><li><b>Резюме «Стандарт»</b> — составление резюме по данным, предоставленным Заказчиком; одна бесплатная правка.</li></ul>
+<h2>2. Стоимость и оплата</h2><p>Стоимость указана на сайте в рублях. Оплата — переводом на банковскую карту по реквизитам, указанным на странице заказа. Заказ принимается в работу после подтверждения поступления платежа.</p>
+<h2>3. Порядок оказания услуг</h2><ul><li>Рассылка начинается после подтверждения оплаты. Письма отправляются постепенно в течение нескольких часов.</li><li>Ход рассылки и список компаний доступны Заказчику на странице заказа.</li><li>Резюме «Стандарт» готовится в течение 6 часов после подтверждения оплаты и направляется на e-mail Заказчика.</li></ul>
+<h2>4. Ограничение ответственности</h2><p>Исполнитель обязуется отправить резюме по выбранной базе, но не гарантирует ответ компаний, приглашение на собеседование или трудоустройство: решения принимают работодатели. Исполнитель не отвечает за недоставку писем по причинам на стороне получателя (неактуальный адрес, спам-фильтры, переполненный ящик). Заказчик отвечает за достоверность своих данных и за право распространять предоставленные документы.</p>
+<h2>5. Возврат</h2><p>Если услуга не начата, Исполнитель возвращает оплату по обращению Заказчика. После начала рассылки или составления резюме возврат осуществляется по соглашению сторон, если услуга оказана не в полном объёме по вине Исполнителя.</p>
+<h2>6. Контакты и реквизиты</h2><p>${esc(who())}${env("LEGAL_INN") ? `, ИНН ${esc(env("LEGAL_INN"))}` : ""}. Связь: ${contact}.</p>`;
+    return shell({title: (kind === "policy" ? "Политика конфиденциальности" : "Публичная оферта") + " — Vreise.ru", desc: kind === "policy" ? "Политика конфиденциальности Vreise.ru" : "Публичная оферта Vreise.ru", path: "/" + kind,
+        hero: `<header class="hero short">${navTop(false)}</header>`, body: `<div class="legal">${kind === "policy" ? policy : offer}</div>`});
+}
+
+const notFound = () => shell({title: "Страница не найдена — Vreise.ru", desc: "", noindex: true, hero: `<header class="hero short">${navTop(false)}</header>`,
+    body: `<div class="page"><h1>Страница не найдена</h1><p class="sub">Такой страницы нет. <a href="/">Перейти на главную</a></p></div>`});
+
+module.exports = {home, orderForm, orderPage, legal, notFound, shell};
