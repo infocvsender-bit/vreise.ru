@@ -89,7 +89,8 @@
             if(addBase && addBase.value){ sum += Number(addBase.options[addBase.selectedIndex].getAttribute("data-p")) || 0; }
             var mo = $("addMore"); if(mo) mo.hidden = !(addBase && addBase.value);
         } else if(sel){
-            var o = sel.options[sel.selectedIndex]; sum = Number(o.getAttribute("data-price")) || 0;
+            sum = Number((sel.getAttribute("data-prices") || "").split(",")[timesOf() - 1]) || 0;
+            var tt = $("tmsTxt"), ts = $("tmsSum"); if(tt) tt.textContent = timesOf() + (timesOf() === 1 ? " рассылка" : " рассылки"); if(ts) ts.textContent = fmt(sum);
             if(extra){
                 [].forEach.call(extra.options, function(x){ x.disabled = !!x.value && sel.value === "rassylka-" + timesOf() + "-" + x.value; });
                 var tn = timesOf() - 1;
@@ -103,10 +104,15 @@
                 }
             }
         }
-        var ttl = $("ttl"); if(ttl && sel && !isCv){ var so = sel.options[sel.selectedIndex]; if(so) ttl.textContent = "«" + so.getAttribute("data-name") + "»"; }
         if(total) total.textContent = fmt(sum);
     }
-    if(sel && !isCv) sel.addEventListener("change", function(){ recalc(); history.replaceState(null, "", "/order?s=" + sel.value); });
+    var seg = $("timesSeg");
+    if(seg) seg.addEventListener("click", function(e){
+        var bt = e.target.closest("button[data-n]"); if(!bt) return;
+        [].forEach.call(seg.querySelectorAll("button"), function(x){ x.classList.toggle("on", x === bt); });
+        sel.value = (sel.getAttribute("data-slugs") || "").split(",")[Number(bt.getAttribute("data-n")) - 1];
+        recalc(); history.replaceState(null, "", "/order?s=" + sel.value);
+    });
     if(addBase) addBase.addEventListener("change", recalc);
     if(extra) extra.addEventListener("change", recalc);
     recalc();

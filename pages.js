@@ -135,9 +135,13 @@ function orderForm(slug, counts){
     if(slug === C.CV.slug) return orderFormCv(counts);
     const sv = C.bySlug(slug) || C.SERVICES.find(s => s.base === "rossiya" && s.times === 1), cv = sv.kind === "cv";
     const cnt = counts && counts.byBase || {};
-    const opts = C.BASES.map(b => `<optgroup label="${esc(b.name)}${cnt[b.key] > 0 ? " · " + addrCount(cnt[b.key]) : ""}">${[1, 2, 3].map(n => `<option value="${C.SERVICES.find(s => s.base === b.key && s.times === n).slug}" data-name="${esc(b.name)}" data-price="${C.priceOf(b, n)}"${sv.base === b.key && sv.times === n ? " selected" : ""}>${esc(b.name)} — ${n === 1 ? "1 рассылка" : n + " рассылки"} · ${rub(C.priceOf(b, n))}</option>`).join("")}</optgroup>`).join("");
+    const bs = C.baseOf(sv.base), slugs = [1, 2, 3].map(n => C.SERVICES.find(x => x.base === bs.key && x.times === n).slug), prices = [1, 2, 3].map(n => C.priceOf(bs, n));
+    const timesLbl = ["1 рассылка", "2 рассылки", "3 рассылки"];
     const pick = cv ? `<input type="hidden" id="slug" value="${C.CV.slug}" data-price="${C.cvPrice()}">` :
-        `<label class="f">База и количество рассылок<select class="in" id="slug">${opts}</select></label>`;
+        `<input type="hidden" id="slug" value="${sv.slug}" data-slugs="${slugs.join(",")}" data-prices="${prices.join(",")}">
+<div class="lbl" style="font-weight:700;color:var(--deep);margin-bottom:10px">Количество рассылок</div>
+<div class="seg full" id="timesSeg" role="group" aria-label="Количество рассылок">${[1, 2, 3].map(n => `<button type="button" data-n="${n}"${sv.times === n ? ' class="on"' : ""}>${timesLbl[n - 1]}<small>${rub(prices[n - 1])}</small></button>`).join("")}</div>
+<div class="xnote big" id="baseNote">Рассылка по базе <b>«${esc(bs.name)}»</b>${cnt[bs.key] > 0 ? " · " + addrCount(cnt[bs.key]) : ""} · <span id="tmsTxt">${timesLbl[sv.times - 1]}</span> — <b id="tmsSum">${rub(prices[sv.times - 1])}</b><br><span class="hint">Если рассылок несколько, они уходят с интервалом в неделю. <a href="/#services">Выбрать другую базу</a></span></div>`;
     const extraPanel = cv ? "" : `<div class="panel addon"><h3>➕ Добавить ещё одну базу <span class="badge">−${C.extraDiscPct()}%</span></h3>
 <p class="hint" style="margin-top:0">Любую базу можно добавить в те же рассылки на ${C.extraDiscPct()}% дешевле — например, к базе «Россия» добавить «Танкеры и газовозы». Адреса не повторяются.</p>
 <label class="f">Дополнительная база<select class="in" id="extra"><option value="">Не нужна</option>${C.BASES.map(b => `<option value="${b.key}" data-p="${[1, 2, 3].map(n => C.extraPrice(C.priceOf(b, n))).join(",")}" data-f="${[1, 2, 3].map(n => C.priceOf(b, n)).join(",")}" data-t="${esc(b.name)}${cnt[b.key] > 0 ? " · " + addrCount(cnt[b.key]) : ""}">${esc(b.name)}${cnt[b.key] > 0 ? " · " + addrCount(cnt[b.key]) : ""}</option>`).join("")}</select></label>
