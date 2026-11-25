@@ -359,9 +359,16 @@ function parseBase(text, defaultBase){
         }
         if(req.method === "POST" && (m = p.match(/^\/orders\/([\w-]+)\/reply$/))){
             const o = await one(`SELECT * FROM orders WHERE id = $1`, [m[1]]); if(!o) return json(res, 404, {error: "нет заказа"});
-            const rb = await body(req, 20000), text = clean(rb.text, 5000), subject = clean(rb.subject, 150).replace(/[\r\n]+/g, " "); if(!text) return json(res, 400, {error: "Пустой ответ"});
-            await engine.note(o.id, subject ? `${subject}\n${text}` : text, "Ответ менеджера");
-            Mail.T.reply(o, text, subject).catch(() => {});
+            const rb = await body(req, 14 * 1024 * 1024), text = clean(rb.text, 5000), subject = clean(rb.subject, 150).replace(/[\r\n]+/g, " "); if(!text) return json(res, 400, {error: "Пустой ответ"});
+            let attach = null;
+            if(rb.file && rb.file.b64){
+                const nm = clean(rb.file.name, 120) || "file", data = Buffer.from(String(rb.file.b64).replace(/^data:[^,]*,/, "").replace(/\s+/g, ""), "base64");
+                if(!data.length || data.length > 8 * 1024 * 1024) return json(res, 400, {error: "Файл не принят (до 8 МБ)"});
+                attach = {name: nm, mime: M.mimeOf(nm), data};
+            }
+            try { await Mail.T.reply(o, text, subject, attach); }
+            catch(e){ return json(res, 502, {error: "Письмо не ушло: " + String(e.message).slice(0, 200) + ". Проверьте CRM → Серверы и настройки → «Тест системной почты»."}); }
+            await engine.note(o.id, (subject ? `${subject}\n` : "") + text + (attach ? `\n📎 Приложен файл: ${attach.name}` : ""), "Ответ менеджера");
             return json(res, 200, {ok: true});
         }
         if(req.method === "POST" && (m = p.match(/^\/jobs\/([\w-]+)\/(pause|resume|stop|retry)$/))){

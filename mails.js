@@ -25,12 +25,12 @@ ${btn && url ? `<p style="margin:24px 0 4px"><a href="${esc(url)}" style="backgr
 }
 const strip = h => String(h).replace(/<br\s*\/?>/gi, "\n").replace(/<\/p>/gi, "\n\n").replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/\n{3,}/g, "\n\n").trim();
 
-async function toClient(to, title, body, btn, url){
-    return send(to, title, layout(title, body, btn, url), strip(body) + (url ? `\n\n${btn}: ${url}` : ""));
+async function toClient(to, title, body, btn, url, attach, strict){
+    return send(to, title, layout(title, body, btn, url), strip(body) + (url ? `\n\n${btn}: ${url}` : ""), attach, strict);
 }
-async function send(to, subject, html, text){
-    try { await M.sendSystem(to, subject, text || strip(html), html); return true; }
-    catch(e){ console.error("✉️ письмо не ушло:", to, e.message); return false; }
+async function send(to, subject, html, text, attach, strict){
+    try { await M.sendSystem(to, subject, text || strip(html), html, undefined, attach); return true; }
+    catch(e){ console.error("✉️ письмо не ушло:", to, e.message); if(strict) throw e; return false; }
 }
 
 const rub = n => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " ₽";
@@ -51,8 +51,8 @@ const T = {
     finished: (o, j) => toClient(o.email, `Рассылка по заказу №${o.num} завершена`,
         `<p>Рассылка №${j.m} завершена: отправлено <b>${j.sent}</b> из ${j.total}${j.failed ? `, не доставлено ${j.failed}` : ""}.</p>${Number(o.times) > Number(j.m) ? `<p>Следующая рассылка по вашему заказу пройдёт через неделю.</p>` : ""}
          <p>Полный список компаний — на странице заказа.</p>`, "Отчёт о рассылке", orderLink(o)),
-    reply: (o, text, subject) => toClient(o.email, subject || `Ответ менеджера по заказу №${o.num}`,
-        `<p>Здравствуйте, ${esc(o.first_name || "")}!</p><p>${esc(text).replace(/\n/g, "<br>")}</p><p style="color:#5b727a;font-size:13.5px">Написать нам можно на странице заказа или в мессенджеры.</p>`, "Открыть заказ", orderLink(o)),
+    reply: (o, text, subject, attach) => toClient(o.email, subject || `Ответ менеджера по заказу №${o.num}`,
+        `<p>Здравствуйте, ${esc(o.first_name || "")}!</p><p>${esc(text).replace(/\n/g, "<br>")}</p><p style="color:#5b727a;font-size:13.5px">Написать нам можно на странице заказа или в мессенджеры.</p>`, "Открыть заказ", orderLink(o), attach, true),
     newReplies: (o, n) => toClient(o.email, `Ответ компании по заказу №${o.num}`,
         `<p>Здравствуйте, ${esc(o.first_name || "")}!</p><p>На вашу рассылку пришл${n === 1 ? "о новое письмо" : "и новые письма"} от компаний (${n}). Прочитать ${n === 1 ? "его" : "их"} можно на странице заказа.</p>
          <p style="color:#5b727a;font-size:13.5px">Отвечать компаниям лучше со своей личной почты — на ту, с которой вам написали.</p>`, "Открыть ответы", orderLink(o)),
