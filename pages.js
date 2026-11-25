@@ -53,6 +53,7 @@ function home(counts){
 <div class="included" id="included"><h3>Что входит в заказ</h3><ul>
 <li>Рассылка вашего резюме по выбранной базе компаний</li><li>Сопроводительное письмо — своё или готовое</li><li>Личный кабинет: ход рассылки и отправленные письма</li><li>Тему и письмо можно поменять в любой момент</li><li>Возможность заменить резюме</li><li>Можно исключить ненужные компании</li><li>Ответы компаний — в кабинете и на вашу почту</li><li>Вопросы менеджеру — прямо из кабинета</li></ul></div>
 <div class="strip" id="resume"><div><h3>Составление резюме «Стандарт»</h3><ul>${C.CV.bullets.map(b => `<li>${esc(b)}</li>`).join("")}</ul></div>
+<a class="rex" href="/static/resume-example.pdf" target="_blank" rel="noopener"><img src="/static/resume-example.jpg" alt="Пример резюме «Стандарт»" width="420" loading="lazy"><span>Пример резюме «Стандарт» — нажмите, чтобы открыть целиком</span></a>
 <div class="pr"><b>${rub(C.cvPrice())}</b><a class="btn gold" href="/order?s=${C.CV.slug}">Заказать резюме</a></div></div>
 </div></section>
 <section class="sec alt" id="how"><div class="c"><div class="kick">Как это работает</div><h2>Четыре шага до рассылки</h2><p class="sub">Никакой регистрации и паролей — всё по ссылке из письма.</p>
@@ -88,7 +89,7 @@ function orderFormCv(counts){
 <p class="sub">Заполните анкету — мы составим резюме по международному образцу (Application Form). Поля со звёздочкой обязательны.</p>
 <form id="f" novalidate><div class="err" id="err" hidden></div>
 <input type="hidden" id="slug" value="${C.CV.slug}" data-price="${C.cvPrice()}">
-<div class="panel"><h3>Услуга</h3><p class="hint" style="margin-top:0">${esc(C.CV.title)} · <b>${rub(C.cvPrice())}</b></p></div>
+<div class="panel"><h3>Услуга</h3><p class="hint" style="margin-top:0">${esc(C.CV.title)} · <b>${rub(C.cvPrice())}</b></p><p class="hint" style="margin:8px 0 0"><a href="/static/resume-example.pdf" target="_blank" rel="noopener">👁 Посмотреть пример готового резюме</a></p></div>
 <div class="panel"><h3>👤 Основные данные</h3><div class="grid2">
 ${r("first", "Имя (на английском)", 'autocomplete="given-name" placeholder="Ivan" lang="en"')}
 ${r("last", "Фамилия (на английском)", 'autocomplete="family-name" placeholder="Petrov" lang="en"')}

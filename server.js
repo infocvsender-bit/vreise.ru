@@ -5,7 +5,7 @@ const openDb = require("./db.js"), makeEngine = require("./engine.js"), Mail = r
 const {env} = M;
 
 const PUB = path.join(__dirname, "public");
-const MIME = {".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".ico": "image/x-icon", ".txt": "text/plain; charset=utf-8"};
+const MIME = {".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".ico": "image/x-icon", ".txt": "text/plain; charset=utf-8", ".pdf": "application/pdf"};
 const uuid = () => crypto.randomUUID(), now = () => new Date().toISOString();
 const MAX_FILE = 5 * 1024 * 1024;
 
