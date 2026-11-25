@@ -65,12 +65,21 @@ function home(counts){
         ["Сколько заказов вы принимаете в день?", "Не больше 10 заказов в сутки, чтобы выполнять каждый внимательно. Если лимит на сегодня исчерпан, форма заказа временно закрыта, а приём откроется в 00:00 по Москве."],
         ["Как оплатить заказ?", "Переводом на банковскую карту в рублях. После оформления заказа вы увидите сумму и реквизиты, платёж проверяем вручную и запускаем работу."]
     ];
-    const ICON = {rossiya: "🧭", ofsor: "🏗️", tanker: "🛢️", evropa: "🏰", "ofsor-evropa": "⚓", mir: "🌍", "mir-ofsor": "🌐"}, topKey = C.BASES.reduce((a, b) => (n[b.key] || 0) > (n[a.key] || 0) ? b : a, C.BASES[0]).key, hasN = C.BASES.some(b => n[b.key] > 0);
-    const rows = C.BASES.map((b, i) => `<li class="pc a${i % 4}" data-p="${b.prices.map((_, k) => C.priceOf(b, k + 1)).join(",")}" data-b="${b.key}">
+    const svg = d => `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+    const LOOK = {   // у каждой базы свой цвет и значок
+        rossiya: ["#ef6a5b", "#cf3f33", svg('<path d="M12 21s-6-5.3-6-10a6 6 0 1112 0c0 4.7-6 10-6 10z"/><circle cx="12" cy="11" r="2.2"/>')],
+        ofsor: ["#f5b50a", "#e08300", svg('<path d="M4 10h16M6 10v10M18 10v10M6 15h12M9 10V5h6v5"/>')],
+        tanker: ["#2fb59f", "#188470", svg('<path d="M3 15h18l-2 4H5l-2-4zM6 15v-5h7v5M13 12h5v3"/>')],
+        evropa: ["#5b8def", "#2e56c4", svg('<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4l-5.3 3 1.2-6-4.5-4.1 6-.7L12 3z"/>')],
+        "ofsor-evropa": ["#9b6cf6", "#6c3fd2", svg('<circle cx="12" cy="5" r="2"/><path d="M12 7v14M5 14a7 7 0 0014 0M8.5 11h7"/>')],
+        mir: ["#3fc27a", "#1f9150", svg('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>')],
+        "mir-ofsor": ["#1b8aa3", "#0a3340", svg('<circle cx="12" cy="9.5" r="6.5"/><path d="M5.5 9.5h13M12 3c2 2 2 11 0 13M12 3c-2 2-2 11 0 13M3 20c2-1.5 4-1.5 6 0s4 1.5 6 0 4-1.5 6 0"/>')]
+    }, topKey = C.BASES.reduce((a, b) => (n[b.key] || 0) > (n[a.key] || 0) ? b : a, C.BASES[0]).key, hasN = C.BASES.some(b => n[b.key] > 0);
+    const rows = C.BASES.map((b, i) => `<li class="pc" style="--ac:${(LOOK[b.key] || LOOK.mir)[0]};--ac2:${(LOOK[b.key] || LOOK.mir)[1]}" data-p="${b.prices.map((_, k) => C.priceOf(b, k + 1)).join(",")}" data-b="${b.key}">
       ${hasN && b.key === topKey ? `<span class="pc-rib">Максимум охвата</span>` : ""}
-      <div class="pc-top"><span class="pc-ic" aria-hidden="true">${ICON[b.key] || "📨"}</span><h4>${esc(b.name)}</h4></div><p class="pc-note">${esc(b.note)}</p>
+      <div class="pc-top"><span class="pc-ic">${(LOOK[b.key] || LOOK.mir)[2]}</span><h4>${esc(b.name)}</h4></div><p class="pc-note">${esc(b.note)}</p>
       ${n[b.key] > 0 ? `<div class="pc-cnt"><b>${numFmt(n[b.key])}</b><span>адресов в базе</span></div>` : `<div class="pc-cnt"></div>`}
-      <div class="pc-foot"><div class="pc-pr"><div class="pc-price" data-price>${rub(C.priceOf(b, 1))}</div><small>за заказ</small></div><a class="btn gold" data-order href="/order?s=${C.SERVICES.find(s => s.base === b.key && s.times === 1).slug}">Заказать</a><a class="pc-more" href="#included">Что входит в заказ</a></div></li>`).join("");
+      <div class="pc-foot"><div class="pc-n"><span>Рассылок:</span><div class="pc-seg" role="group" aria-label="Количество рассылок"><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button><button type="button" data-n="3">3</button></div></div><div class="pc-pr"><div class="pc-price" data-price>${rub(C.priceOf(b, 1))}</div><small data-note>за 1 рассылку</small></div><a class="btn gold" data-order href="/order?s=${C.SERVICES.find(s => s.base === b.key && s.times === 1).slug}">Заказать</a><a class="pc-more" href="#included">Что входит в заказ</a></div></li>`).join("");
     const hero = `<header class="hero">${navTop()}<div class="wrap"><div>
 <div class="pill"><b></b>Онлайн-сервис для моряков</div>
 <h1>Ваше резюме — <span>сразу в крюинговые компании</span></h1>
@@ -83,9 +92,7 @@ function home(counts){
     const body = `<section class="sec" id="services"><div class="c">
 <div class="kick">Услуги</div><h2>Рассылка резюме по базам</h2>
 <p class="sub">Выберите базу и количество рассылок. Письма уходят от вашего имени, а ответы компаний приходят на вашу почту и в личный кабинет!</p>
-<div class="board" id="board"><div class="board-head"><h3>Количество рассылок</h3>
-<div class="seg" role="group" aria-label="Количество рассылок"><button type="button" data-n="1" class="on">1 рассылка</button><button type="button" data-n="2">2 рассылки</button><button type="button" data-n="3">3 рассылки</button></div></div>
-<ul class="pcs">${rows}</ul></div>
+<div class="board" id="board"><ul class="pcs">${rows}</ul></div>
 <div class="included" id="included"><h3>Что входит в заказ</h3><ul>
 <li>Рассылка вашего резюме по выбранной базе компаний</li><li>Сопроводительное письмо — своё или готовое</li><li>Личный кабинет: ход рассылки и отправленные письма</li><li>Тему и письмо можно поменять в любой момент</li><li>Возможность заменить резюме</li><li>Можно исключить ненужные компании</li><li>Ответы компаний — в кабинете и на вашу почту</li><li>Вопросы менеджеру — прямо из кабинета</li></ul></div>
 <div class="strip" id="resume"><div><h3>Составление резюме «Стандарт»</h3><ul>${C.CV.bullets.map(b => `<li>${esc(b)}</li>`).join("")}</ul></div>
