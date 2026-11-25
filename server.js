@@ -86,7 +86,7 @@ function parseBase(text, defaultBase){
     let counts = null, countsAt = 0;
     const getCounts = async () => { if(!counts || Date.now() - countsAt > 300e3){ counts = await engine.baseCounts(); countsAt = Date.now(); } return counts; };
     const byToken = t => one(`SELECT * FROM orders WHERE token = $1`, [clean(t, 80)]);
-    const ORDER_LIST = `id, num, token, kind, slug, title, base, times, price, status, first_name, last_name, email, phone, position, vessel, created_at, claimed_at, paid_at, done_at, cv_name, res_name`;
+    const ORDER_LIST = `id, num, email_ok, token, kind, slug, title, base, times, price, status, first_name, last_name, email, phone, position, vessel, created_at, claimed_at, paid_at, done_at, cv_name, res_name`;
 
     /* ---------- сайт ---------- */
     async function site(req, res, u){
@@ -107,7 +107,13 @@ function parseBase(text, defaultBase){
         if(p === "/order") return send(res, 200, P.orderForm(u.searchParams.get("s") || "", await getCounts().catch(() => null)));
         if(p === "/policy" || p === "/offer") return send(res, 200, P.legal(p.slice(1)));
 
-        let m = p.match(/^\/o\/([A-Za-z0-9_-]{10,80})(\/file)?$/);
+        let m = p.match(/^\/o\/([A-Za-z0-9_-]{10,80})\/confirm$/);
+        if(m){
+            const o = await byToken(m[1]); if(!o) return send(res, 404, P.notFound());
+            if(!o.email_ok){ await q(`UPDATE orders SET email_ok = $1 WHERE id = $2`, [now(), o.id]); await engine.note(o.id, "E-mail подтверждён клиентом", "Клиент"); }
+            return redirect(res, "/o/" + o.token);
+        }
+        m = p.match(/^\/o\/([A-Za-z0-9_-]{10,80})(\/file)?$/);
         if(m){
             const o = await byToken(m[1]); if(!o) return send(res, 404, P.notFound());
             if(m[2]){
@@ -158,7 +164,7 @@ function parseBase(text, defaultBase){
                 } catch(e){ if(!/unique|duplicate/i.test(e.message)) throw e; }
             }
             if(!o) return json(res, 500, {error: "Не удалось создать заказ, попробуйте ещё раз"});
-            Mail.T.created(o).catch(() => {});
+            Mail.T.confirm(o).catch(() => {});
             Mail.owner(`🆕 Новый заказ №${o.num}\n${o.title} · ${Mail.rub(o.price)}\n${first} ${last} · ${email}${o.phone ? " · " + o.phone : ""}`);
             return json(res, 200, {url: "/o/" + o.token});
         }
@@ -171,6 +177,13 @@ function parseBase(text, defaultBase){
             await engine.note(o.id, "Клиент нажал «Я оплатил(а)»", "Клиент");
             Mail.owner(`💳 Клиент сообщил об оплате\nЗаказ №${o.num} · ${Mail.rub(o.price)}\n${o.first_name || ""} ${o.last_name || ""} · ${o.email}\nПроверьте карту и подтвердите в CRM: ${Mail.siteUrl()}/crm`);
             return json(res, 200, {ok: true});
+        }
+        m = p.match(/^\/api\/o\/([A-Za-z0-9_-]{10,80})\/resend$/);
+        if(req.method === "POST" && m){
+            if(limited("resend:" + m[1], 3, 3600e3)) return json(res, 429, {error: "Письмо уже отправлено несколько раз — проверьте папку «Спам» или напишите менеджеру."});
+            const o = await byToken(m[1]); if(!o) return json(res, 404, {error: "Заказ не найден"});
+            if(o.email_ok) return json(res, 200, {ok: true});
+            Mail.T.confirm(o).catch(() => {}); return json(res, 200, {ok: true});
         }
         m = p.match(/^\/api\/o\/([A-Za-z0-9_-]{10,80})\/letter$/);
         if(req.method === "POST" && m){
@@ -253,6 +266,11 @@ function parseBase(text, defaultBase){
                 await engine.note(o.id, `Готовое резюме загружено: ${name}`, who);
                 if(b.notify !== false) Mail.T.cvReady(o).catch(() => {});
             }
+            return json(res, 200, {ok: true});
+        }
+        if(req.method === "POST" && (m = p.match(/^\/orders\/([\w-]+)\/email-ok$/))){
+            const o = await one(`SELECT id FROM orders WHERE id = $1`, [m[1]]); if(!o) return json(res, 404, {error: "нет заказа"});
+            await q(`UPDATE orders SET email_ok = $1 WHERE id = $2 AND email_ok IS NULL`, [now(), o.id]); await engine.note(o.id, "E-mail отмечен подтверждённым вручную", who);
             return json(res, 200, {ok: true});
         }
         if(req.method === "POST" && (m = p.match(/^\/orders\/([\w-]+)\/reply$/))){

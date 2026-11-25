@@ -19,6 +19,15 @@
         fetch("/api/o/" + window.__tok + "/claim", {method: "POST"}).then(function(r){ return r.json(); }).then(function(){ location.reload(); }).catch(function(){ claim.disabled = false; });
     });
 
+    /* повторное письмо с подтверждением e-mail */
+    var rsd = $("resend");
+    if(rsd) rsd.addEventListener("click", function(){
+        rsd.disabled = true;
+        fetch("/api/o/" + window.__tok + "/resend", {method: "POST"}).then(function(r){ return r.json().then(function(j){ return {ok: r.ok, j: j}; }); })
+            .then(function(x){ $("rsmsg").textContent = x.ok ? "Отправили — проверьте почту" : (x.j.error || "Не удалось отправить"); if(!x.ok) rsd.disabled = false; })
+            .catch(function(){ rsd.disabled = false; });
+    });
+
     /* тема и письмо */
     var lf = $("lf");
     if(lf){

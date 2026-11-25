@@ -7,7 +7,7 @@
 - Без Telegram-бота и уведомлений владельцу в Telegram (только письмо на `OWNER_EMAIL`). Без рекламы Telegram-каналов, ботов, Instagram и т. п. Контакты клиентов — только WhatsApp и Telegram на номер из переменной `CONTACT_PHONE`.
 - Не делать: вакансии, Premium, подбор услуги, абонемент, «безлимит до рейса», другие языки.
 - Адресные базы (email компаний) и секреты — НЕ в репозитории (он может быть публичным). Базы загружаются через CRM, секреты — переменные Railway.
-- Адреса страниц (`/`, `/order`, `/o/<token>`, `/policy`, `/offer`) после запуска не менять.
+- Адреса страниц (`/`, `/order`, `/o/<token>`, `/o/<token>/confirm`, `/policy`, `/offer`) после запуска не менять.
 - Коммиты заканчиваются строками `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>` и `Claude-Session: https://claude.ai/code/session_01Xx5ytnGpxXoDAkpLc6BSDX`.
 
 ## Переменные окружения (Railway)

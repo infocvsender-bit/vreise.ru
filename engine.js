@@ -160,7 +160,7 @@ module.exports = function engine(db){
             for(const job of jobs){
                 const o = await one(`SELECT * FROM orders WHERE id = $1`, [job.order_id]); if(!o) continue;
                 if(job.status === "wait"){
-                    if(Date.parse(job.start_at) > Date.now() || !["paid", "in_progress"].includes(o.status)) continue;
+                    if(Date.parse(job.start_at) > Date.now() || !["paid", "in_progress"].includes(o.status) || !o.email_ok) continue;           // ждём оплату и подтверждение e-mail
                     try { await prepare(job, o); } catch(e){
                         await q(`UPDATE jobs SET last_error = $1 WHERE id = $2`, [String(e.message).slice(0, 300), job.id]);
                         alertOnce("prep:" + job.id, `⚠️ Не удалось подготовить рассылку по заказу №${o.num}: ${e.message}`, 120);

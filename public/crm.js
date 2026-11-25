@@ -37,7 +37,7 @@
             var h = '<p><a href="#" id="back">← К заказам</a></p><div class="panel"><h3>Заказ №' + o.num + ' · <span class="tag ' + o.status + '">' + esc(ST[o.status] || o.status) + "</span></h3><div class=\"kv\">" +
                 "<b>Услуга</b><span>" + esc(o.title) + " — " + rub(o.price) + "</span><b>Клиент</b><span>" + esc(o.first_name + " " + o.last_name) + "</span><b>E-mail</b><span>" + esc(o.email) + "</span>" +
                 (o.phone ? "<b>Телефон</b><span>" + esc(o.phone) + "</span>" : "") + (o.position ? "<b>Должность</b><span>" + esc(o.position) + "</span>" : "") + (o.vessel ? "<b>Суда</b><span>" + esc(o.vessel) + "</span>" : "") +
-                "<b>Оформлен</b><span>" + dt(o.created_at) + "</span><b>Нажал «оплатил»</b><span>" + dt(o.claimed_at) + "</span><b>Оплата подтверждена</b><span>" + dt(o.paid_at) + "</span>" +
+                "<b>Подтверждение e-mail</b><span>" + (o.email_ok ? "✅ подтверждён " + dt(o.email_ok) : "⚠️ не подтверждён <button class=\"btn sm gold\" id=\"emok\" style=\"margin-left:8px\">Отметить подтверждённым</button>") + "</span><b>Оформлен</b><span>" + dt(o.created_at) + "</span><b>Нажал «оплатил»</b><span>" + dt(o.claimed_at) + "</span><b>Оплата подтверждена</b><span>" + dt(o.paid_at) + "</span>" +
                 '<b>Страница клиента</b><span><a href="' + esc(d.link) + '" target="_blank">' + esc(d.link) + "</a></span>" +
                 (o.cv_name ? '<b>Файл клиента</b><span><a href="/crm/api/orders/' + o.id + '/cv">' + esc(o.cv_name) + "</a></span>" : "") + "</div>" +
                 (o.letter ? '<p class="mut" style="margin-top:12px">Письмо клиента:</p><div class="pre">' + esc(o.letter) + "</div>" : "") +
@@ -62,6 +62,7 @@
             $("back").onclick = function(e){ e.preventDefault(); orders(); };
             if($("confirm")) $("confirm").onclick = function(){ post("/orders/" + id + "/confirm", {}, "Деньги на карте? Подтвердить оплату заказа №" + o.num + " и запустить работу?"); };
             if($("cancel")) $("cancel").onclick = function(){ post("/orders/" + id + "/cancel", {}, "Отменить заказ №" + o.num + "? Рассылки будут остановлены."); };
+            if($("emok")) $("emok").onclick = function(){ post("/orders/" + id + "/email-ok", {}, "Отметить e-mail клиента подтверждённым вручную?"); };
             $("ntgo").onclick = function(){ if($("nt").value.trim()) post("/orders/" + id + "/note", {text: $("nt").value}); };
             $("rpgo").onclick = function(){ if($("rp").value.trim()) post("/orders/" + id + "/reply", {text: $("rp").value}); };
             [].forEach.call(view.querySelectorAll(".jc"), function(b){ b.onclick = function(){ post("/jobs/" + b.getAttribute("data-j") + "/" + b.getAttribute("data-a"), {}, b.getAttribute("data-a") === "stop" ? "Остановить рассылку? Продолжить её будет нельзя." : ""); }; });

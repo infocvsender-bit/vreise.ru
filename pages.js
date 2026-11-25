@@ -133,6 +133,7 @@ ${o.status === "new" ? `<div style="margin-top:18px"><button class="btn gold" id
 <p class="hint">Показаны последние ${sent.length} писем.</p></div>` : "";
     const res = cv && o.res_name ? `<div class="panel"><h3>Ваше резюме готово</h3><p><a class="btn gold" href="/o/${o.token}/file">Скачать: ${esc(o.res_name)}</a></p></div>` : "";
     const wait = cv && ["paid", "in_progress"].includes(o.status) && !o.res_name ? `<div class="ok">Оплата получена. Готовим ваше резюме — оно придёт на почту и появится здесь в течение 6 часов.</div>` : "";
+    const emailBanner = !o.email_ok && o.status !== "cancelled" ? `<div class="err" style="background:#fff7dc;color:#6b4e00;border-color:#f0d78a;margin-bottom:18px">✉️ <b>Подтвердите e-mail.</b> Мы отправили письмо на <b>${esc(o.email)}</b> — нажмите в нём кнопку. ${cv ? "" : "Без подтверждения рассылка не начнётся. "}Письма нет? Проверьте «Спам» или <button class="btn gold sm" id="resend" type="button" style="margin:0 6px">отправьте ещё раз</button><span class="hint" id="rsmsg"></span></div>` : "";
     const running = jobs.some(j => j.status === "run");
     const letterBlock = !cv && std && o.status !== "cancelled" ? `<div class="panel"><h3>Тема и сопроводительное письмо</h3>
 <p class="hint" style="margin:0 0 14px">${o.letter || o.subject ? "Здесь ваш вариант письма." : "Пока стоит стандартное письмо, составленное по вашим данным."} Именно оно уйдёт компаниям, резюме прикладывается автоматически. ${running ? "Рассылка идёт — изменить письмо можно после её окончания, для следующих рассылок." : "Поправьте текст как вам нужно — изменения применятся к рассылке."}</p>
@@ -145,7 +146,7 @@ ${msgs.map(m => `<div style="margin-top:14px;padding:10px 14px;border-radius:12p
 <form id="msgf" style="margin-top:14px"><textarea class="in" id="msgt" maxlength="1500" placeholder="Ваш вопрос. Ответ придёт на ${esc(o.email)} и появится здесь." style="min-height:90px"></textarea>
 <div style="margin-top:10px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><button class="btn gold sm" id="msgb" type="submit">Отправить</button><span class="hint" id="msgs"></span></div></form></details></div>`;
     const body = `<div class="page"><h1>Заказ №${o.num}</h1><p class="sub">${esc(o.title)} · <span class="tag ${o.status}">${STATUS[o.status] || o.status}</span></p>
-${payBlock}${wait}${res}${progress}${list}${letterBlock}${chat}
+${emailBanner}${payBlock}${wait}${res}${progress}${list}${letterBlock}${chat}
 <div class="panel"><h3>Данные заказа</h3><table class="t"><tbody>
 <tr><td>Клиент</td><td>${esc([o.first_name, o.last_name].filter(Boolean).join(" "))}</td></tr><tr><td>E-mail</td><td>${esc(o.email)}</td></tr>
 ${o.phone ? `<tr><td>Телефон</td><td>${esc(o.phone)}</td></tr>` : ""}${o.position ? `<tr><td>Должность</td><td>${esc(o.position)}</td></tr>` : ""}
