@@ -64,7 +64,7 @@
     function board(d){
         var by = {}; COLS.forEach(function(c){ by[c[0]] = []; }); d.orders.forEach(function(o){ (by[colOf(o)] || (by[colOf(o)] = [])).push(o); });
         /* пустые колонки сворачиваются в узкую полоску — доска помещается на экран без прокрутки */
-        var tpl = COLS.map(function(c){ return by[c[0]].length ? "minmax(185px,1fr)" : "46px"; }).join(" ");
+        var tpl = COLS.map(function(c){ return by[c[0]].length ? "minmax(165px,310px)" : "46px"; }).join(" ");
         var open = COLS.filter(function(c){ return by[c[0]].length; }).length;
         var h = modeSwitch() + '<div class="flt"><input class="in" id="q" placeholder="Поиск: №, имя, e-mail" style="max-width:260px;padding:7px 12px" value="' + esc(search) + '"><span class="mut">Всего заказов: ' + d.orders.length + (open ? "" : " · заказов пока нет") + "</span></div>" + '<div class="kb" style="grid-template-columns:' + tpl + '">';
         COLS.forEach(function(c){
