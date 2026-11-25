@@ -17,6 +17,47 @@
     function readFile(file){ return new Promise(function(ok, no){ var r = new FileReader(); r.onload = function(){ ok({name: file.name, b64: String(r.result).split(",")[1] || ""}); }; r.onerror = no; r.readAsDataURL(file); }); }
     function readText(file){ return new Promise(function(ok, no){ var r = new FileReader(); r.onload = function(){ ok(String(r.result)); }; r.onerror = no; r.readAsText(file, "utf-8"); }); }
 
+    /* ---------- резюме от ИИ ---------- */
+    function aiPanel(id, o, ndocs){
+        var box = document.getElementById("aibody"); if(!box) return;
+        var $ = function(i){ return document.getElementById(i); };
+        function go(fb){ api("/orders/" + id + "/ai-resume", {body: {feedback: fb || ""}}).then(function(){ aiPanel(id, o, ndocs); }).catch(alertErr); }
+        api("/orders/" + id + "/ai-resume").then(function(r){
+            box = document.getElementById("aibody"); if(!box) return;
+            var a = r.ai, h = "";
+            if(!r.key) return void (box.innerHTML = '<p style="color:#c0392b">Не задан ключ <b>ASSISTANT_API_KEY</b> в Railway Variables — ИИ не сможет собрать резюме.</p>');
+            if(a && a.status === "run"){ box.innerHTML = '<p>⏳ ИИ читает анкету, старое резюме и файлы клиента и собирает резюме… обычно 1–3 минуты. Страница обновится сама.</p>'; setTimeout(function(){ aiPanel(id, o, ndocs); }, 5000); return; }
+            if(!a || !a.data){
+                h = (a && a.status === "error" ? '<p style="color:#c0392b">Не получилось: ' + esc(a.error || "ошибка") + "</p>" : "") +
+                    '<p class="mut" style="margin:0 0 8px">ИИ прочитает анкету, старое резюме и все файлы, которые моряк приложил к заказу (файлов: ' + ndocs + '), и составит резюме в международном формате на английском. Вы проверите и отправите клиенту.</p>' +
+                    '<div class="acts"><button class="btn gold sm" id="aigo">🤖 Собрать резюме по файлам клиента</button></div>';
+                box.innerHTML = h; $("aigo").onclick = function(){ go(""); }; return;
+            }
+            var d = a.data, P = d.personal || {}, li = function(arr, c){ return arr && arr.length ? '<ul style="margin:4px 0 10px 18px;padding:0;' + (c || "") + '">' + arr.map(function(x){ return "<li>" + esc(x) + "</li>"; }).join("") + "</ul>" : ""; };
+            h = (a.status === "error" ? '<p style="color:#c0392b">Последняя пересборка не удалась: ' + esc(a.error || "") + " — показана предыдущая версия.</p>" : "") +
+                '<p style="margin:0 0 6px"><b>Версия ' + a.version + "</b> · " + dt(a.updated_at) + " · <b>" + esc(d.full_name || "") + "</b> — " + esc(d.applied_position || "") + "</p>" +
+                (d.summary ? '<p class="mut" style="margin:0 0 8px">' + esc(d.summary) + "</p>" : "") +
+                '<p class="mut" style="margin:0 0 8px">Морской стаж: ' + (d.sea_service || []).length + " · Сертификаты и документы: " + (d.certificates || []).length + " · Образование: " + (d.education || []).length + " · Телефон: " + esc(P.phone || "—") + " · Дата рождения: " + esc(P.date_of_birth || "—") + "</p>" +
+                ((d.missing || []).length ? '<p style="margin:6px 0 0"><b>⚠ Чего не нашлось в файлах — уточните у моряка:</b></p>' + li(d.missing, "color:#b9770e") : "") +
+                ((d.notes || []).length ? '<p style="margin:6px 0 0"><b>Заметки ИИ:</b></p>' + li(d.notes) : "") +
+                (a.feedbacks && a.feedbacks.length ? '<p class="mut" style="margin:6px 0 0">Уже внесены правки моряка (' + a.feedbacks.length + "): " + esc(a.feedbacks.join(" | ")).slice(0, 400) + "</p>" : "") +
+                '<div class="acts"><a class="btn sm line" style="text-decoration:none;color:var(--deep);border-color:#9fb6bb" href="/crm/api/orders/' + id + '/ai-resume.docx">⬇ Скачать Word</a> <button class="btn gold sm" id="aisend">✅ Отправить клиенту как готовое резюме</button></div>' +
+                '<p style="margin:14px 0 4px"><b>Внести изменения моряка</b> <span class="mut">— впишите, что моряк просит поправить; ИИ пересоберёт текущую версию, остальное не тронет</span></p>' +
+                '<textarea class="in" id="aifb" style="min-height:90px" placeholder="Например: телефон +7 900 111 22 33; в рейсе на MV Ocean должность была не AB, а Bosun; добавить сертификат ECDIS, № 12345, до 05.2029"></textarea>' +
+                '<div class="acts"><button class="btn gold sm" id="aire">↻ Пересобрать с правками</button>' + (r.msgs && r.msgs.length ? '<button class="btn sm line" id="aimsg" style="color:var(--deep);border-color:#9fb6bb">Подставить сообщения клиента из чата</button>' : "") + '<button class="btn sm line" id="aifull" style="color:#a33;border-color:#e0b3a8">Собрать заново с нуля</button></div>';
+            box.innerHTML = h;
+            $("aire").onclick = function(){ var t = $("aifb").value.trim(); if(!t) return alert("Впишите, что поправить"); go(t); };
+            if($("aimsg")) $("aimsg").onclick = function(){ $("aifb").value = r.msgs.slice().reverse().map(function(m){ return m.text; }).join("\n"); };
+            $("aifull").onclick = function(){ if(confirm("Собрать резюме заново с нуля? Внесённые правки моряка пропадут из текущей версии.")){ api("/orders/" + id + "/ai-resume/reset", {body: {}}).then(function(){ go(""); }).catch(alertErr); } };
+            $("aisend").onclick = function(){
+                if(!confirm("Отправить это резюме клиенту на проверку? Клиент получит письмо «Резюме готово». Если вы его правили в Word — сначала загрузите свой файл в блоке «Готовое резюме» ниже.")) return;
+                fetch("/crm/api/orders/" + id + "/ai-resume.docx", {credentials: "same-origin"}).then(function(x){ if(!x.ok) throw new Error("файл не получен"); return x.blob(); })
+                    .then(function(bl){ return readFile(new File([bl], "CV_" + (d.full_name || "resume").replace(/[^\w]+/g, "_") + ".docx")); })
+                    .then(function(fl){ return api("/orders/" + id + "/result", {body: fl}); }).then(function(){ order(id); alert("Резюме отправлено клиенту"); }).catch(alertErr);
+            };
+        }).catch(function(e){ box.innerHTML = '<p style="color:#c0392b">' + esc(e.message || e) + "</p>"; });
+    }
+
     /* ---------- заказы ---------- */
     function orders(){
         api("/orders?status=" + (mode === "board" ? "" : encodeURIComponent(filter)) + "&q=" + encodeURIComponent(search)).then(function(d){
@@ -166,6 +207,7 @@
                 '<input class="in" id="cvs" value="' + esc((o.subject && String(o.subject).trim()) || d.def.subject) + '" placeholder="Тема письма"><textarea class="in" id="cvt" style="min-height:260px;margin-top:10px">' + esc(o.draft_letter || o.letter || d.def.text) + '</textarea>' +
                 '<div class="acts"><button class="btn gold sm" id="cvgo">Отправить клиенту на подтверждение</button>' + (o.cover_ok ? "" : '<button class="btn sm line" id="cvskip" style="color:var(--deep);border-color:#9fb6bb">Запустить без подтверждения (стандартное письмо)</button>') + '</div>' :
                 '<p class="mut">У заказа нет рассылки: напишите письмо и отправьте клиенту файлом через блок «Переписка и история» → «Письмо клиенту».</p>') + '</div>';
+            if(cv && ["paid", "in_progress", "done"].indexOf(o.status) >= 0) h += '<div class="panel" style="border:2px solid #7aa7b3"><h3>🤖 Резюме от ИИ</h3><div id="aibody" class="mut">Загрузка…</div></div>';
             if(cv && ["paid", "in_progress", "done"].indexOf(o.status) >= 0) h += '<div class="panel"><h3>Готовое резюме</h3>' + (o.res_name ? '<p>Загружено: <a href="/crm/api/orders/' + o.id + '/res">' + esc(o.res_name) + "</a></p>" : "<p class=\"mut\">Файл ещё не загружен.</p>") +
                 '<input type="file" id="resf" class="in"><div class="acts"><button class="btn gold sm" id="resgo">Загрузить и отправить клиенту</button></div></div>';
             if(d.jobs.length) h += '<div class="panel"><h3>Рассылки</h3><table class="t"><thead><tr><th>№</th><th>Статус</th><th>Старт</th><th>Отправлено</th><th>Ошибок</th><th>Осталось</th><th></th></tr></thead><tbody>' +
@@ -206,6 +248,7 @@
                     .then(function(){ order(id); alert("Письмо отправлено клиенту"); }).catch(function(e){ $("rpgo").disabled = false; alertErr(e); });
             };
             [].forEach.call(view.querySelectorAll(".jc"), function(b){ b.onclick = function(){ post("/jobs/" + b.getAttribute("data-j") + "/" + b.getAttribute("data-a"), {}, b.getAttribute("data-a") === "stop" ? "Остановить рассылку? Продолжить её будет нельзя." : ""); }; });
+            if($("aibody")) aiPanel(id, o, d.docs ? d.docs.length : 0);
             if($("resgo")) $("resgo").onclick = function(){
                 var f = $("resf").files[0]; if(!f) return alert("Выберите файл");
                 readFile(f).then(function(fl){ return post("/orders/" + id + "/result", fl, "Отправить клиенту письмо «Резюме готово»?"); }).catch(alertErr);

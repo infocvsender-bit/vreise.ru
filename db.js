@@ -42,6 +42,7 @@ module.exports = async function openDb(){
         `CREATE TABLE IF NOT EXISTS names(name_key TEXT NOT NULL, local TEXT NOT NULL, at TEXT NOT NULL)`,
         `CREATE TABLE IF NOT EXISTS order_docs(id TEXT PRIMARY KEY, order_id TEXT NOT NULL, name TEXT NOT NULL, size INTEGER NOT NULL DEFAULT 0, b64 TEXT NOT NULL, added_at TEXT NOT NULL)`,
         `CREATE INDEX IF NOT EXISTS idx_docs_order ON order_docs(order_id)`,
+        `CREATE TABLE IF NOT EXISTS ai_resumes(order_id TEXT PRIMARY KEY, status TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 0, data TEXT, feedbacks TEXT, error TEXT, started_at TEXT, updated_at TEXT)`,
         `CREATE TABLE IF NOT EXISTS replies(id TEXT PRIMARY KEY, order_id TEXT NOT NULL, box TEXT NOT NULL, uid INTEGER NOT NULL, from_email TEXT, from_name TEXT, subject TEXT, text TEXT,
             kind TEXT NOT NULL, at TEXT NOT NULL, created_at TEXT NOT NULL)`,
         `CREATE INDEX IF NOT EXISTS idx_replies_order ON replies(order_id, at)`,

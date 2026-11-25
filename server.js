@@ -1,7 +1,7 @@
 "use strict";
 /* Vreise.ru — сервер: сайт, заказы, CRM, рассылка. Только русский язык. */
 const http = require("http"), fs = require("fs"), path = require("path"), crypto = require("crypto");
-const openDb = require("./db.js"), makeEngine = require("./engine.js"), Mail = require("./mails.js"), M = require("./mailer.js"), C = require("./catalog.js"), P = require("./pages.js"), CRM = require("./crmpage.js"), Mask = require("./mask.js");
+const openDb = require("./db.js"), makeEngine = require("./engine.js"), Mail = require("./mails.js"), M = require("./mailer.js"), C = require("./catalog.js"), P = require("./pages.js"), CRM = require("./crmpage.js"), Mask = require("./mask.js"), Resume = require("./resume.js");
 const {env} = M;
 
 const PUB = path.join(__dirname, "public");
@@ -555,6 +555,50 @@ function parseBase(text, defaultBase){
             if(!b64) return json(res, 404, {error: "файла нет"});
             return send(res, 200, Buffer.from(b64, "base64"), M.mimeOf(name), {"Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(name)}`});
         }
+        if(req.method === "POST" && (m = p.match(/^\/orders\/([\w-]+)\/ai-resume\/reset$/))){
+            await q(`UPDATE ai_resumes SET data = NULL, feedbacks = '[]' WHERE order_id = $1 AND status <> 'run'`, [m[1]]);
+            return json(res, 200, {ok: true});
+        }
+        if((m = p.match(/^\/orders\/([\w-]+)\/ai-resume(\.docx)?$/))){                       // резюме от ИИ: сборка по файлам клиента и пересборка по его правкам
+            const id = m[1], dl = !!m[2], keyOn = !!String(process.env.ASSISTANT_API_KEY || "").trim();
+            const cur = await one(`SELECT * FROM ai_resumes WHERE order_id = $1`, [id]);
+            const J = (t, d) => { try { return JSON.parse(t) || d; } catch(e){ return d; } };
+            if(req.method === "GET"){
+                if(dl){
+                    const o = await one(`SELECT first_name, last_name FROM orders WHERE id = $1`, [id]); if(!o || !cur || !cur.data) return json(res, 404, {error: "Резюме ещё не собрано"});
+                    const nm = `CV_${o.last_name}_${o.first_name}.docx`.replace(/[^\w.-]+/g, "_");
+                    return send(res, 200, Resume.docx(J(cur.data, {})), "application/vnd.openxmlformats-officedocument.wordprocessingml.document", {"Content-Disposition": `attachment; filename="${nm}"`, "Cache-Control": "no-store"});
+                }
+                const msgs = await q(`SELECT at, text FROM notes WHERE order_id = $1 AND author = 'Сообщение клиента' ORDER BY at DESC LIMIT 8`, [id]);
+                return json(res, 200, {key: keyOn, ai: cur ? {status: cur.status, version: cur.version, data: J(cur.data, null), feedbacks: J(cur.feedbacks, []), error: cur.error, updated_at: cur.updated_at} : null, msgs});
+            }
+            if(req.method === "POST"){
+                const o = await one(`SELECT * FROM orders WHERE id = $1`, [id]); if(!o) return json(res, 404, {error: "нет заказа"});
+                if(o.kind !== "cv") return json(res, 400, {error: "Сборка резюме — только для заказов «Резюме»"});
+                if(!keyOn) return json(res, 400, {error: "Не задан ключ ASSISTANT_API_KEY в Railway Variables"});
+                const b = await body(req, 20000), feedback = clean(b.feedback, 4000);
+                if(cur && cur.status === "run" && Date.now() - Date.parse(cur.started_at) < 6 * 60e3) return json(res, 409, {error: "ИИ уже собирает резюме — подождите минуту"});
+                const prev = feedback && cur && cur.data ? J(cur.data, null) : null; if(feedback && !prev) return json(res, 400, {error: "Сначала соберите резюме, потом вносите правки"});
+                const fbs = J(cur && cur.feedbacks, []), t = now();
+                await q(`INSERT INTO ai_resumes(order_id, status, version, data, feedbacks, error, started_at, updated_at) VALUES($1,'run',$2,$3,$4,NULL,$5,$5) ON CONFLICT(order_id) DO UPDATE SET status = 'run', error = NULL, started_at = excluded.started_at, updated_at = excluded.updated_at`,
+                    [id, cur ? cur.version : 0, cur ? cur.data : null, JSON.stringify(fbs), t]);
+                await engine.note(o.id, feedback ? `ИИ пересобирает резюме с правками клиента: ${feedback.slice(0, 300)}` : "ИИ собирает резюме по анкете и файлам клиента", who);
+                (async () => {
+                    try {
+                        const files = [], dcs = await q(`SELECT name, b64 FROM order_docs WHERE order_id = $1 ORDER BY added_at`, [id]);
+                        if(o.cv_b64) files.push({name: o.cv_name || "old-cv.pdf", buf: Buffer.from(o.cv_b64, "base64")});
+                        for(const d of dcs) files.push({name: d.name, buf: Buffer.from(d.b64, "base64")});
+                        const r = await Resume.askAI({order: o, details: J(o.details, {}), files, prev, feedback, feedbacks: fbs});
+                        await q(`UPDATE ai_resumes SET status = 'ready', version = version + 1, data = $1, feedbacks = $2, error = NULL, updated_at = $3 WHERE order_id = $4`, [JSON.stringify(r.data), JSON.stringify(feedback ? fbs.concat([feedback]) : fbs), now(), id]);
+                        await engine.note(o.id, `Резюме от ИИ готово (версия ${(cur ? cur.version : 0) + 1}) — проверьте в карточке заказа`, "ИИ");
+                    } catch(e){
+                        console.error("ИИ-резюме:", e.message);
+                        await q(`UPDATE ai_resumes SET status = 'error', error = $1, updated_at = $2 WHERE order_id = $3`, [String(e.message || e).slice(0, 400), now(), id]).catch(() => {});
+                    }
+                })();
+                return json(res, 200, {ok: true});
+            }
+        }
         if(req.method === "POST" && (m = p.match(/^\/orders\/([\w-]+)\/cover-letter$/))){
             const o = await one(`SELECT * FROM orders WHERE id = $1`, [m[1]]); if(!o) return json(res, 404, {error: "нет заказа"});
             if(!o.base) return json(res, 400, {error: "У заказа нет рассылки — отправьте письмо файлом через «Письмо клиенту»"});
@@ -574,7 +618,7 @@ function parseBase(text, defaultBase){
             for(const b of await q(`SELECT * FROM boxes WHERE order_id = $1 AND deleted_at IS NULL`, [o.id])) try { await engine.deleteBox(b); } catch(e){ errs.push(`${b.email}: ${e.message}`); }
             for(const b of await q(`SELECT id FROM boxes WHERE order_id = $1`, [o.id])) await q(`DELETE FROM imap_state WHERE box_id = $1`, [b.id]);
             await q(`DELETE FROM queue WHERE job_id IN (SELECT id FROM jobs WHERE order_id = $1)`, [o.id]);
-            for(const t of ["jobs", "boxes", "replies", "reply_fwd", "notes", "order_docs"]) await q(`DELETE FROM ${t} WHERE order_id = $1`, [o.id]);
+            for(const t of ["jobs", "boxes", "replies", "reply_fwd", "notes", "order_docs", "ai_resumes"]) await q(`DELETE FROM ${t} WHERE order_id = $1`, [o.id]);
             await q(`DELETE FROM orders WHERE id = $1`, [o.id]);
             console.log(`🗑 Заказ №${o.num} удалён из CRM (${who})`);
             return json(res, 200, {ok: true, warn: errs.length ? "Ящики не удалились на почтовом сервере (удалите вручную): " + errs.join("; ") : ""});
