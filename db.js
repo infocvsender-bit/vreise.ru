@@ -50,6 +50,8 @@ module.exports = async function openDb(){
         `CREATE TABLE IF NOT EXISTS inbox(id TEXT PRIMARY KEY, uid INTEGER NOT NULL, from_email TEXT, from_name TEXT, subject TEXT, text TEXT, kind TEXT NOT NULL, at TEXT NOT NULL, created_at TEXT NOT NULL, seen INTEGER NOT NULL DEFAULT 0)`,
         `CREATE INDEX IF NOT EXISTS idx_inbox_at ON inbox(at)`,
         `CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT)`,
+        `CREATE TABLE IF NOT EXISTS chat_msgs(id TEXT PRIMARY KEY, sid TEXT NOT NULL, who TEXT NOT NULL, text TEXT NOT NULL, at TEXT NOT NULL)`,
+        `CREATE INDEX IF NOT EXISTS idx_chat_sid ON chat_msgs(sid, at)`,
         `CREATE TABLE IF NOT EXISTS reply_fwd(reply_id TEXT PRIMARY KEY, order_id TEXT NOT NULL, comment TEXT, at TEXT NOT NULL)`,
         `CREATE TABLE IF NOT EXISTS mail_log(id TEXT PRIMARY KEY, at TEXT NOT NULL, to_email TEXT, subject TEXT, ok INTEGER NOT NULL, error TEXT)`
     ]) await db.query(s);

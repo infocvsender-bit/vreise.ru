@@ -5,7 +5,7 @@
 
     /* часть документов не загрузилась */
     var dm = /[?&]docs=(\d+)/.exec(location.search);
-    if(dm && document.querySelector(".page h1")){ var nb = document.createElement("div"); nb.className = "err"; nb.textContent = "Не все файлы удалось загрузить (" + dm[1] + "). Пришлите их менеджеру в WhatsApp или Telegram — резюме составим по анкете.";
+    if(dm && document.querySelector(".page h1")){ var nb = document.createElement("div"); nb.className = "err"; nb.textContent = "Не все файлы удалось загрузить (" + dm[1] + "). Напишите об этом менеджеру в чате на сайте — резюме составим по анкете.";
         document.querySelector(".page h1").insertAdjacentElement("afterend", nb); }
 
     /* копирование номера карты */
@@ -369,7 +369,7 @@
             if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(val("email"))) return fail("Укажите корректный e-mail");
             if($("position").value.split(", ").indexOf("Другая") >= 0 && !val("positionOther")) return fail("Укажите вашу должность");
             if(fileEl && fileEl.hasAttribute("required") && !file) return fail("Загрузите ваше резюме (PDF или Word)");
-            if(file && file.size > 5 * 1024 * 1024) return fail("Файл больше 5 МБ — уменьшите его или пришлите в WhatsApp");
+            if(file && file.size > 5 * 1024 * 1024) return fail("Файл больше 5 МБ — уменьшите его или напишите менеджеру в чате");
         }
         if(!$("agree").checked) return fail("Нужно согласие с офертой и политикой конфиденциальности");
         var sm = schedCheck(); if(sm) return fail(sm);

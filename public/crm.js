@@ -299,6 +299,22 @@
     }
 
 
+    /* ---------- чаты с моряками ---------- */
+    var chatSid = "";
+    function chatsTab(){
+        api("/chats").then(function(d){
+            view.innerHTML = '<div class="chs"><div class="chl">' + (d.chats.length ? d.chats.map(function(c){ return '<div class="chi' + (c.sid === chatSid ? " on" : "") + (c.last_who === "user" ? " w" : "") + '" data-s="' + c.sid + '"><b>#' + c.sid.slice(0, 8) + " · " + dt(c.last_at) + (c.last_who === "user" ? " · ждёт ответа" : "") + "</b><span>" + esc((c.last_who === "user" ? "" : "Вы: ") + c.last_text) + "</span></div>"; }).join("") : '<div class="mut" style="padding:14px">Чатов пока нет</div>') + '</div><div class="panel" id="chv"><p class="mut">Выберите чат слева</p></div></div>';
+            [].forEach.call(view.querySelectorAll(".chi"), function(r){ r.onclick = function(){ chatSid = r.getAttribute("data-s"); chatsTab(); }; });
+            if(!chatSid) return;
+            api("/chats/" + chatSid).then(function(m){
+                var v = document.getElementById("chv"); if(!v) return;
+                v.innerHTML = '<h3>Чат #' + chatSid.slice(0, 8) + '</h3><div class="cht" id="cht">' + m.msgs.map(function(x){ return '<div class="' + (x.who === "user" ? "cmu" : "cma") + '">' + esc(x.text) + '<span class="cmt">' + (x.who === "user" ? "Моряк" : "Вы") + " · " + dt(x.at) + "</span></div>"; }).join("") + '</div><form id="chf" style="display:flex;gap:8px;margin-top:10px"><textarea class="in" id="cht2" rows="2" maxlength="1500" placeholder="Ответ моряку — он увидит его в чате на сайте" style="flex:1"></textarea><button class="btn gold" type="submit">Ответить</button></form>';
+                var t = document.getElementById("cht"); t.scrollTop = t.scrollHeight;
+                document.getElementById("chf").onsubmit = function(e){ e.preventDefault(); var x = document.getElementById("cht2").value.trim(); if(!x) return; api("/chats/" + chatSid + "/reply", {body: {text: x}}).then(chatsTab).catch(alertErr); };
+            }).catch(alertErr);
+        }).catch(alertErr);
+    }
+
     /* ---------- ящики рассылки ---------- */
     function boxesTab(){
         api("/boxes").then(function(d){
@@ -312,9 +328,10 @@
         }).catch(alertErr);
     }
 
-    function show(){ ({orders: orders, boxes: boxesTab, bases: bases, letter: letter, servers: servers})[tab](); }
+    function show(){ ({orders: orders, chats: chatsTab, boxes: boxesTab, bases: bases, letter: letter, servers: servers})[tab](); }
     [].forEach.call(document.querySelectorAll("#tabs button"), function(b){ b.onclick = function(){
         tab = b.getAttribute("data-t"); [].forEach.call(document.querySelectorAll("#tabs button"), function(x){ x.classList.toggle("on", x === b); }); show(); }; });
     show();
+    setInterval(function(){ if(tab === "chats" && document.activeElement && document.activeElement.tagName !== "TEXTAREA") chatsTab(); }, 20000);
     setInterval(function(){ if(tab === "orders" && document.activeElement && document.activeElement.id !== "q" && view.querySelector(".flt")) orders(); }, 60000);
 })();

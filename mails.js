@@ -7,15 +7,12 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "
 const siteUrl = () => (env("SITE_URL") || (env("RAILWAY_PUBLIC_DOMAIN") ? "https://" + env("RAILWAY_PUBLIC_DOMAIN") : "http://localhost:" + (env("PORT") || 3000))).replace(/\/+$/, "");
 const phone = () => env("CONTACT_PHONE") || "";
 const digits = () => phone().replace(/\D/g, "");
-const WA = () => digits() ? `https://wa.me/${digits()}` : "";
-const TGL = () => digits() ? `https://t.me/+${digits()}` : "";
-const MAXL = () => { const u = String(env("MAX_URL") || "").trim(); return /^https:\/\/(max\.ru|web\.max\.ru)\//i.test(u) ? u : ""; };
 
 function layout(title, body, btn, url){
     const site = siteUrl(), host = site.replace(/^https?:\/\//, "");
     const A = "text-decoration:none;color:#ffffff", mailTo = String(env("SYS_SMTP_FROM") || env("SYS_SMTP_USER") || "").replace(/^.*<([^>]+)>.*$/, "$1").trim();
     const pill = (href, ico, label, bg) => href ? `<td style="padding:0 8px 0 0"><a href="${esc(href)}" style="display:inline-block;background:${bg};color:#ffffff;text-decoration:none;font-weight:bold;font-size:13px;padding:8px 14px 8px 10px;border-radius:999px"><img src="${esc(site)}/static/mail-${ico}.png" width="18" height="18" alt="" style="vertical-align:middle;border:0;margin-right:6px">${label}</a></td>` : "";
-    const pills = pill(WA(), "wa", "WhatsApp", "#1f9d55") + pill(TGL(), "tg", "Telegram", "#2a8bd0") + (MAXL() ? `<td style="padding:0 8px 0 0"><a href="${esc(MAXL())}" style="display:inline-block;background:#6a4bff;color:#ffffff;text-decoration:none;font-weight:bold;font-size:13px;padding:8px 14px;border-radius:999px">Max</a></td>` : "") + pill(mailTo ? "mailto:" + mailTo : "", "mail", "Почта", "#0F4C5C");
+    const pills = pill(mailTo ? "mailto:" + mailTo : "", "mail", "Почта", "#0F4C5C");
     return `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"></head><body style="margin:0;background:#eef3f4;font-family:Arial,Helvetica,sans-serif;color:#10262c">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#eef3f4;padding:24px 12px"><tr><td align="center">
 <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#ffffff;border-radius:14px;overflow:hidden">
@@ -108,4 +105,4 @@ async function owner(text, id){
     console.log("🔔", text.replace(/\n/g, " | "));
 }
 
-module.exports = {toBot, esc, siteUrl, phone, WA, TGL, MAXL, rub, orderLink, T, owner, send, layout};
+module.exports = {toBot, esc, siteUrl, phone, rub, orderLink, T, owner, send, layout};

@@ -204,9 +204,27 @@ function parseBase(text, defaultBase){
     async function publicApi(req, res, u){
         const p = u.pathname;
         if(req.method === "POST" && p === "/api/assistant") return askAssistant(req, res);
+        if(p === "/api/chat"){                                   // живой чат моряка с менеджером (ответ менеджера — из админ-бота или CRM → «Чаты»)
+            const ip = ipOf(req), okSid = x => /^[a-z0-9]{10,24}$/.test(String(x || ""));
+            if(req.method === "GET"){
+                if(limited("chatget:" + ip, 90, 60e3)) return json(res, 429, {error: "Слишком часто"});
+                const sid = u.searchParams.get("sid"), after = String(u.searchParams.get("after") || ""); if(!okSid(sid)) return json(res, 200, {msgs: []});
+                const rows = await q(`SELECT id, who, text, at FROM chat_msgs WHERE sid = $1 AND at > $2 ORDER BY at LIMIT 100`, [sid, /^\d{4}-/.test(after) ? after : ""]);
+                return json(res, 200, {msgs: rows});
+            }
+            if(req.method === "POST"){
+                if(limited("chat:" + ip, 25, 600e3) || limited("chatd:" + ip, 200, 864e5)) return json(res, 429, {error: "Слишком много сообщений — подождите немного"});
+                const b = await body(req, 4000), sid = String(b.sid || ""), text = clean(b.text, 1000); if(!okSid(sid)) return json(res, 400, {error: "Обновите страницу"}); if(text.length < 1) return json(res, 400, {error: "Напишите сообщение"});
+                const last = await one(`SELECT at FROM chat_msgs WHERE sid = $1 ORDER BY at DESC LIMIT 1`, [sid]), fresh = !last || Date.now() - Date.parse(last.at) > 30 * 60e3;
+                const id = uuid(), at = now(); await q(`INSERT INTO chat_msgs(id, sid, who, text, at) VALUES($1, $2, 'user', $3, $4)`, [id, sid, text, at]);
+                const note = `💬 Чат с сайта · #${sid.slice(0, 8)}\n${text}\n\nОтветить: ответом из бота или CRM → «Чаты»`;
+                (fresh ? Mail.owner(note, "chat:" + sid) : Mail.toBot(note, "chat:" + sid)).catch(() => {});
+                return json(res, 200, {ok: true, id, at});
+            }
+        }
         if(req.method === "POST" && p === "/api/order"){
             const ip = ipOf(req);
-            if(limited("order:" + ip, 6, 3600e3)) return json(res, 429, {error: "Слишком много заказов с вашего адреса. Попробуйте позже или напишите нам в WhatsApp."});
+            if(limited("order:" + ip, 6, 3600e3)) return json(res, 429, {error: "Слишком много заказов с вашего адреса. Попробуйте позже или напишите нам в чате на сайте."});
             const b = await body(req);
             if(b.hp) return json(res, 200, {url: "/"});                           // ловушка для ботов
             const sv = C.bySlug(clean(b.slug, 80)); if(!sv) return json(res, 400, {error: "Выберите услугу"});
@@ -460,7 +478,7 @@ function parseBase(text, defaultBase){
         }
         m = p.match(/^\/api\/o\/([A-Za-z0-9_-]{10,80})\/message$/);
         if(req.method === "POST" && m){
-            if(limited("msg:" + m[1], 10, 3600e3)) return json(res, 429, {error: "Слишком много сообщений. Напишите нам в WhatsApp или Telegram."});
+            if(limited("msg:" + m[1], 10, 3600e3)) return json(res, 429, {error: "Слишком много сообщений. Напишите нам в чате на сайте."});
             const o = await byToken(m[1]); if(!o) return json(res, 404, {error: "Заказ не найден"});
             const text = clean((await body(req, 20000)).text, 1500); if(text.length < 2) return json(res, 400, {error: "Напишите сообщение"});
             await engine.note(o.id, text, "Сообщение клиента");
@@ -543,6 +561,18 @@ function parseBase(text, defaultBase){
             await q(`DELETE FROM orders WHERE id = $1`, [o.id]);
             console.log(`🗑 Заказ №${o.num} удалён из CRM (${who})`);
             return json(res, 200, {ok: true, warn: errs.length ? "Ящики не удалились на почтовом сервере (удалите вручную): " + errs.join("; ") : ""});
+        }
+        if(req.method === "GET" && p === "/chats"){
+            const rows = await q(`SELECT sid, who, text, at FROM chat_msgs ORDER BY at DESC LIMIT 2000`), seen = new Map();
+            for(const r of rows){ const c = seen.get(r.sid) || {sid: r.sid, last_who: r.who, last_text: String(r.text).slice(0, 120), last_at: r.at, n: 0}; c.n++; seen.set(r.sid, c); }
+            return json(res, 200, {chats: [...seen.values()].slice(0, 100)});
+        }
+        if(req.method === "GET" && (m = p.match(/^\/chats\/([a-z0-9]{10,24})$/))) return json(res, 200, {msgs: await q(`SELECT id, who, text, at FROM chat_msgs WHERE sid = $1 ORDER BY at LIMIT 300`, [m[1]])});
+        if(req.method === "POST" && (m = p.match(/^\/chats\/([a-z0-9]{10,24})\/reply$/))){
+            const sid = m[1], text = clean((await body(req, 4000)).text, 1500); if(text.length < 1) return json(res, 400, {error: "Напишите ответ"});
+            if(!(await one(`SELECT 1 AS x FROM chat_msgs WHERE sid = $1 LIMIT 1`, [sid]))) return json(res, 404, {error: "Чат не найден"});
+            await q(`INSERT INTO chat_msgs(id, sid, who, text, at) VALUES($1, $2, 'admin', $3, $4)`, [uuid(), sid, text, now()]);
+            return json(res, 200, {ok: true});
         }
         if(req.method === "POST" && p === "/settle"){
             const b = await body(req, 2000), n = Math.max(0, Math.floor(Number(b.num) || 0));
@@ -765,7 +795,7 @@ function parseBase(text, defaultBase){
                 const rest = u.pathname.slice("/api/hook".length);
                 if(req.method === "GET" && rest === "/crm-link") return json(res, 200, {link: SEC.link()});
                 if(req.method === "POST" && rest === "/crm-rotate"){ await SEC.rotate(true); return json(res, 200, {link: SEC.link()}); }
-                if(!/^\/(orders|orders\/[\w-]+|orders\/[\w-]+\/(confirm|cancel|note|reply|email-ok|cover-skip)|jobs\/[\w-]+|jobs\/[\w-]+\/(pause|resume|stop|retry))$/.test(rest)) return json(res, 404, {error: "not found"});
+                if(!/^\/(orders|orders\/[\w-]+|orders\/[\w-]+\/(confirm|cancel|note|reply|email-ok|cover-skip)|chats|chats\/[a-z0-9]{10,24}|chats\/[a-z0-9]{10,24}\/reply|jobs\/[\w-]+|jobs\/[\w-]+\/(pause|resume|stop|retry))$/.test(rest)) return json(res, 404, {error: "not found"});
                 if(req.method === "GET" && /^\/jobs\/[\w-]+$/.test(rest)){ const j = await one(`SELECT id, order_id, m, status FROM jobs WHERE id = $1`, [rest.slice(6)]); return j ? json(res, 200, j) : json(res, 404, {error: "нет задания"}); }
                 const u2 = new URL(u); u2.pathname = "/crm/api" + rest; u2.viaBot = true;
                 return await crmApi(req, res, u2);

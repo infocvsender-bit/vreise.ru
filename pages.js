@@ -1,7 +1,7 @@
 "use strict";
 /* Страницы сайта (HTML на сервере). Только русский язык. */
 const C = require("./catalog.js");
-const {esc, siteUrl, phone, WA, TGL, MAXL, rub} = require("./mails.js");
+const {esc, siteUrl, rub} = require("./mails.js");
 const V = (String(process.env.RAILWAY_GIT_COMMIT_SHA || "").slice(0, 8)) || String(Date.now());
 const env = k => String(process.env[k] || "").trim();
 
@@ -20,7 +20,7 @@ ${noindex ? '<meta name="robots" content="noindex,nofollow">' : `<link rel="cano
 <link rel="stylesheet" href="/static/style.css?v=${V}"></head><body>
 ${hero}${body}
 <footer class="f"><div class="c"><span>© Vreise.ru</span><span><a href="/policy">Политика конфиденциальности</a><a href="/offer">Публичная оферта</a></span></div></footer>
-<script>window.__vr=${JSON.stringify({wa: WA(), tg: TGL(), mx: MAXL(), phone: phone()}).replace(/</g, "\\u003c")}</script><script src="/static/assistant.js?v=${V}" defer></script>
+<script>window.__vr=${JSON.stringify({}).replace(/</g, "\\u003c")}</script><script src="/static/assistant.js?v=${V}" defer></script>
 ${scripts}</body></html>`;
 }
 
@@ -75,8 +75,8 @@ function home(counts){
 <details><summary>Как быстро начнётся рассылка?</summary><p>Сразу после подтверждения оплаты. Письма уходят постепенно в течение нескольких часов, чтобы не попасть в спам.</p></details>
 <details><summary>Что нужно для резюме «Стандарт»?</summary><p>Заполните форму с вашими данными и приложите документы или старое резюме. Готовое резюме придёт на почту и появится на странице заказа в течение 6 часов после оплаты.</p></details>
 </div></div></section>
-<section class="sec" id="contacts"><div class="c"><div class="contacts"><div><h2>Остались вопросы?</h2><p>Напишите нам — ответим в WhatsApp, Telegram или Max.</p>${phone() ? `<div class="tel">${esc(phone())}</div>` : ""}</div>
-<div class="btns">${WA() ? `<a class="btn gold" href="${WA()}" target="_blank" rel="noopener">WhatsApp</a>` : ""}${TGL() ? `<a class="btn line" href="${TGL()}" target="_blank" rel="noopener">Telegram</a>` : ""}${MAXL() ? `<a class="btn line" href="${esc(MAXL())}" target="_blank" rel="noopener">Max</a>` : ""}</div></div></div></section>`;
+<section class="sec" id="contacts"><div class="c"><div class="contacts"><div><h2>Остались вопросы?</h2><p>Спросите онлайн-помощника — он ответит сразу, а живой менеджер ответит прямо в этом же чате.</p></div>
+<div class="btns"><button class="btn gold" type="button" onclick="window.VRAsst&&VRAsst.open()">Открыть чат</button><button class="btn line" type="button" onclick="window.VRAsst&&VRAsst.open('mgr')">Написать менеджеру</button></div></div></div></section>`;
     const scripts = `<script src="/static/site.js?v=${V}" defer></script>`;
     return shell({title: "Vreise.ru — рассылка резюме моряков в крюинговые компании", desc: "Рассылка резюме моряков по базам: Россия, Европа, Офшор, Мир. Резюме «Стандарт» с нуля. Оплата картой в рублях.", hero, body, scripts});
 }
@@ -165,7 +165,7 @@ ${cv ? "" : `<div class="panel"><h3>📅 Дата и время рассылки
 <label class="f">Имя<input class="in" id="first" autocomplete="given-name" required></label>
 <label class="f">Фамилия<input class="in" id="last" autocomplete="family-name" required></label>
 <label class="f">E-mail<small> — сюда придут письма и ответы компаний</small><input class="in" id="email" type="email" autocomplete="email" required></label>
-<label class="f">Телефон / WhatsApp<input class="in" id="phone" type="tel" autocomplete="tel" placeholder="+7 …"></label>
+<label class="f">Телефон<input class="in" id="phone" type="tel" autocomplete="tel" placeholder="+7 …"></label>
 </div>
 <div class="fld"><div class="lbl">Должность <small>— до 3-х</small></div><input type="hidden" id="position">${chips("position", POSITIONS.concat(["Другая"]), 3, "Выберите должность")}
 <input class="in" id="positionOther" placeholder="Укажите вашу должность" hidden></div>
@@ -197,7 +197,7 @@ function orderPage(o, jobs, sent, msgs = [], std = null, replies = []){
 ${o.status === "claimed" ? `<div class="ok">Спасибо! Мы проверяем ваш платёж — как только увидим перевод, заказ будет подтверждён, и вы получите письмо.</div>` : ""}
 <p>Сумма к оплате: <b style="font-size:22px">${rub(o.price)}</b></p>
 ${cards.length ? `<p style="margin-top:12px;margin-bottom:0">${cards.length > 1 ? "Выберите банк и переведите на карту" : "Переведите на карту" + (cards[0].bank ? " " + esc(cards[0].bank) : "")}:</p>${cardsHtml}${env("PAY_HOLDER") ? `<p class="hint">Получатель: ${esc(env("PAY_HOLDER"))}</p>` : ""}`
- : `<div class="err">Реквизиты для оплаты пока не заданы. Напишите нам в WhatsApp или Telegram${phone() ? ": " + esc(phone()) : ""}.</div>`}
+ : `<div class="err">Реквизиты для оплаты пока не заданы. Напишите нам в чате на сайте (кнопка справа внизу).</div>`}
 <p class="hint" style="margin-top:14px">В комментарии к платежу, если есть такая возможность, укажите номер заказа <b>№${o.num}</b>. Переводите точную сумму.</p>
 ${o.status === "new" ? `<div style="margin-top:18px"><button class="btn gold" id="claim" type="button">Я оплатил(а)</button></div>` : ""}</div>` : "";
     const fmtMsk = s => new Date(s).toLocaleString("ru-RU", {timeZone: "Europe/Moscow", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit"});
@@ -298,7 +298,7 @@ ${tracker}${mail ? `<div id="pushbar"></div>` : ""}${emailBanner}${coverBanner}$
 <tr><td>Клиент</td><td>${esc([o.first_name, o.last_name].filter(Boolean).join(" "))}</td></tr><tr><td>E-mail</td><td>${esc(o.email)}</td></tr>
 ${o.phone ? `<tr><td>Телефон</td><td>${esc(o.phone)}</td></tr>` : ""}${o.position ? `<tr><td>Должность</td><td>${esc(o.position)}</td></tr>` : ""}
 <tr><td>Сумма</td><td>${rub(o.price)}</td></tr><tr><td>Оформлен</td><td>${esc(new Date(o.created_at).toLocaleString("ru-RU"))}</td></tr></tbody></table>
-<p class="hint" style="margin-top:12px">Сохраните эту ссылку — по ней всегда можно посмотреть состояние заказа.${phone() ? ` Вопросы — WhatsApp / Telegram ${esc(phone())}.` : ""}</p></div></div>`;
+<p class="hint" style="margin-top:12px">Сохраните эту ссылку — по ней всегда можно посмотреть состояние заказа. Вопросы — в чате на сайте.</p></div></div>`;
     const live = ["claimed", "paid", "in_progress"].includes(o.status) ? `<script>setInterval(function(){var a=document.activeElement;if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))return;if(document.querySelector("textarea[data-dirty]"))return;location.reload()},45000);document.addEventListener("input",function(e){if(e.target&&e.target.tagName==="TEXTAREA")e.target.setAttribute("data-dirty","1")})</script>` : "";
     return shell({title: `Заказ №${o.num} — Vreise.ru`, desc: "Страница заказа", path: "/o/" + o.token, noindex: true, hero: `<header class="hero short">${navTop(false)}</header>`, body,
         scripts: `<script>window.__tok=${JSON.stringify(o.token)}</script><script src="/static/order.js?v=${V}" defer></script><script src="/static/noselect.js?v=${V}" defer></script>${live}`});
@@ -307,7 +307,7 @@ ${o.phone ? `<tr><td>Телефон</td><td>${esc(o.phone)}</td></tr>` : ""}${o.
 /* ---------- политика и оферта ---------- */
 const who = () => env("LEGAL_NAME") || "владелец сайта Vreise.ru (далее — Исполнитель)";
 function legal(kind){
-    const contact = `${phone() ? `WhatsApp / Telegram: ${esc(phone())}` : "через форму на сайте"}`;
+    const contact = "через чат на сайте";
     const policy = `<h1>Политика конфиденциальности</h1>
 <p>Настоящая политика описывает, какие данные собирает сайт Vreise.ru и как они используются. Оператор данных — ${esc(who())}${env("LEGAL_INN") ? `, ИНН ${esc(env("LEGAL_INN"))}` : ""}.</p>
 <h2>Какие данные мы получаем</h2><ul><li>Имя, фамилия, e-mail, телефон, должность и типы судов — из формы заказа.</li><li>Файлы, которые вы загружаете: резюме, документы, текст письма.</li><li>Технические данные: IP-адрес и сведения о браузере — для защиты сайта от злоупотреблений.</li></ul>
