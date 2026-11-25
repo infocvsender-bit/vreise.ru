@@ -266,6 +266,8 @@ module.exports = function engine(db){
         if(inboxBusy || !M.sysOn()) return; inboxBusy = true;
         try {
             const IM = require("./imap.js"), host = env("SYS_IMAP_HOST") || env("SYS_SMTP_HOST"), port = Number(env("SYS_IMAP_PORT")) || 993;
+            const mine = new Set([env("SYS_SMTP_USER"), env("SYS_SMTP_FROM")].map(x => String(x || "").replace(/^.*<([^>]+)>.*$/, "$1").trim().toLowerCase()).filter(Boolean));     // письма с самого ящика (наши же уведомления, тесты) в «Входящие» не берём — иначе уведомление порождает новое уведомление
+            await q(`DELETE FROM inbox WHERE lower(from_email) = ANY($1)`.replace("= ANY($1)", "IN (" + [...mine].map((_, i) => "$" + (i + 1)).join(",") + ")"), [...mine]).catch(() => {});
             const st = await one(`SELECT value FROM meta WHERE key = 'inbox_uid'`); let last = st ? Number(st.value) || 0 : -1, err = null, fresh = [];
             let S = null;
             try {
@@ -276,6 +278,7 @@ module.exports = function engine(db){
                     last = Math.max(last, uid);
                     if(!data || !data.length) continue;
                     const r = IM.parseMail(data);
+                    if(mine.has(String(r.fromRaw || r.from).toLowerCase())) continue;
                     if(await one(`SELECT id FROM inbox WHERE uid = $1`, [uid])) continue;
                     await q(`INSERT INTO inbox(id, uid, from_email, from_name, subject, text, kind, at, created_at, seen) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,0)`,
                         [uuid(), uid, r.fromRaw || r.from, String(r.name || "").slice(0, 200), r.subject, r.text, r.kind, new Date(r.date).toISOString(), now()]);

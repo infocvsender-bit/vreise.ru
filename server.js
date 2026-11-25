@@ -485,7 +485,9 @@ function parseBase(text, defaultBase){
         if(req.method === "POST" && p === "/servers/test"){
             const b = await body(req), to = clean(b.to, 120);
             if(!EMAIL.test(to)) return json(res, 400, {error: "Укажите e-mail для теста"});
-            try { return json(res, 200, {ok: true, domain: await engine.testSend(to)}); } catch(e){ return json(res, 500, {error: e.message}); }
+            try { return json(res, 200, {ok: true, domain: await engine.testSend(to)}); } catch(e){
+                let m = e.message; if(/IP не разрешён|ключ API/.test(m)){ try { const ip = (await (await fetch("https://api.ipify.org", {signal: AbortSignal.timeout(5000)})).text()).trim(); if(/^[\d.:a-f]+$/i.test(ip)) m += `. Исходящий IP сайта сейчас: ${ip}`; } catch(x){} }
+                return json(res, 500, {error: m}); }
         }
         if(req.method === "GET" && p === "/inbox"){
             const st = await one(`SELECT value FROM meta WHERE key = 'inbox_state'`); let state = null; try { state = JSON.parse(st?.value || "null"); } catch(e){}
