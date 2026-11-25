@@ -65,10 +65,12 @@ function home(counts){
         ["Сколько заказов вы принимаете в день?", "Не больше 10 заказов в сутки, чтобы выполнять каждый внимательно. Если лимит на сегодня исчерпан, форма заказа временно закрыта, а приём откроется в 00:00 по Москве."],
         ["Как оплатить заказ?", "Переводом на банковскую карту в рублях. После оформления заказа вы увидите сумму и реквизиты, платёж проверяем вручную и запускаем работу."]
     ];
+    const ICON = {rossiya: "🧭", ofsor: "🏗️", tanker: "🛢️", evropa: "🏰", "ofsor-evropa": "⚓", mir: "🌍", "mir-ofsor": "🌐"}, topKey = C.BASES.reduce((a, b) => (n[b.key] || 0) > (n[a.key] || 0) ? b : a, C.BASES[0]).key, hasN = C.BASES.some(b => n[b.key] > 0);
     const rows = C.BASES.map((b, i) => `<li class="pc a${i % 4}" data-p="${b.prices.map((_, k) => C.priceOf(b, k + 1)).join(",")}" data-b="${b.key}">
-      <h4>${esc(b.name)}</h4><p class="pc-note">${esc(b.note)}</p>
-      ${n[b.key] > 0 ? `<div class="pc-cnt"><b>${numFmt(n[b.key])}</b><span>Адресов в базе</span></div>` : `<div class="pc-cnt"></div>`}
-      <div class="pc-foot"><div class="pc-price" data-price>${rub(C.priceOf(b, 1))}</div><a class="btn gold" data-order href="/order?s=${C.SERVICES.find(s => s.base === b.key && s.times === 1).slug}">Заказать</a><a class="btn ghost" href="#included">Что входит в заказ?</a></div></li>`).join("");
+      ${hasN && b.key === topKey ? `<span class="pc-rib">Максимум охвата</span>` : ""}
+      <div class="pc-top"><span class="pc-ic" aria-hidden="true">${ICON[b.key] || "📨"}</span><h4>${esc(b.name)}</h4></div><p class="pc-note">${esc(b.note)}</p>
+      ${n[b.key] > 0 ? `<div class="pc-cnt"><b>${numFmt(n[b.key])}</b><span>адресов в базе</span></div>` : `<div class="pc-cnt"></div>`}
+      <div class="pc-foot"><div class="pc-pr"><div class="pc-price" data-price>${rub(C.priceOf(b, 1))}</div><small>за заказ</small></div><a class="btn gold" data-order href="/order?s=${C.SERVICES.find(s => s.base === b.key && s.times === 1).slug}">Заказать</a><a class="pc-more" href="#included">Что входит в заказ</a></div></li>`).join("");
     const hero = `<header class="hero">${navTop()}<div class="wrap"><div>
 <div class="pill"><b></b>Онлайн-сервис для моряков</div>
 <h1>Ваше резюме — <span>сразу в крюинговые компании</span></h1>
