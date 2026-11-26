@@ -67,6 +67,7 @@ module.exports = async function openDb(){
     try { await db.query(`ALTER TABLE replies ADD COLUMN notified TEXT`); await db.query(`UPDATE replies SET notified = created_at`); } catch(e){}     // при первом добавлении колонки старые письма считаем уже показанными
     await db.query(`INSERT INTO chat_contacts(email, name, first_at, last_at, chats, msgs, last_sid) SELECT i.email, i.name, i.upd, i.upd, 1, 1, i.sid FROM chat_info i WHERE i.email <> '' AND NOT EXISTS (SELECT 1 FROM chat_contacts c WHERE c.email = i.email) GROUP BY i.email`).catch(() => {});     // контакты из уже существующих чатов
     await db.query(`ALTER TABLE jobs ADD COLUMN pause_until TEXT`).catch(() => {});
+    try { await db.query(`ALTER TABLE orders ADD COLUMN replies_ntf TEXT`); await db.query(`UPDATE orders SET replies_ntf = created_at WHERE (SELECT COUNT(*) FROM replies r WHERE r.order_id = orders.id AND r.kind IN ('reply', 'auto')) >= 10`); } catch(e){}
     await db.query(`ALTER TABLE jobs ADD COLUMN notif_pct INTEGER NOT NULL DEFAULT 0`).catch(() => {});
     return db;
 };
