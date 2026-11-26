@@ -603,7 +603,7 @@ function parseBase(text, defaultBase){
                 j.fails = await q(`SELECT email, error FROM queue WHERE job_id = $1 AND status = 'fail' LIMIT 30`, [j.id]);
             }
             const notes = await q(`SELECT at, author, text FROM notes WHERE order_id = $1 ORDER BY at DESC LIMIT 100`, [o.id]);
-            const boxes = await q(`SELECT email, sent, active, last_error, deleted_at FROM boxes WHERE order_id = $1 ORDER BY created_at`, [o.id]);
+            const boxes = await q(`SELECT id, email, sent, active, last_error, deleted_at FROM boxes WHERE order_id = $1 ORDER BY created_at`, [o.id]);
             const sent = await q(`SELECT qu.company, qu.email, qu.country, qu.status, qu.error, qu.sent_at, j.m FROM queue qu JOIN jobs j ON j.id = qu.job_id WHERE j.order_id = $1 AND qu.status IN ('sent','fail') ORDER BY qu.sent_at DESC LIMIT 1000`, [o.id]);
             const docs = await q(`SELECT id, name, size FROM order_docs WHERE order_id = $1 ORDER BY added_at`, [o.id]);
             let det = null; try { det = o.details ? JSON.parse(o.details) : null; } catch(e){} delete o.details;
@@ -800,6 +800,49 @@ function parseBase(text, defaultBase){
             const j = await one(`SELECT * FROM jobs WHERE id = $1`, [m[1]]); if(!j) return json(res, 404, {error: "нет задания"});
             await engine.jobCtl(j, m[2], who); return json(res, 200, {ok: true});
         }
+        if(req.method === "POST" && (m = p.match(/^\/orders\/([\w-]+)\/letter$/))){           // владелец правит тему и/или текст письма заказа напрямую (клиенту — заметка в истории); reset — стандартное письмо
+            const o = await one(`SELECT * FROM orders WHERE id = $1`, [m[1]]); if(!o) return json(res, 404, {error: "нет заказа"});
+            if(!o.base) return json(res, 400, {error: "У заказа нет рассылки"});
+            const b = await body(req, 40000), std = engine.letterFor({...o, letter: "", subject: ""});
+            let subject = o.subject || "", text = o.letter || "";
+            if(b.reset){ subject = ""; text = ""; }
+            else {
+                if(b.subject !== undefined){ subject = clean(b.subject, 200).replace(/[\r\n]+/g, " "); if(!subject) return json(res, 400, {error: "Тема пустая"}); if(subject === std.subject) subject = ""; }
+                if(b.text !== undefined){ text = String(b.text).replace(/\r/g, "").trim().slice(0, 4000); if(text.length < 20) return json(res, 400, {error: "Письмо слишком короткое"}); if(text.replace(/\s+/g, " ") === std.text.replace(/\s+/g, " ")) text = ""; }
+            }
+            await q(`UPDATE orders SET letter = $1, subject = $2, letter_ok = $3 WHERE id = $4`, [text, subject, now(), o.id]);
+            await engine.note(o.id, b.reset ? "Менеджер вернул стандартное письмо" : `Менеджер изменил ${b.subject !== undefined && b.text !== undefined ? "тему и текст" : b.subject !== undefined ? "тему" : "текст"} письма (новые письма уйдут уже с правкой)`, who);
+            const L = engine.letterFor({...o, letter: text, subject}); return json(res, 200, {ok: true, subject: L.subject, text: L.text});
+        }
+        if(req.method === "POST" && (m = p.match(/^\/orders\/([\w-]+)\/add-job$/))){            // владелец добавляет заказу ещё одну рассылку (без доплаты)
+            const o = await one(`SELECT * FROM orders WHERE id = $1`, [m[1]]); if(!o) return json(res, 404, {error: "нет заказа"});
+            const b = await body(req, 2000);
+            try { const r = await engine.addJob(o, {now: !!b.now, at: clean(b.at, 20)}); await engine.note(o.id, `Менеджер добавил рассылку №${r.m} (без доплаты), старт ${new Date(r.at).toLocaleString("ru-RU", {timeZone: "Europe/Moscow", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit"})} МСК`, who); return json(res, 200, {ok: true, ...r}); }
+            catch(e){ return json(res, 400, {error: e.message || "Не удалось"}); }
+        }
+        if(req.method === "POST" && (m = p.match(/^\/boxes\/([\w-]+)\/delete$/))){               // владелец удаляет ящик: на почтовом сервере и в базе
+            const b = await one(`SELECT * FROM boxes WHERE id = $1`, [m[1]]); if(!b) return json(res, 404, {error: "нет ящика"});
+            if(b.deleted_at) return json(res, 400, {error: "Ящик уже удалён"});
+            try { await engine.deleteBox(b); } catch(e){ return json(res, 400, {error: "Не удалось удалить на почтовом сервере: " + String(e.message || e).slice(0, 200)}); }
+            if(b.order_id) await engine.note(b.order_id, `Ящик ${b.email} удалён вручную (и на почтовом сервере)`, who);
+            return json(res, 200, {ok: true});
+        }
+        if(req.method === "POST" && (m = p.match(/^\/orders\/([\w-]+)\/boxes\/delete$/))){      // удалить все живые ящики заказа
+            const rows = await q(`SELECT * FROM boxes WHERE order_id = $1 AND deleted_at IS NULL`, [m[1]]); let n = 0; const errs = [];
+            for(const b of rows) try { await engine.deleteBox(b); n++; } catch(e){ errs.push(`${b.email}: ${String(e.message || e).slice(0, 120)}`); }
+            if(n) await engine.note(m[1], `Менеджер удалил ящики заказа: ${n} (и на почтовом сервере)${errs.length ? "; ошибки: " + errs.join("; ").slice(0, 300) : ""}`, who);
+            if(!n && errs.length) return json(res, 400, {error: errs.join("; ")});
+            return json(res, 200, {ok: true, deleted: n, errs});
+        }
+        if(req.method === "POST" && (m = p.match(/^\/jobs\/([\w-]+)\/boxes$/))){                // владелец создаёт ещё ящики для идущей/приостановленной рассылки
+            const j = await one(`SELECT * FROM jobs WHERE id = $1`, [m[1]]); if(!j) return json(res, 404, {error: "нет задания"});
+            if(!["run", "pause"].includes(j.status)) return json(res, 400, {error: "Ящики создаются автоматически при старте рассылки; вручную — только для идущей или приостановленной"});
+            const o = await one(`SELECT * FROM orders WHERE id = $1`, [j.order_id]);
+            let r; try { r = await engine.createBoxes(o, j); } catch(e){ return json(res, 400, {error: e.message}); }
+            if(!r.ids.length) return json(res, 400, {error: "Ящики не созданы: " + (r.errs.join("; ") || "нет почтовых серверов")});
+            await engine.note(o.id, `Менеджер создал ящики для рассылки №${j.m}: ${r.ids.length}${r.errs.length ? " (ошибки: " + r.errs.join("; ").slice(0, 200) + ")" : ""}`, who);
+            return json(res, 200, {ok: true, created: r.ids.length, errs: r.errs});
+        }
         if(req.method === "POST" && (m = p.match(/^\/orders\/([\w-]+)\/base$/))){          // владелец меняет базу заказа (в т.ч. на «Тест») — пока рассылка не стартовала
             const o = await one(`SELECT id, num, base, extra_base, status FROM orders WHERE id = $1`, [m[1]]); if(!o) return json(res, 404, {error: "нет заказа"});
             if(!o.base) return json(res, 400, {error: "У заказа нет рассылки"});
@@ -995,7 +1038,7 @@ function parseBase(text, defaultBase){
                 const rest = u.pathname.slice("/api/hook".length);
                 if(req.method === "GET" && rest === "/crm-link") return json(res, 200, {link: SEC.link()});
                 if(req.method === "POST" && rest === "/crm-rotate"){ await SEC.rotate(true); return json(res, 200, {link: SEC.link()}); }
-                if(!/^\/(orders|orders\/[\w-]+|orders\/[\w-]+\/(confirm|cancel|note|reply|email-ok|cover-skip)|chats|chats\/[a-z0-9]{10,24}|chats\/[a-z0-9]{10,24}\/(reply|close)|jobs\/[\w-]+|jobs\/[\w-]+\/(pause|resume|stop|retry))$/.test(rest)) return json(res, 404, {error: "not found"});
+                if(!/^\/(orders|orders\/[\w-]+|orders\/[\w-]+\/(confirm|cancel|note|reply|email-ok|cover-skip|res-skip|base|letter|cover-letter|add-job|result|cv|res|sent\.csv|ai-resume|ai-resume\.docx|ai-resume\/reset|boxes\/delete|doc\/[\w-]+)|bases|bases\/test|bases\/[\w-]+\.csv|boxes|boxes\/[\w-]+\/delete|chats|chats\/[a-z0-9]{10,24}|chats\/[a-z0-9]{10,24}\/(reply|close)|jobs\/[\w-]+|jobs\/[\w-]+\/(pause|resume|stop|retry|time|boxes))$/.test(rest)) return json(res, 404, {error: "not found"});
                 if(req.method === "GET" && /^\/jobs\/[\w-]+$/.test(rest)){ const j = await one(`SELECT id, order_id, m, status FROM jobs WHERE id = $1`, [rest.slice(6)]); return j ? json(res, 200, j) : json(res, 404, {error: "нет задания"}); }
                 const u2 = new URL(u); u2.pathname = "/crm/api" + rest; u2.viaBot = true;
                 return await crmApi(req, res, u2);

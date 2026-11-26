@@ -401,6 +401,24 @@ module.exports = function engine(db){
         return new Date(at2).toISOString();
     }
 
+    /* владелец: добавить заказу ещё одну рассылку (без доплаты); opt = {now: true} или {at: "YYYY-MM-DDTHH:MM"} по Москве */
+    async function addJob(o, opt = {}){
+        if(!o.base) throw new Error("У заказа нет рассылки");
+        if(o.status === "cancelled") throw new Error("Заказ отменён");
+        if(["new", "claimed"].includes(o.status)) throw new Error("Сначала подтвердите оплату заказа");
+        const last = await one(`SELECT MAX(m) AS m FROM jobs WHERE order_id = $1`, [o.id]), m = (Number(last && last.m) || 0) + 1;
+        if(m > 6) throw new Error("Не больше 6 рассылок в заказе");
+        const T = isTest(o); let ms = opt.now ? Date.now() : parseMsk(opt.at);
+        if(!Number.isFinite(ms)) throw new Error("Неверная дата: нужен формат ГГГГ-ММ-ДДTЧЧ:ММ по Москве");
+        if(ms < Date.now() - 60e3) throw new Error("Время должно быть в будущем");
+        if(ms > Date.now() + 200 * DAY) throw new Error("Дата слишком далеко");
+        const at2 = T ? Math.max(ms, Date.now()) : nextWindow(Math.max(ms, Date.now()));
+        await q(`INSERT INTO jobs(id, order_id, m, status, start_at) VALUES($1,$2,$3,'wait',$4)`, [uuid(), o.id, m, new Date(at2).toISOString()]);
+        await q(`UPDATE orders SET times = $1, status = CASE WHEN status = 'done' THEN 'in_progress' ELSE status END, done_at = NULL WHERE id = $2`, [Math.max(m, Number(o.times) || 0), o.id]);
+        setTimeout(() => tick().catch(() => {}), 1000);
+        return {m, at: new Date(at2).toISOString()};
+    }
+
     /* владелец из CRM: поставить старт на ближайшее разрешённое время («сейчас» — но только будни 06:00–18:00 МСК) */
     async function startJobNow(job){
         const o = await one(`SELECT * FROM orders WHERE id = $1`, [job.order_id]), T = isTest(o);
@@ -434,5 +452,5 @@ module.exports = function engine(db){
         return c.domain;
     }
 
-    return {pollReplies, pollInbox, startOrder, tick, start, jobCtl, applyExclude, setJobTime, startJobNow, sameDayCheck, note, pick, baseCounts, testSend, letterFor, hasBase, parseExclude, deleteBox, byFleet, push: Push, flushReplies, progressMark};
+    return {pollReplies, pollInbox, startOrder, tick, start, jobCtl, applyExclude, setJobTime, startJobNow, sameDayCheck, addJob, createBoxes, note, pick, baseCounts, testSend, letterFor, hasBase, parseExclude, deleteBox, byFleet, push: Push, flushReplies, progressMark};
 };
