@@ -338,3 +338,10 @@ details.autofill>summary{cursor:pointer;list-style:none;font-size:19px;font-weig
 @media(min-width:700px){.iosHow{align-items:center}}
 
 .mgbar{padding:14px 18px}.mgb{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.mgb .btn{flex:0 0 auto}
+
+details.rpl{padding:0}details.rpl>summary{list-style:none;cursor:pointer;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline;padding:11px 36px 11px 14px;position:relative}
+details.rpl>summary::-webkit-details-marker{display:none}details.rpl>summary::after{content:"▾";position:absolute;right:14px;top:11px;color:var(--muted)}details.rpl[open]>summary::after{content:"▴"}
+details.rpl>summary b{min-width:0;overflow-wrap:anywhere}details.rpl>summary time{color:var(--muted);font-size:12.5px}
+details.rpl .rk{font-size:12px;font-weight:800;border-radius:999px;padding:2px 9px;background:#e3f6ec;color:#147a46}details.rpl .rk.auto{background:#eef3f8;color:#33485c}
+details.rpl .rs{flex:0 0 100%;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}details.rpl[open] .rs{white-space:normal}
+details.rpl>.b,details.rpl>.rfw,details.rpl>.hint{margin-left:14px;margin-right:14px}details.rpl>.rfw{margin-bottom:12px;margin-top:10px}
