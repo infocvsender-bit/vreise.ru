@@ -301,6 +301,7 @@ ${payBlock}
     const paidDone = ["paid", "in_progress", "done"].includes(o.status), jobsEnded = jobs.length > 0 && jobs.every(j => ["done", "stop"].includes(j.status));
     const steps = [{t: "Заказ оформлен", s: "done", d: ""},
         {t: "Оплата", s: paidDone ? "done" : "todo", d: o.status === "claimed" ? "проверяем платёж" : o.status === "new" ? "ждём оплату" : "получена"}];
+    const noCv = o.kind === "mailing" && !o.cv_b64 && !o.cv_name && o.status !== "cancelled";
     const resPending = cv && mail && !!o.res_name && !o.res_ok && o.status !== "cancelled";
     if(cv) steps.push({t: "Резюме", s: o.res_name && !resPending ? "done" : "todo", d: resPending ? "ждёт вашего подтверждения" : o.res_name ? (mail ? "подтверждено" : "готово") : paidDone ? "составляем" : ""});
     if(mail) steps.push({t: "Рассылка", s: jobsEnded ? "done" : "todo", d: jobsEnded ? "завершена" : jobs.some(j => j.status === "pause") ? "на паузе" : jobs.some(j => j.status === "run") ? "идёт" : jobs.length ? (resPending ? "после подтверждения резюме" : !o.email_ok ? "после подтверждения e-mail" : !o.start_ok ? "ждёт вашего «Старта»" : "ждёт старта") : paidDone ? "готовим" : ""});
@@ -367,7 +368,7 @@ ${notStarted ? `<div class="jtf" hidden data-j="${esc(j.id)}"><label class="f">�
     const wait = cv && ["paid", "in_progress"].includes(o.status) && !o.res_name ? `<div class="ok">Оплата получена. Готовим ваше резюме — оно придёт на почту и появится здесь в течение 6 часов.</div>` : "";
     const emailBanner = !o.email_ok && o.status !== "cancelled" ? `<div class="err" style="background:#fff7dc;color:#6b4e00;border-color:#f0d78a;margin-bottom:18px">✉️ <b>Подтвердите e-mail.</b> Мы отправили письмо на <b>${esc(o.email)}</b> — нажмите в нём кнопку. ${cv ? "" : "Без подтверждения рассылка не начнётся. "}Письма нет? Проверьте «Спам» или <button class="btn gold sm" id="resend" type="button" style="margin:0 6px">отправьте ещё раз</button><span class="hint" id="rsmsg"></span></div>` : "";
     const running = jobs.some(j => j.status === "run");
-    const noCv = o.kind === "mailing" && !o.cv_b64 && !o.cv_name && o.status !== "cancelled";
+    const finished = o.status === "done" && !jobs.some(j => ["wait", "run", "pause"].includes(j.status));   // всё выполнено — править письмо и резюме уже незачем
     const startPending = mail && !noCv && !o.start_ok && !!o.email_ok && o.status !== "cancelled" && !(cv && !o.res_ok) && !(Number(o.cover) && !o.cover_ok) && !!std;
     let schedList = []; if(jobs.length) schedList = jobs.map(j => fmtMsk(Date.parse(j.start_at))); else { try { schedList = (JSON.parse(o.schedule || "[]") || []).map(v => fmtMsk(Date.parse(v + ":00+03:00"))); } catch(e){} }
     const startBlock = startPending ? `<div class="panel" id="start" style="border:2px solid #f2b400"><h3>🚀 Всё готово — запустите рассылку</h3>
@@ -382,11 +383,11 @@ ${schedList.length ? `<p style="margin:0 0 10px"><b>Старт${schedList.length
 <label class="f">Тема письма<input class="in" id="cvsub" maxlength="200" value="${esc(o.draft_subject || "")}"></label>
 <div style="margin-top:14px"><label class="f">Текст письма<textarea class="in" id="cvtxt" maxlength="4000" style="min-height:260px">${esc(o.draft_letter)}</textarea></label></div>
 <div style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><button class="btn gold" id="cvok" type="button">Подтвердить и запустить рассылку</button><span class="hint" id="cvmsg"></span></div></div>` : "";
-    const resumeBlock = o.kind === "mailing" && o.status !== "cancelled" ? `<div class="panel" id="cvfile"${noCv ? ' style="border:2px solid #e0a100"' : ""}><h3>${noCv ? "📎 Прикрепите ваше резюме" : "Ваше резюме"}</h3>
+    const resumeBlock = o.kind === "mailing" && o.status !== "cancelled" && !finished ? `<div class="panel" id="cvfile"${noCv ? ' style="border:2px solid #e0a100"' : ""}><h3>${noCv ? "📎 Прикрепите ваше резюме" : "Ваше резюме"}</h3>
 <p class="hint" style="margin:0 0 12px">${noCv ? "<b>Файл резюме не прикреплён.</b> Прикрепите ваше резюме — без него рассылка не начнётся." : `Сейчас компаниям уходит файл <b>${esc(o.cv_name || "резюме")}</b>.`} ${noCv ? "" : `Можно заменить его в любой момент${running ? " — новый файл будет приложен к письмам, которые ещё не отправлены" : ""}.`}</p>
 <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><input class="in" type="file" id="rsfile" accept=".pdf,.doc,.docx,.xls,.xlsx" style="max-width:360px"><button class="btn gold sm" id="rsgo" type="button">${noCv ? "Прикрепить резюме" : "Заменить резюме"}</button><span class="hint" id="rsmsg2"></span></div>
 <p class="hint" style="margin:10px 0 0">PDF, Word или Excel, до 5 МБ.</p></div>` : "";
-    const letterBlock = std && o.status !== "cancelled" ? `<div class="panel"><h3>Тема и сопроводительное письмо</h3>
+    const letterBlock = std && o.status !== "cancelled" && !finished ? `<div class="panel"><h3>Тема и сопроводительное письмо</h3>
 <p class="hint" style="margin:0 0 14px">✉️ ${jobs.length ? "Мы отправили" : "Как только всё будет готово, мы отправим"} вам на почту <b>${esc(o.email)}</b> письмо — так ваша рассылка будет выглядеть для работодателей. ${o.letter || o.subject ? "Здесь ваш вариант письма." : "Сейчас стоит стандартное письмо, составленное по вашим данным."} Резюме прикладывается автоматически. <b>Если хотите что-то поменять — сделайте это здесь:</b> новый вариант применится ко всем ещё не отправленным письмам${running ? " (уже отправленные не изменятся)" : ""}.</p>
 <form id="lf"><label class="f">Тема письма<input class="in" id="lsub" maxlength="200" value="${esc(std.cur.subject)}"></label>
 <div style="margin-top:14px"><label class="f">Текст письма<textarea class="in" id="ltxt" maxlength="4000" style="min-height:230px">${esc(std.cur.text)}</textarea></label></div>
