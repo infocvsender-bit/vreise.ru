@@ -1,5 +1,5 @@
 "use strict";
-/* Рассылка: заказ оплачен → задания (1/2/3 рассылки на выбранные даты, отправка по будням 06:00–18:00 МСК, не быстрее 10 часов) → ящик на каждом сервере Hestia (по имени клиента) →
+/* Рассылка: заказ оплачен → задания (1/2/3 рассылки на выбранные даты, отправка по будням 06:00–18:00 МСК, не быстрее 10 часов; базы Россия/Офшор/Европа — не быстрее 6 часов) → ящик на каждом сервере Hestia (по имени клиента) →
    очередь адресов из базы → письма по одному с паузой SEND_GAP_SEC → отчёт. Ответы компаний идут клиенту (Reply-To). Ящики удаляются через 24 часа после конца. */
 const crypto = require("crypto");
 const M = require("./mailer.js");
@@ -13,6 +13,7 @@ const WEEK = 7 * 864e5, DAY = 864e5, MSK = 3 * 3600e3;
 const MIN_HOURS = 10, WIN_FROM = 6, WIN_TO = 18;
 const mskParts = ms => { const d = new Date(ms + MSK); return {dow: d.getUTCDay(), h: d.getUTCHours() + d.getUTCMinutes() / 60 + d.getUTCSeconds() / 3600, d}; };
 /* заказ на тестовую базу владельца (без реальной доп. базы): окно 06:00–18:00 МСК, выходные и 10-часовой темп не применяются */
+const PLAN = require("./plan.js");
 const isTest = o => !!o && o.base === "test" && !o.extra_base;
 const inWindow = ms => { const p = mskParts(ms); return p.dow >= 1 && p.dow <= 5 && p.h >= WIN_FROM && p.h < WIN_TO; };
 /* Старт «сегодня» (по Москве): можно, если заказ оформляется в будний день до 12:00 МСК; время старта — не позже 15:00 (дальше идёт до 18:00 и продолжается на следующий рабочий день).
@@ -277,9 +278,17 @@ module.exports = function engine(db){
                     continue;
                 }
                 if(!isTest(o) && !inWindow(Date.now())) continue;                              // вне окна 06:00–18:00 МСК и в выходные не отправляем
+                let batch = 1, keepLast = 0;
+                if(!isTest(o) && require("./catalog.js").sameDay(o)){            // «Россия» / «Офшор» / «Европа»: вся рассылка не быстрее 6 часов (вместо 10) — при старте до 12:00 уходит в тот же день
+                    const g = Math.max(PLAN.sameGapMs(), PLAN.SAME_MIN_H * 3600e3 / Math.max(1, Number(job.total) || 1)), last = lastSend.get(job.id) || 0, since = Date.now() - last;
+                    if(since < g) continue;
+                    batch = Math.min(4, Math.floor(since / g));                           // тик раз в 5 с: при паузе меньше 5 с за тик уходит несколько писем; остаток времени переносится
+                    keepLast = last && since < 5 * g ? last + batch * g : Date.now();
+                } else
                 if(Date.now() - (lastSend.get(job.id) || 0) < (isTest(o) ? GAP() : Math.max(GAP(), MIN_HOURS * 3600e3 / Math.max(1, Number(job.total) || 1)))) continue;   // темп: вся рассылка не быстрее 10 часов
-                lastSend.set(job.id, Date.now());
-                const more = await sendOne(job, o);
+                lastSend.set(job.id, keepLast || Date.now());
+                let more = await sendOne(job, o);
+                for(let bi = 1; bi < batch && more; bi++) more = await sendOne(job, o);
                 if(!more){
                     const left = await one(`SELECT COUNT(*) AS n FROM queue WHERE job_id = $1 AND status = 'wait'`, [job.id]);
                     const cur = await one(`SELECT status FROM jobs WHERE id = $1`, [job.id]);

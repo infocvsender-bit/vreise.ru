@@ -2,11 +2,11 @@
 /* Каталог услуг и цены в рублях. Рассылки: 8 готовых баз × 1/2/3 рассылки. Резюме «Стандарт» — 1999 ₽, персональное сопроводительное письмо — 449 ₽.
    Поменять цену можно переменной Railway PRICE_<slug>=1500 (дефис в slug → _). */
 const BASES = [
-    {key: "rossiya", count: 541, name: "Россия", note: "Крюинговые компании и судовладельцы России", prices: [1439, 2249, 3329]},
-    {key: "ofsor", count: 4778, name: "Офшор", note: "Крюинговые компании и судовладельцы по всему миру, нанимающие на офшорный флот", prices: [1439, 2249, 3329]},
+    {key: "rossiya", day: true, count: 541, name: "Россия", note: "Крюинговые компании и судовладельцы России", prices: [1439, 2249, 3329]},
+    {key: "ofsor", day: true, count: 4778, name: "Офшор", note: "Крюинговые компании и судовладельцы по всему миру, нанимающие на офшорный флот", prices: [1439, 2249, 3329]},
     {key: "tanker", count: 3466, name: "Танкеры и газовозы", note: "Крюинговые компании и судовладельцы по всему миру с танкерным и газовым флотом", prices: [1439, 2249, 3329]},
-    {key: "evropa", count: 3646, name: "Европа + Россия", note: "Крюинговые компании и судовладельцы Европы и России", prices: [1709, 2519, 3419]},
-    {key: "ofsor-evropa", count: 7259, name: "Офшор + Европа + Россия", note: "Крюинговые компании и судовладельцы: офшорный флот мира, Европа и Россия", prices: [2339, 3239, 4139]},
+    {key: "evropa", day: true, count: 3646, name: "Европа + Россия", note: "Крюинговые компании и судовладельцы Европы и России", prices: [1709, 2519, 3419]},
+    {key: "ofsor-evropa", day: true, count: 7259, name: "Офшор + Европа + Россия", note: "Крюинговые компании и судовладельцы: офшорный флот мира, Европа и Россия", prices: [2339, 3239, 4139]},
     {key: "mir", count: 6465, name: "Мир", note: "Крюинговые компании и судовладельцы по всему миру", prices: [2069, 3149, 4049]},
     {key: "mir-ofsor", count: 9146, name: "Мир + Офшор", note: "Крюинговые компании и судовладельцы по всему миру, включая офшорный флот", prices: [2879, 3779, 4679]}
 ];
@@ -25,6 +25,10 @@ SERVICES.push({slug: CV.slug, kind: "cv", times: 0, price: envPrice(CV.slug) || 
 
 const bySlug = slug => SERVICES.find(s => s.slug === slug);
 const baseOf = key => BASES.find(b => b.key === key);
+/* Базы «Россия», «Офшор», «Европа + Россия», «Офшор + Европа + Россия» идут не быстрее 6 часов (при старте до 12:00 МСК уходят целиком в день старта); «Мир» и остальные — не менее 10 часов, остаток на следующий рабочий день. С дополнительной базой — только если и она из этих. */
+const sameDay = o => { const ks = [o && o.base, o && o.extra_base].filter(Boolean); return !!ks.length && ks.every(k => { const b = baseOf(k); return !!(b && b.day); }); };
+/* оценка числа адресов до старта (когда реальное число ещё не известно) */
+const estCount = o => [o && o.base, o && o.extra_base].filter(Boolean).reduce((s, k) => s + ((baseOf(k) || {}).count || 0), 0);
 /* «Тест» — служебная база владельца (адреса вписывает он сам в CRM). В BASES и SERVICES её нет, клиент заказать её не может; ставится только из CRM в карточке заказа. */
 const TEST_KEY = "test";
 const baseName = key => key === TEST_KEY ? "Тест" : (baseOf(key) || {}).name || key;
@@ -41,4 +45,4 @@ const extraPrice = full => Math.max(1, Math.round(full * (100 - extraDiscPct()) 
 
 const coverPrice = () => envPrice("cover") || 449;
 
-module.exports = {TEST_KEY, baseName, coverPrice, discPct, addonPrice, extraDiscPct, extraPrice, BASES, TIMES, CV, SERVICES, bySlug, baseOf, priceOf, fmt, cvPrice: () => envPrice(CV.slug) || CV.price};
+module.exports = {sameDay, estCount, TEST_KEY, baseName, coverPrice, discPct, addonPrice, extraDiscPct, extraPrice, BASES, TIMES, CV, SERVICES, bySlug, baseOf, priceOf, fmt, cvPrice: () => envPrice(CV.slug) || CV.price};
