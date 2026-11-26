@@ -15,6 +15,18 @@ const mskParts = ms => { const d = new Date(ms + MSK); return {dow: d.getUTCDay(
 /* заказ на тестовую базу владельца (без реальной доп. базы): окно 06:00–18:00 МСК, выходные и 10-часовой темп не применяются */
 const isTest = o => !!o && o.base === "test" && !o.extra_base;
 const inWindow = ms => { const p = mskParts(ms); return p.dow >= 1 && p.dow <= 5 && p.h >= WIN_FROM && p.h < WIN_TO; };
+/* Старт «сегодня» (по Москве): можно, если заказ оформляется в будний день до 12:00 МСК; время старта — не позже 15:00 (дальше идёт до 18:00 и продолжается на следующий рабочий день).
+   После 12:00 и в выходные: «на сегодня нет свободных мест». Возвращает текст ошибки или "" (если дата не сегодняшняя — тоже ""). */
+const TODAY_UNTIL = 12, TODAY_LAST_START = 15, NO_PLACES = "На сегодня нет свободных мест — выберите другую дату";
+function sameDayCheck(at, nowMs = Date.now()){
+    const ms = parseMsk(at); if(!Number.isFinite(ms)) return "";
+    const day = t => Math.floor((t + MSK) / DAY); if(day(ms) !== day(nowMs)) return "";
+    const np = mskParts(nowMs), p = mskParts(ms);
+    if(np.dow < 1 || np.dow > 5 || np.h >= TODAY_UNTIL) return NO_PLACES;
+    if(p.h > TODAY_LAST_START) return `Сегодня старт возможен не позже ${TODAY_LAST_START}:00 по Москве`;
+    if(ms < nowMs) return "Это время уже прошло — выберите более позднее";
+    return "";
+}
 /* Пауза клиента — не дольше 2 рабочих дней: прибавляем 2 будних дня (суббота и воскресенье не считаются) */
 const PAUSE_DAYS = 2;
 function addWorkdays(ms, n){ let t = ms, k = 0; while(k < n){ t += DAY; const w = mskParts(t).dow; if(w >= 1 && w <= 5) k++; } return t; }
@@ -372,9 +384,10 @@ module.exports = function engine(db){
     }
 
     /* клиент меняет время старта ещё не начавшейся рассылки; at — «YYYY-MM-DDTHH:MM» по Москве */
-    async function setJobTime(o, job, at){
+    async function setJobTime(o, job, at, opt = {}){
         const T = isTest(o), ms = parseMsk(at); if(!Number.isFinite(ms)) throw new Error("Неверная дата");
         const p = mskParts(ms); if(!T && (p.h < WIN_FROM || p.h >= WIN_TO)) throw new Error("Время старта — с 06:00 до 18:00 по Москве");
+        if(opt.client){ const e = sameDayCheck(at); if(e) throw new Error(e); }          // клиент: «сегодня» — только по правилу до 12:00 / не позже 15:00
         if(ms < Date.now() + (T ? 60e3 : 3600e3)) throw new Error(T ? "Время должно быть в будущем" : "Старт — не раньше чем через час от текущего момента");
         if(ms > Date.now() + 200 * DAY) throw new Error("Дата слишком далеко");
         const jobs = await q(`SELECT * FROM jobs WHERE order_id = $1 ORDER BY m`, [o.id]), day = t => Math.floor((t + MSK) / DAY);
@@ -421,5 +434,5 @@ module.exports = function engine(db){
         return c.domain;
     }
 
-    return {pollReplies, pollInbox, startOrder, tick, start, jobCtl, applyExclude, setJobTime, startJobNow, note, pick, baseCounts, testSend, letterFor, hasBase, parseExclude, deleteBox, byFleet, push: Push, flushReplies, progressMark};
+    return {pollReplies, pollInbox, startOrder, tick, start, jobCtl, applyExclude, setJobTime, startJobNow, sameDayCheck, note, pick, baseCounts, testSend, letterFor, hasBase, parseExclude, deleteBox, byFleet, push: Push, flushReplies, progressMark};
 };

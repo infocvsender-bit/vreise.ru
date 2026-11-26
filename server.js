@@ -341,17 +341,19 @@ function parseBase(text, defaultBase){
                 title = `${sv.title} + «${eb.name}» (доп. база −${C.extraDiscPct()}%)`;
             }
             let schedule = null;
-            if(base){                                                              // даты и время рассылок (по Москве): не раньше завтра, старт 06:00–17:59, по возрастанию
+            if(base){                                                              // даты и время рассылок (по Москве): сегодня — до 12:00 МСК и старт не позже 15:00, иначе с завтра; старт 06:00–17:59, по возрастанию
                 const arr = Array.isArray(b.schedule) ? b.schedule.slice(0, 3) : [];
                 if(arr.length !== Number(times)) return json(res, 400, {error: "Выберите дату и время старта для каждой рассылки"});
                 const mskNow = new Date(Date.now() + 3 * 3600e3), today = Date.UTC(mskNow.getUTCFullYear(), mskNow.getUTCMonth(), mskNow.getUTCDate());
-                let prevDay = today;
+                let prevDay = null;
                 for(const x of arr){
                     const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(String(x));
                     if(!m) return json(res, 400, {error: "Неверная дата рассылки"});
                     const day = Date.UTC(+m[1], +m[2] - 1, +m[3]), hh = +m[4], mm = +m[5];
                     if(new Date(day).getUTCDate() !== +m[3] || hh < 6 || hh > 17 || mm > 59) return json(res, 400, {error: "Время старта — с 06:00 до 18:00 по Москве"});
-                    if(day <= prevDay) return json(res, 400, {error: prevDay === today ? "Дата рассылки — не раньше завтрашнего дня" : "Каждая следующая рассылка — на более позднюю дату"});
+                    if(day < today) return json(res, 400, {error: "Эта дата уже прошла — выберите другую"});
+                    if(day === today){ const e = engine.sameDayCheck(String(x)); if(e) return json(res, 409, {error: e}); }   // сегодня — только до 12:00 МСК, старт не позже 15:00
+                    if(prevDay !== null && day <= prevDay) return json(res, 400, {error: "Каждая следующая рассылка — на более позднюю дату"});
                     if(day - today > 200 * 864e5) return json(res, 400, {error: "Дата рассылки слишком далеко"});
                     prevDay = day;
                 }
@@ -508,7 +510,7 @@ function parseBase(text, defaultBase){
             const b = await body(req, 1000), j = await one(`SELECT * FROM jobs WHERE id = $1 AND order_id = $2`, [String(b.id || ""), o.id]);
             if(!j) return json(res, 404, {error: "Рассылка не найдена"});
             if(j.started_at || !["wait", "pause"].includes(j.status)) return json(res, 400, {error: "Рассылка уже началась — время менять поздно"});
-            try { const at = await engine.setJobTime(o, j, String(b.at || "")); await engine.note(o.id, `Клиент изменил время старта рассылки №${j.m}: ${String(b.at).replace("T", " ")} МСК`, "Клиент"); return json(res, 200, {ok: true, start_at: at}); }
+            try { const at = await engine.setJobTime(o, j, String(b.at || ""), {client: true}); await engine.note(o.id, `Клиент изменил время старта рассылки №${j.m}: ${String(b.at).replace("T", " ")} МСК`, "Клиент"); return json(res, 200, {ok: true, start_at: at}); }
             catch(e){ return json(res, 400, {error: e.message}); }
         }
         /* список «куда не отправлять» */

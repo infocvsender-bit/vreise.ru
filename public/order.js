@@ -224,14 +224,26 @@
     function dstr(d){ return d.getUTCFullYear() + "-" + p2(d.getUTCMonth() + 1) + "-" + p2(d.getUTCDate()); }
     function mskDay(add){ return dstr(new Date(Date.now() + 3 * 3600e3 + add * 864e5)); }
     function mailCount(){ if(isCv){ if(!addBase || !addBase.value) return 0; return Number(addBase.value.split(":")[1]) || 1; } return timesOf(); }
+    /* «сегодня» (по Москве): можно, если сейчас будний день и ещё нет 12:00; старт — не позже 15:00. Окончательная проверка — на сервере. */
+    var NO_PLACES = "На сегодня нет свободных мест — выберите другую дату";
+    function mskNow(){ return new Date(Date.now() + 3 * 3600e3); }
+    function todayOpen(){ var n = mskNow(), dw = n.getUTCDay(); return dw >= 1 && dw <= 5 && n.getUTCHours() < 12; }
+    function minTodayMin(){ var n = mskNow(); return Math.max(360, Math.floor((n.getUTCHours() * 60 + n.getUTCMinutes()) / 30) * 30 + 30); }
+    function timeOpts(d, sel){
+        var today = d === mskDay(0), from = today ? minTodayMin() : 360, to = today ? 15 * 60 : 17 * 60 + 30, list = [];
+        for(var m = from; m <= to; m += 30) list.push(p2(Math.floor(m / 60)) + ":" + p2(m % 60));
+        if(!list.length) list.push("06:00");
+        if(list.indexOf(sel) < 0) sel = list.indexOf("10:00") >= 0 ? "10:00" : list[0];
+        return {sel: sel, html: list.map(function(t){ return "<option" + (t === sel ? " selected" : "") + ">" + t + "</option>"; }).join("")};
+    }
     function renderSched(){
         if(!schedBox) return;
-        var n = mailCount(), min = mskDay(1), html = "";
+        var n = mailCount(), min = mskDay(0), html = "";
         for(var i = 0; i < n; i++){
             var v = schedVals[i] || {d: mskDay(1 + 7 * i), t: "10:00"};
-            if(v.d < min) v.d = min; schedVals[i] = v;
-            var opts = ""; for(var h = 6; h < 18; h++) for(var m = 0; m < 60; m += 30){ var tt = p2(h) + ":" + p2(m); opts += "<option" + (tt === v.t ? " selected" : "") + ">" + tt + "</option>"; }
-            html += '<div class="schrow"><span class="schn">' + (n > 1 ? "Рассылка №" + (i + 1) : "Рассылка") + '</span><input type="date" class="in" data-sd="' + i + '" min="' + min + '" value="' + v.d + '"><select class="in" data-st="' + i + '">' + opts + '</select><span class="schw" data-sw="' + i + '"></span></div>';
+            if(v.d < min) v.d = mskDay(1 + 7 * i);
+            var to = timeOpts(v.d, v.t); v.t = to.sel; schedVals[i] = v;
+            html += '<div class="schrow"><span class="schn">' + (n > 1 ? "Рассылка №" + (i + 1) : "Рассылка") + '</span><input type="date" class="in" data-sd="' + i + '" min="' + min + '" value="' + v.d + '"><select class="in" data-st="' + i + '">' + to.html + '</select><span class="schw" data-sw="' + i + '"></span></div>';
         }
         schedBox.innerHTML = html; weekendNotes();
     }
@@ -239,20 +251,32 @@
         [].forEach.call(schedBox ? schedBox.querySelectorAll("[data-sw]") : [], function(w){
             var v = schedVals[Number(w.getAttribute("data-sw"))]; if(!v || !v.d) return;
             var dw = new Date(v.d + "T00:00:00Z").getUTCDay();
-            w.textContent = dw === 6 || dw === 0 ? "Выходной — старт перенесётся на понедельник" : "";
+            w.style.color = "";
+            if(v.d === mskDay(0)){
+                if(todayOpen()) w.textContent = "Сегодня — старт не позже 15:00; письма уйдут, как только вы и мы подтвердим заказ";
+                else { w.textContent = NO_PLACES; w.style.color = "#c0392b"; }
+            } else w.textContent = dw === 6 || dw === 0 ? "Выходной — старт перенесётся на понедельник" : "";
         });
     }
     if(schedBox) schedBox.addEventListener("change", function(e){
         var a = e.target.getAttribute("data-sd"), b = e.target.getAttribute("data-st");
-        if(a !== null){ schedVals[Number(a)].d = e.target.value; }
+        if(a !== null){
+            var i = Number(a), v = schedVals[i]; v.d = e.target.value;
+            var sel = schedBox.querySelector('[data-st="' + i + '"]'), to = timeOpts(v.d, v.t); v.t = to.sel; if(sel) sel.innerHTML = to.html;     // для «сегодня» — только время от текущего момента до 15:00
+        }
         if(b !== null){ schedVals[Number(b)].t = e.target.value; }
         weekendNotes();
     });
     function schedCheck(){
-        var n = mailCount(), min = mskDay(1), prev = "";
+        var n = mailCount(), today = mskDay(0), prev = "";
         for(var i = 0; i < n; i++){
             var v = schedVals[i]; if(!v || !/^\d{4}-\d{2}-\d{2}$/.test(v.d)) return "Выберите дату рассылки";
-            if(v.d < min) return "Дата рассылки — не раньше завтрашнего дня";
+            if(v.d < today) return "Эта дата уже прошла — выберите другую";
+            if(v.d === today){
+                if(!todayOpen()) return NO_PLACES;
+                if(v.t > "15:00") return "Сегодня старт возможен не позже 15:00 по Москве";
+                var tm = v.t.split(":"); if(Number(tm[0]) * 60 + Number(tm[1]) < minTodayMin() - 30) return "Это время уже прошло — выберите более позднее";
+            }
             if(prev && v.d <= prev) return "Каждая следующая рассылка — на более позднюю дату, чем предыдущая";
             prev = v.d;
         }
