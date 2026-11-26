@@ -710,14 +710,7 @@ function parseBase(text, defaultBase){
         }
         if(req.method === "POST" && (m = p.match(/^\/orders\/([\w-]+)\/delete$/))){
             const o = await one(`SELECT id, num FROM orders WHERE id = $1`, [m[1]]); if(!o) return json(res, 404, {error: "нет заказа"});
-            await q(`UPDATE jobs SET status = 'stop', finished_at = $1 WHERE order_id = $2 AND status IN ('wait','run','pause')`, [now(), o.id]);
-            const errs = [];
-            for(const b of await q(`SELECT * FROM boxes WHERE order_id = $1 AND deleted_at IS NULL`, [o.id])) try { await engine.deleteBox(b); } catch(e){ errs.push(`${b.email}: ${e.message}`); }
-            for(const b of await q(`SELECT id FROM boxes WHERE order_id = $1`, [o.id])) await q(`DELETE FROM imap_state WHERE box_id = $1`, [b.id]);
-            await q(`DELETE FROM queue WHERE job_id IN (SELECT id FROM jobs WHERE order_id = $1)`, [o.id]);
-            for(const t of ["jobs", "boxes", "replies", "reply_fwd", "notes", "order_docs", "ai_resumes", "reviews"]) await q(`DELETE FROM ${t} WHERE order_id = $1`, [o.id]);
-            await q(`DELETE FROM orders WHERE id = $1`, [o.id]);
-            console.log(`🗑 Заказ №${o.num} удалён из CRM (${who})`);
+            const errs = await engine.deleteOrder(o, who);
             return json(res, 200, {ok: true, warn: errs.length ? "Ящики не удалились на почтовом сервере (удалите вручную): " + errs.join("; ") : ""});
         }
         if(req.method === "GET" && p === "/online") return json(res, 200, {...Online.list(), newReviews: Number((await one(`SELECT COUNT(*) AS n FROM reviews WHERE status = 'new'`)).n)});
@@ -977,7 +970,7 @@ function parseBase(text, defaultBase){
             const map = {
                 confirm: () => Mail.T.confirm(ord), paid: () => Mail.T.paid(ord), started: () => Mail.T.started(ord, job), finished: () => Mail.T.finished(ord, job),
                 reply: () => Mail.T.reply(ord, "Здравствуйте! Это пример ответа менеджера по вашему заказу.", "", null), newReplies: () => Mail.T.newReplies(ord, 2),
-                coverDraft: () => Mail.T.coverDraft(ord, L.subject, L.text), cvReady: () => Mail.T.cvReady(ord), reviewAsk: () => Mail.T.reviewAsk(ord),
+                coverDraft: () => Mail.T.coverDraft(ord, L.subject, L.text), cvReady: () => Mail.T.cvReady(ord), expired: () => Mail.T.expired(ord), reviewAsk: () => Mail.T.reviewAsk(ord),
                 owner_order: () => { const t = ownerOrderText(ord); return Mail.send(to, t.split("\n")[0].slice(0, 120), `<pre style="font:14px/1.5 Arial,sans-serif;white-space:pre-wrap">${Mail.esc(t)}</pre>`, t); }};
             if(!map[name]) return json(res, 400, {error: "Неизвестное письмо"});
             const okSend = await map[name]();

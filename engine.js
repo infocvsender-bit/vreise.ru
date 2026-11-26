@@ -369,6 +369,30 @@ module.exports = function engine(db){
     const REPLY_MS = () => { const m = Number(env("REPLY_MIN")); return (m > 0 ? m : 5) * 60e3; };
     /* через 3 дня после выполнения заказа — письмо «Оставьте отзыв» (ссылка на /reviews?o=<токен>); раз на заказ (`orders.review_ask`) */
     const REVIEW_DAYS = 3; let reviewAt = 0;
+    /* Полное удаление заказа: останавливает рассылки, удаляет ящики на серверах и все данные. Возвращает список ошибок по ящикам. */
+    async function deleteOrder(o, who){
+        await q(`UPDATE jobs SET status = 'stop', finished_at = $1 WHERE order_id = $2 AND status IN ('wait','run','pause')`, [now(), o.id]);
+        const errs = [];
+        for(const b of await q(`SELECT * FROM boxes WHERE order_id = $1 AND deleted_at IS NULL`, [o.id])) try { await deleteBox(b); } catch(e){ errs.push(`${b.email}: ${e.message}`); }
+        for(const b of await q(`SELECT id FROM boxes WHERE order_id = $1`, [o.id])) await q(`DELETE FROM imap_state WHERE box_id = $1`, [b.id]);
+        await q(`DELETE FROM queue WHERE job_id IN (SELECT id FROM jobs WHERE order_id = $1)`, [o.id]);
+        for(const t of ["jobs", "boxes", "replies", "reply_fwd", "notes", "order_docs", "ai_resumes", "reviews"]) await q(`DELETE FROM ${t} WHERE order_id = $1`, [o.id]);
+        await q(`DELETE FROM orders WHERE id = $1`, [o.id]);
+        console.log(`🗑 Заказ №${o.num} удалён (${who})`);
+        return errs;
+    }
+    /* Не оплачен за UNPAID_H часов (по умолчанию 12; только статус «ждёт оплаты» — кто нажал «Я оплатил(а)», остаётся): письмо «Заказ отменён» с кнопкой «Оформить повторно», затем заказ удаляется везде. */
+    const UNPAID_H = () => { const n = Number(env("UNPAID_H")); return n > 0 ? n : 12; };
+    async function expireUnpaid(){
+        const cut = new Date(Date.now() - UNPAID_H() * 3600e3).toISOString();
+        const rows = await q(`SELECT * FROM orders WHERE status = 'new' AND created_at <= $1 ORDER BY created_at LIMIT 20`, [cut]);
+        for(const o of rows){
+            const cur = await one(`SELECT status FROM orders WHERE id = $1`, [o.id]); if(!cur || cur.status !== "new") continue;     // успел нажать «Я оплатил(а)»
+            let sent = false; try { sent = await Mail.T.expired(o); } catch(e){}
+            try { await deleteOrder(o, "Система"); } catch(e){ console.error("expire:", e.message); continue; }
+            Mail.owner(`🗑 Заказ №${o.num} не оплачен за ${UNPAID_H()} ч — отменён и удалён\n${o.first_name || ""} ${o.last_name || ""} · ${Mail.rub(o.price)}\nПисьмо клиенту ${sent ? "отправлено" : "НЕ отправлено"}`);
+        }
+    }
     async function askReviews(){
         const cut = new Date(Date.now() - REVIEW_DAYS * DAY).toISOString();
         const rows = await q(`SELECT * FROM orders WHERE status = 'done' AND done_at IS NOT NULL AND done_at <= $1 AND review_ask IS NULL ORDER BY done_at LIMIT 20`, [cut]);
@@ -381,7 +405,7 @@ module.exports = function engine(db){
             await note(o.id, "Клиенту отправлена просьба оставить отзыв (через 3 дня после выполнения)", "Система");
         }
     }
-    const start = () => { if(!timer) timer = setInterval(() => { tick().catch(() => {}); if(Date.now() - reviewAt > 600e3){ reviewAt = Date.now(); askReviews().catch(() => {}); } if(Date.now() - replyAt > REPLY_MS()){ replyAt = Date.now(); pollReplies().catch(() => {}); pollInbox().catch(() => {}); } }, 5000); };
+    const start = () => { if(!timer) timer = setInterval(() => { tick().catch(() => {}); if(Date.now() - reviewAt > 600e3){ reviewAt = Date.now(); askReviews().catch(() => {}); expireUnpaid().catch(e => console.error("expire:", e.message)); } if(Date.now() - replyAt > REPLY_MS()){ replyAt = Date.now(); pollReplies().catch(() => {}); pollInbox().catch(() => {}); } }, 5000); };
 
     /* клиент поменял список исключений: убираем подходящие адреса из ещё не отправленной очереди уже идущих рассылок */
     async function applyExclude(o){
@@ -467,5 +491,5 @@ module.exports = function engine(db){
         return c.domain;
     }
 
-    return {askReviews, pollReplies, pollInbox, startOrder, tick, start, jobCtl, applyExclude, setJobTime, startJobNow, sameDayCheck, addJob, createBoxes, note, pick, baseCounts, testSend, letterFor, hasBase, parseExclude, deleteBox, byFleet, push: Push, flushReplies, notifyReplies10};
+    return {askReviews, expireUnpaid, deleteOrder, pollReplies, pollInbox, startOrder, tick, start, jobCtl, applyExclude, setJobTime, startJobNow, sameDayCheck, addJob, createBoxes, note, pick, baseCounts, testSend, letterFor, hasBase, parseExclude, deleteBox, byFleet, push: Push, flushReplies, notifyReplies10};
 };
