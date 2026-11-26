@@ -25,6 +25,10 @@
         });
     });
 
+    /* кнопки «Сменить письмо» / «Заменить резюме» раскрывают свои формы; ссылка «Изменить письмо» в блоке старта тоже */
+    function openPanel(id){ var e = $(id); if(!e) return; e.hidden = false; try { e.scrollIntoView({block: "start", behavior: "smooth"}); } catch(x){} }
+    [].forEach.call(document.querySelectorAll(".mgo"), function(b){ b.addEventListener("click", function(){ var e = $(b.getAttribute("data-open")); if(!e) return; if(e.hidden) openPanel(e.id); else e.hidden = true; }); });
+    [].forEach.call(document.querySelectorAll('a[href="#lf"]'), function(a){ a.addEventListener("click", function(ev){ ev.preventDefault(); openPanel("letterbox"); }); });
     /* управление рассылкой: пауза / продолжить / отменить / время старта */
     function post(path, data){
         return fetch("/api/o/" + window.__tok + path, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(data)})
@@ -180,15 +184,15 @@
     if(lf){
         var std = {}; try { std = JSON.parse($("lstd").textContent); } catch(e){}
         var lmsg = function(t){ $("lmsg").textContent = t; };
-        var post = function(body){
+        var lpost = function(body){
             lmsg("Сохраняем…");
             return fetch("/api/o/" + window.__tok + "/letter", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)})
                 .then(function(r){ return r.json().then(function(j){ return {ok: r.ok, j: j}; }); })
                 .then(function(x){ if(!x.ok) throw new Error(x.j.error || "Не удалось сохранить"); lmsg("✅ Сохранено"); })
                 .catch(function(e){ lmsg("❌ " + e.message); });
         };
-        lf.addEventListener("submit", function(ev){ ev.preventDefault(); post({subject: $("lsub").value, text: $("ltxt").value}); });
-        var rs = $("lreset"); if(rs) rs.addEventListener("click", function(){ $("lsub").value = std.subject || ""; $("ltxt").value = std.text || ""; post({reset: true}); });
+        lf.addEventListener("submit", function(ev){ ev.preventDefault(); lpost({subject: $("lsub").value, text: $("ltxt").value}); });
+        var rs = $("lreset"); if(rs) rs.addEventListener("click", function(){ $("lsub").value = std.subject || ""; $("ltxt").value = std.text || ""; lpost({reset: true}); });
     }
 
     /* замена резюме */

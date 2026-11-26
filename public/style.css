@@ -336,3 +336,5 @@ details.autofill>summary{cursor:pointer;list-style:none;font-size:19px;font-weig
 .iosHow .ih-box{background:#fff;border-radius:20px;padding:22px 20px;max-width:440px;width:100%;max-height:90vh;overflow:auto}.iosHow h3{margin:0 0 12px;font-size:19px;color:var(--deep)}
 .iosHow ol{margin:0 0 12px;padding-left:22px}.iosHow li{margin:0 0 10px;font-size:15.5px;line-height:1.45}.iosHow .btn{width:100%;margin-top:6px}
 @media(min-width:700px){.iosHow{align-items:center}}
+
+.mgbar{padding:14px 18px}.mgb{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.mgb .btn{flex:0 0 auto}
