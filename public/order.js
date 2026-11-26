@@ -108,13 +108,29 @@
             var x = '<button class="pb-x" data-push="hide" title="Скрыть" type="button">✕</button>';
             box.innerHTML = st === "on" ? '<div class="pushbar on">✅ Уведомления включены на этом устройстве <button class="pb-l" data-push="off" type="button">Отключить</button></div>'
                 : st === "denied" ? '<div class="pushbar on">🔕 Уведомления для сайта заблокированы в браузере. Чтобы включить: нажмите на значок 🔒 слева от адреса сайта → «Уведомления» → «Разрешить».</div>'
-                : st === "ios" ? '<div class="pushbar">' + x + '<div class="pb-i">🔔</div><div><b>Уведомления на iPhone</b><small>Safari → «Поделиться» → «На экран „Домой“». Откройте кабинет со значка на экране и нажмите «Включить уведомления».</small></div></div>'
+                : st === "ios" ? '<div class="pushbar">' + x + '<div class="pb-i">🔔</div><div><b>Включите уведомления</b><small>Сообщим, когда компании ответят на рассылку — даже если сайт закрыт. На iPhone включается в два касания — покажем как.</small></div><button class="btn gold sm pb-b" data-push="how" type="button">Включить</button></div>'
                 : '<div class="pushbar">' + x + '<div class="pb-i">🔔</div><div><b>Включите уведомления</b><small>Сообщим, когда компании ответят на рассылку — в том числе автоответом, — даже если сайт закрыт.</small></div><button class="btn gold sm pb-b" data-push="on" type="button">Включить</button></div>';
         };
         if(!PUSH_OK){ draw(IOS && !STANDALONE ? "ios" : "none"); return; }
         if(Notification.permission === "denied"){ draw("denied"); return; }
         navigator.serviceWorker.register("/sw.js").then(function(reg){ return reg.pushManager.getSubscription(); })
             .then(function(sub){ if(sub) pushApi({sub: sub.toJSON()}).catch(function(){}); draw(sub ? "on" : "off"); }).catch(function(){ draw("none"); });
+    }
+    /* iPhone: уведомления доступны только у сайта, добавленного на экран «Домой» — показываем пошаговую подсказку */
+    function iosHow(){
+        if($("iosHow")) return;
+        var share = '<svg width="18" height="22" viewBox="0 0 18 22" style="vertical-align:-4px" aria-hidden="true"><path d="M9 1v13M5 5l4-4 4 4M3 9H2a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V10a1 1 0 0 0-1-1h-1" fill="none" stroke="#0b6bcb" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        var d = document.createElement("div"); d.id = "iosHow"; d.className = "iosHow";
+        d.innerHTML = '<div class="ih-box" role="dialog" aria-modal="true"><h3>🔔 Как включить уведомления на iPhone</h3><ol>'
+            + '<li><b>Нажмите «Поделиться»</b> ' + share + ' — значок внизу экрана Safari (квадрат со стрелкой вверх).</li>'
+            + '<li><b>Прокрутите меню вниз</b> и выберите <b>«На экран „Домой“»</b>, затем нажмите <b>«Добавить»</b>.</li>'
+            + '<li><b>Откройте кабинет со значка Vreise</b> на экране «Домой» (не из Safari).</li>'
+            + '<li>В кабинете вверху нажмите <b>«Включить»</b> и в окне iPhone — <b>«Разрешить»</b>.</li></ol>'
+            + '<p class="hint">Без добавления на экран «Домой» iPhone не разрешает сайтам присылать уведомления — это правило Apple. Ответы компаний всё равно придут вам на e-mail.</p>'
+            + '<button class="btn gold" type="button" id="iosHowOk">Понятно</button></div>';
+        document.body.appendChild(d);
+        var close = function(){ d.parentNode && d.parentNode.removeChild(d); };
+        $("iosHowOk").addEventListener("click", close); d.addEventListener("click", function(e){ if(e.target === d) close(); });
     }
     document.addEventListener("click", function(e){
         var f = e.target.closest && e.target.closest(".rfwd");
@@ -131,6 +147,7 @@
         var b = e.target.closest && e.target.closest("[data-push]"); if(!b) return;
         var a = b.getAttribute("data-push");
         if(a === "hide"){ try { localStorage.setItem("vr-push-hide", String(Date.now() + 7 * 864e5)); } catch(x){} $("pushbar").innerHTML = ""; return; }
+        if(a === "how"){ iosHow(); return; }
         b.disabled = true;
         navigator.serviceWorker.register("/sw.js").then(function(){ return navigator.serviceWorker.ready; }).then(function(reg){
             if(a === "off") return reg.pushManager.getSubscription().then(function(sub){ if(!sub) return; return pushApi({off: true, endpoint: sub.endpoint}).catch(function(){}).then(function(){ return sub.unsubscribe(); }); });

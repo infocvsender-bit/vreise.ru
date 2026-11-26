@@ -331,3 +331,8 @@ details.autofill>summary{cursor:pointer;list-style:none;font-size:19px;font-weig
 
 .ms-pop{position:static!important;margin-top:6px;max-height:340px;box-shadow:none;border-color:var(--deep)}.ms-tip{font-size:13.5px;color:var(--muted);padding:6px 10px 8px}
 .ms-done{position:sticky;bottom:0;display:block;width:100%;margin-top:6px;padding:13px 16px;font-size:16px;box-shadow:0 -8px 12px #fff}
+
+.iosHow{position:fixed;inset:0;z-index:100;background:rgba(10,30,40,.55);display:flex;align-items:flex-end;justify-content:center;padding:16px}
+.iosHow .ih-box{background:#fff;border-radius:20px;padding:22px 20px;max-width:440px;width:100%;max-height:90vh;overflow:auto}.iosHow h3{margin:0 0 12px;font-size:19px;color:var(--deep)}
+.iosHow ol{margin:0 0 12px;padding-left:22px}.iosHow li{margin:0 0 10px;font-size:15.5px;line-height:1.45}.iosHow .btn{width:100%;margin-top:6px}
+@media(min-width:700px){.iosHow{align-items:center}}
