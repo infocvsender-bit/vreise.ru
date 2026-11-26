@@ -324,3 +324,5 @@ button#go[disabled]{opacity:.5;cursor:not-allowed}
 .rv-pick{display:flex;gap:4px}
 .rv-pick button{background:none;border:0;font-size:2rem;line-height:1;color:#d5dde0;cursor:pointer;padding:2px}
 .rv-pick button.on{color:var(--gold)}
+
+.schnote summary{cursor:pointer;font-weight:700;color:var(--deep);font-size:14px;list-style:none;padding:2px 0}.schnote summary::-webkit-details-marker{display:none}.schnote summary:after{content:" ▾"}.schnote[open] summary:after{content:" ▴"}.schnote p{margin:6px 0 0}
