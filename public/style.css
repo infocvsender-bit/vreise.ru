@@ -345,3 +345,4 @@ details.rpl>summary b{min-width:0;overflow-wrap:anywhere}details.rpl>summary tim
 details.rpl .rk{font-size:12px;font-weight:800;border-radius:999px;padding:2px 9px;background:#e3f6ec;color:#147a46}details.rpl .rk.auto{background:#eef3f8;color:#33485c}
 details.rpl .rs{flex:0 0 100%;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}details.rpl[open] .rs{white-space:normal}
 details.rpl>.b,details.rpl>.rfw,details.rpl>.hint{margin-left:14px;margin-right:14px}details.rpl>.rfw{margin-bottom:12px;margin-top:10px}
+@media(max-width:520px){footer.f .c{text-align:center}footer.f .fb .brand{justify-content:center}footer.f .fb p{margin-left:auto;margin-right:auto}footer.f .fchips{justify-content:center}footer.f .fbtn{justify-content:center}footer.f .fl{align-items:center;text-align:center}footer.f .fl .fnote{text-align:center;min-width:0}footer.f h4{margin-bottom:14px}}
