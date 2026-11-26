@@ -76,7 +76,7 @@ function ownerOrderText(o){
     if(o.phone) L.push(`📞 ${o.phone}`);
     if(digits.length >= 9) L.push(`💬 WhatsApp: https://wa.me/${digits}`, `✈️ Telegram: https://t.me/+${digits}`);
     if(o.base){
-        const b1 = C.baseOf(o.base), b2 = o.extra_base ? C.baseOf(o.extra_base) : null;
+        const b1 = {name: C.baseName(o.base)}, b2 = o.extra_base ? {name: C.baseName(o.extra_base)} : null;
         L.push("", `📮 Рассылка: ${C.TIMES[Number(o.times) - 1] || o.times} · база «${b1 ? b1.name : o.base}»${b2 ? ` + «${b2.name}»` : ""}`);
         if(sch.length) L.push(`📅 Старт (МСК): ${sch.map(fdt).join("; ")}`);
         L.push(Number(o.cover) ? "💌 Письмо: персональное (заказано, пишем в CRM)" : o.letter ? "💌 Письмо: своё, текст ниже" : "💌 Письмо: стандартное");
@@ -608,7 +608,9 @@ function parseBase(text, defaultBase){
             const replies = await q(`SELECT id, from_email, from_name, subject, text, kind, at FROM replies WHERE order_id = $1 ORDER BY at DESC LIMIT 200`, [o.id]);
             const fw2 = new Set((await q(`SELECT reply_id FROM reply_fwd WHERE order_id = $1`, [o.id])).map(x => x.reply_id)); for(const r of replies) r.fwd = fw2.has(r.id);
             const def = o.base ? engine.letterFor({...o, letter: "", subject: ""}) : null;
-            return json(res, 200, {order: o, details: det, def, docs, replies, sent, jobs, notes, boxes, link: Mail.orderLink(o)});
+            const started = Number((await one(`SELECT COUNT(*) AS n FROM queue WHERE job_id IN (SELECT id FROM jobs WHERE order_id = $1)`, [o.id])).n) > 0;
+            const baseInfo = o.base ? {name: C.baseName(o.base), extraName: o.extra_base ? C.baseName(o.extra_base) : "", can: !started && o.status !== "cancelled", options: C.BASES.map(b => ({key: b.key, name: b.name})).concat([{key: C.TEST_KEY, name: "Тест (только для владельца)"}])} : null;
+            return json(res, 200, {order: o, details: det, def, docs, replies, sent, jobs, notes, boxes, link: Mail.orderLink(o), baseInfo});
         }
         if(req.method === "GET" && (m = p.match(/^\/orders\/([\w-]+)\/doc\/([\w-]+)$/))){
             const d = await one(`SELECT name, b64 FROM order_docs WHERE id = $1 AND order_id = $2`, [m[2], m[1]]); if(!d) return json(res, 404, {error: "файла нет"});
@@ -796,9 +798,56 @@ function parseBase(text, defaultBase){
             const j = await one(`SELECT * FROM jobs WHERE id = $1`, [m[1]]); if(!j) return json(res, 404, {error: "нет задания"});
             await engine.jobCtl(j, m[2], who); return json(res, 200, {ok: true});
         }
+        if(req.method === "POST" && (m = p.match(/^\/orders\/([\w-]+)\/base$/))){          // владелец меняет базу заказа (в т.ч. на «Тест») — пока рассылка не стартовала
+            const o = await one(`SELECT id, num, base, extra_base, status FROM orders WHERE id = $1`, [m[1]]); if(!o) return json(res, 404, {error: "нет заказа"});
+            if(!o.base) return json(res, 400, {error: "У заказа нет рассылки"});
+            const b = await body(req), nb = clean(b.base, 40), ex = clean(b.extra, 40);
+            if(nb !== C.TEST_KEY && !C.baseOf(nb)) return json(res, 400, {error: "Неизвестная база"});
+            if(ex && (ex === nb || ex === C.TEST_KEY || !C.baseOf(ex))) return json(res, 400, {error: "Неверная дополнительная база"});
+            if(o.status === "cancelled") return json(res, 400, {error: "Заказ отменён"});
+            if(Number((await one(`SELECT COUNT(*) AS n FROM queue WHERE job_id IN (SELECT id FROM jobs WHERE order_id = $1)`, [o.id])).n)) return json(res, 400, {error: "Рассылка уже началась — базу можно менять только до старта"});
+            await q(`UPDATE orders SET base = $1, extra_base = $2 WHERE id = $3`, [nb, ex || null, o.id]);
+            await engine.note(o.id, `База заказа изменена: «${C.baseName(o.base)}»${o.extra_base ? ` + «${C.baseName(o.extra_base)}»` : ""} → «${C.baseName(nb)}»${ex ? ` + «${C.baseName(ex)}»` : ""} (цена заказа не пересчитывается)`, who);
+            return json(res, 200, {ok: true});
+        }
+        if(req.method === "POST" && (m = p.match(/^\/jobs\/([\w-]+)\/time$/))){            // владелец ставит время старта ещё не начавшейся рассылки
+            const j = await one(`SELECT * FROM jobs WHERE id = $1`, [m[1]]); if(!j) return json(res, 404, {error: "нет задания"});
+            if(!["wait", "pause"].includes(j.status) || Number((await one(`SELECT COUNT(*) AS n FROM queue WHERE job_id = $1`, [j.id])).n)) return json(res, 400, {error: "Время можно менять только у рассылки, которая ещё не началась"});
+            const o = await one(`SELECT * FROM orders WHERE id = $1`, [j.order_id]), b = await body(req);
+            try {
+                const at = b.now ? await engine.startJobNow(j) : await engine.setJobTime(o, j, clean(b.at, 20));
+                await engine.note(o.id, `Менеджер поставил старт рассылки №${j.m}: ${new Date(at).toLocaleString("ru-RU", {timeZone: "Europe/Moscow", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit"})} МСК (отправка — по будням 06:00–18:00)`, who);
+                return json(res, 200, {ok: true, at});
+            } catch(e){ return json(res, 400, {error: e.message || "Не удалось"}); }
+        }
         if(req.method === "GET" && p === "/bases"){
             counts = null; const c = await getCounts();
-            return json(res, 200, {total: c.total, byBase: c.byBase, bases: C.BASES.map(b => ({key: b.key, name: b.name}))});
+            const tn = Number((await one(`SELECT COUNT(*) AS n FROM test_rows`)).n);
+            return json(res, 200, {total: c.total, byBase: {...c.byBase, test: tn}, bases: C.BASES.map(b => ({key: b.key, name: b.name})), testName: C.baseName("test")});
+        }
+        /* служебная база «Тест»: адреса (e-mail + название) вписывает владелец; в реальные базы и на сайт не попадают, ставится только в карточке заказа */
+        if(req.method === "GET" && p === "/bases/test") return json(res, 200, {rows: await q(`SELECT email, company FROM test_rows ORDER BY added_at, email`)});
+        if(req.method === "POST" && p === "/bases/test"){
+            const b = await body(req), seen = new Set(), rows = [];
+            for(const l of String(b.text || "").replace(/^\ufeff/, "").split(/\r?\n/)){
+                const f = l.split(/[,;\t]/).map(x => x.trim()), email = String(f[0] || "").toLowerCase();
+                if(!EMAIL.test(email) || seen.has(email)) continue; seen.add(email); rows.push([email, clean(f.slice(1).join(" ").trim(), 120)]);
+                if(rows.length >= 500) break;
+            }
+            await q(`DELETE FROM test_rows`);
+            const t = now(); for(let i = 0; i < rows.length; i++) await q(`INSERT INTO test_rows(email, company, added_at) VALUES($1,$2,$3)`, [rows[i][0], rows[i][1], t + String(i).padStart(4, "0")]);
+            return json(res, 200, {ok: true, n: rows.length});
+        }
+        /* выгрузка базы в CSV: по ключу базы (как её видит рассылка), «all» — все адреса, «test» — тестовая */
+        if(req.method === "GET" && (m = p.match(/^\/bases\/([\w-]+)\.csv$/))){
+            const key = m[1], cell = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+            let rows, name;
+            if(key === "test"){ rows = (await q(`SELECT email, company FROM test_rows ORDER BY added_at, email`)).map(r => ({...r, country: "", fleets: "", bases: "test"})); name = "Тест"; }
+            else if(key === "all"){ rows = await q(`SELECT email, company, country, fleets, bases FROM base_rows ORDER BY email`); name = "Все"; }
+            else if(C.baseOf(key)){ rows = (await q(`SELECT email, company, country, fleets, bases FROM base_rows ORDER BY email`)).filter(r => engine.hasBase(r, key)); name = C.baseOf(key).name; }
+            else return json(res, 404, {error: "Нет такой базы"});
+            const csv = "\ufeff" + ["email;company;country;fleets;bases"].concat(rows.map(r => [r.email, r.company, r.country, r.fleets, r.bases].map(cell).join(";"))).join("\r\n");
+            return send(res, 200, csv, "text/csv; charset=utf-8", {"Content-Disposition": `attachment; filename="base-${key}.csv"; filename*=UTF-8''${encodeURIComponent("база-" + name + ".csv")}`, "Cache-Control": "no-store"});
         }
         if(req.method === "POST" && p === "/bases/ru-rescan"){            // добавить в базу «Россия» уже загруженные адреса российских компаний
             const rows = await q(`SELECT email, country, bases FROM base_rows`); let n = 0;

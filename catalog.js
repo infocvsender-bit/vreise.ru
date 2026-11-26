@@ -25,6 +25,9 @@ SERVICES.push({slug: CV.slug, kind: "cv", times: 0, price: envPrice(CV.slug) || 
 
 const bySlug = slug => SERVICES.find(s => s.slug === slug);
 const baseOf = key => BASES.find(b => b.key === key);
+/* «Тест» — служебная база владельца (адреса вписывает он сам в CRM). В BASES и SERVICES её нет, клиент заказать её не может; ставится только из CRM в карточке заказа. */
+const TEST_KEY = "test";
+const baseName = key => key === TEST_KEY ? "Тест" : (baseOf(key) || {}).name || key;
 const priceOf = (b, n) => envPrice(mailSlug(b.key, n)) || b.prices[n - 1];
 const fmt = n => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " ₽";
 
@@ -38,4 +41,4 @@ const extraPrice = full => Math.max(1, Math.round(full * (100 - extraDiscPct()) 
 
 const coverPrice = () => envPrice("cover") || 449;
 
-module.exports = {coverPrice, discPct, addonPrice, extraDiscPct, extraPrice, BASES, TIMES, CV, SERVICES, bySlug, baseOf, priceOf, fmt, cvPrice: () => envPrice(CV.slug) || CV.price};
+module.exports = {TEST_KEY, baseName, coverPrice, discPct, addonPrice, extraDiscPct, extraPrice, BASES, TIMES, CV, SERVICES, bySlug, baseOf, priceOf, fmt, cvPrice: () => envPrice(CV.slug) || CV.price};

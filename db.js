@@ -31,6 +31,7 @@ module.exports = async function openDb(){
         `CREATE TABLE IF NOT EXISTS notes(id TEXT PRIMARY KEY, order_id TEXT NOT NULL, at TEXT NOT NULL, author TEXT, text TEXT NOT NULL)`,
         `CREATE INDEX IF NOT EXISTS idx_notes_order ON notes(order_id)`,
         `CREATE TABLE IF NOT EXISTS base_rows(email TEXT PRIMARY KEY, company TEXT, country TEXT, fleets TEXT, bases TEXT NOT NULL, added_at TEXT NOT NULL)`,
+        `CREATE TABLE IF NOT EXISTS test_rows(email TEXT PRIMARY KEY, company TEXT, added_at TEXT NOT NULL)`,
         `CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY, order_id TEXT NOT NULL, m INTEGER NOT NULL, status TEXT NOT NULL, total INTEGER NOT NULL DEFAULT 0,
             sent INTEGER NOT NULL DEFAULT 0, failed INTEGER NOT NULL DEFAULT 0, start_at TEXT NOT NULL, started_at TEXT, finished_at TEXT, last_error TEXT, rr INTEGER NOT NULL DEFAULT 0, boxes_deleted_at TEXT)`,
         `CREATE INDEX IF NOT EXISTS idx_jobs_order ON jobs(order_id)`,

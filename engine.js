@@ -46,9 +46,16 @@ module.exports = function engine(db){
         return tokens.some(t => e === t || dom === t.replace(/^@/, "") || dom.includes(t) || (co && co.includes(t)));
     }
     async function pick(o){
-        const rows = await q(`SELECT email, company, country, fleets, bases FROM base_rows`);
-        const tokens = parseExclude(o.exclude), seen = new Set();
-        return rows.filter(r => (hasBase(r, o.base) || (o.extra_base && hasBase(r, o.extra_base))) && !excluded(r, tokens) && !seen.has(r.email) && seen.add(r.email));
+        const tokens = parseExclude(o.exclude), seen = new Set(), out = [], keys = [o.base, o.extra_base].filter(Boolean);
+        if(keys.includes("test")){                                      // служебная база владельца: свои адреса из test_rows, в реальные базы не попадают
+            for(const r of await q(`SELECT email, company FROM test_rows ORDER BY added_at, email`)) if(!seen.has(r.email) && seen.add(r.email)) out.push({email: r.email, company: r.company || "", country: "", fleets: "", bases: "test"});
+        }
+        const real = keys.filter(k => k !== "test");
+        if(real.length){
+            const rows = await q(`SELECT email, company, country, fleets, bases FROM base_rows`);
+            for(const r of rows) if(real.some(k => hasBase(r, k)) && !excluded(r, tokens) && !seen.has(r.email) && seen.add(r.email)) out.push(r);
+        }
+        return out;
     }
     /* порядок отправки: сначала компании, чей флот совпадает с видами судов, выбранными моряком; внутри группы — вперемешку.
        Далее — компании без указанного флота, в конце — с другим флотом. «Любые суда» / нет выбора — просто вперемешку. */
@@ -379,6 +386,14 @@ module.exports = function engine(db){
         return new Date(at2).toISOString();
     }
 
+    /* владелец из CRM: поставить старт на ближайшее разрешённое время («сейчас» — но только будни 06:00–18:00 МСК) */
+    async function startJobNow(job){
+        const at2 = nextWindow(Date.now()), prev = await one(`SELECT m, start_at FROM jobs WHERE order_id = $1 AND m < $2 ORDER BY m DESC LIMIT 1`, [job.order_id, job.m]);
+        if(prev && Date.parse(prev.start_at) >= at2) throw new Error(`Рассылка №${prev.m} должна стартовать раньше — сначала запустите её`);
+        await q(`UPDATE jobs SET start_at = $1, status = CASE WHEN status = 'pause' THEN 'pause' ELSE 'wait' END WHERE id = $2`, [new Date(at2).toISOString(), job.id]);
+        return new Date(at2).toISOString();
+    }
+
     async function jobCtl(job, action, who){
         const o = await one(`SELECT * FROM orders WHERE id = $1`, [job.order_id]);
         if(action === "pause") await q(`UPDATE jobs SET status = 'pause', pause_until = $2 WHERE id = $1 AND status IN ('run','wait')`, [job.id, who === "Клиент" ? new Date(addWorkdays(Date.now(), PAUSE_DAYS)).toISOString() : null]);   // клиентская пауза кончается сама через 2 рабочих дня; менеджер ставит паузу без срока
@@ -402,5 +417,5 @@ module.exports = function engine(db){
         return c.domain;
     }
 
-    return {pollReplies, pollInbox, startOrder, tick, start, jobCtl, applyExclude, setJobTime, note, pick, baseCounts, testSend, letterFor, hasBase, parseExclude, deleteBox, byFleet, push: Push, flushReplies, progressMark};
+    return {pollReplies, pollInbox, startOrder, tick, start, jobCtl, applyExclude, setJobTime, startJobNow, note, pick, baseCounts, testSend, letterFor, hasBase, parseExclude, deleteBox, byFleet, push: Push, flushReplies, progressMark};
 };
