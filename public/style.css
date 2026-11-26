@@ -346,3 +346,7 @@ details.rpl .rk{font-size:12px;font-weight:800;border-radius:999px;padding:2px 9
 details.rpl .rs{flex:0 0 100%;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}details.rpl[open] .rs{white-space:normal}
 details.rpl>.b,details.rpl>.rfw,details.rpl>.hint{margin-left:14px;margin-right:14px}details.rpl>.rfw{margin-bottom:12px;margin-top:10px}
 @media(max-width:520px){footer.f .c{text-align:center}footer.f .fb .brand{justify-content:center}footer.f .fb p{margin-left:auto;margin-right:auto}footer.f .fchips{justify-content:center}footer.f .fbtn{justify-content:center}footer.f .fl{align-items:center;text-align:center}footer.f .fl .fnote{text-align:center;min-width:0}footer.f h4{margin-bottom:14px}}
+
+details.prev{padding:0}details.prev>summary{list-style:none;cursor:pointer;font-weight:800;font-size:17px;color:var(--ink);padding:16px 40px 16px 22px;position:relative}details.prev>summary::-webkit-details-marker{display:none}
+details.prev>summary::after{content:"▾";position:absolute;right:20px;top:16px;color:var(--muted)}details.prev[open]>summary::after{content:"▴"}
+details.prev .pvb{margin:0 22px;padding:14px 16px;border:1px solid #d5e3e6;border-radius:12px;background:#f6fafb;font-size:15px}details.prev>p{margin-left:22px!important;margin-right:22px!important;margin-bottom:18px!important}

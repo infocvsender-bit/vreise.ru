@@ -449,7 +449,6 @@ function parseBase(text, defaultBase){
             await q(`UPDATE orders SET res_ok = $1, start_ok = COALESCE(start_ok, $1) WHERE id = $2`, [now(), o.id]);
             await engine.note(o.id, "Клиент проверил и подтвердил готовое резюме" + (o.email_ok ? "" : " (e-mail ещё не подтверждён — рассылка стартует после подтверждения почты)"), "Клиент");
             Mail.owner(`✅ Клиент подтвердил резюме — заказ №${o.num}\n${o.email_ok ? "Рассылка стартует по выбранным датам." : "⚠️ E-mail клиента ещё не подтверждён — рассылка ждёт."}`, o.id);
-            if(o.email_ok){ const jb = await q(`SELECT id FROM jobs WHERE order_id = $1`, [o.id]); if(jb.length){ try { const L = engine.letterFor({...o, res_ok: now()}); Mail.T.preview({...o, start_ok: now()}, L, o.res_name).catch(() => {}); } catch(e){} } }
             engine.tick().catch(() => {});
             return json(res, 200, {ok: true});
         }
@@ -978,7 +977,7 @@ function parseBase(text, defaultBase){
             const map = {
                 confirm: () => Mail.T.confirm(ord), paid: () => Mail.T.paid(ord), started: () => Mail.T.started(ord, job), finished: () => Mail.T.finished(ord, job),
                 reply: () => Mail.T.reply(ord, "Здравствуйте! Это пример ответа менеджера по вашему заказу.", "", null), newReplies: () => Mail.T.newReplies(ord, 2),
-                coverDraft: () => Mail.T.coverDraft(ord, L.subject, L.text), preview: () => Mail.T.preview(ord, L, ord.cv_name), cvReady: () => Mail.T.cvReady(ord), reviewAsk: () => Mail.T.reviewAsk(ord),
+                coverDraft: () => Mail.T.coverDraft(ord, L.subject, L.text), cvReady: () => Mail.T.cvReady(ord), reviewAsk: () => Mail.T.reviewAsk(ord),
                 owner_order: () => { const t = ownerOrderText(ord); return Mail.send(to, t.split("\n")[0].slice(0, 120), `<pre style="font:14px/1.5 Arial,sans-serif;white-space:pre-wrap">${Mail.esc(t)}</pre>`, t); }};
             if(!map[name]) return json(res, 400, {error: "Неизвестное письмо"});
             const okSend = await map[name]();

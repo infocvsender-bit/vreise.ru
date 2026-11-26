@@ -187,7 +187,7 @@ module.exports = function engine(db){
         if(Number(o.cover) && !o.cover_ok){
             await note(o.id, "💌 Заказано персональное сопроводительное письмо — составьте его в CRM (карточка заказа), клиент подтвердит. Рассылка стартует после подтверждения.", "Система");
             Mail.owner(`💌 Нужно персональное письмо — заказ №${o.num}\n${[o.first_name, o.last_name].filter(Boolean).join(" ")} · ${o.position || ""}\nCRM → заказ №${o.num} → «Персональное письмо». Рассылка ждёт.`, o.id);
-        } else if(!(o.kind === "cv" && o.base && !o.res_ok)) try { const L = letterFor(o); Mail.T.preview(o, L, o.kind === "cv" ? o.res_name : o.cv_name).catch(() => {}); } catch(e){}
+        }
         setTimeout(() => tick().catch(() => {}), 1500);
     }
 
