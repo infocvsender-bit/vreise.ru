@@ -12,6 +12,8 @@ const WEEK = 7 * 864e5, DAY = 864e5, MSK = 3 * 3600e3;
 /* Окно отправки: будни, 06:00–18:00 по Москве (UTC+3, без перехода на летнее время). Рассылка идёт минимум 10 часов окна. */
 const MIN_HOURS = 10, WIN_FROM = 6, WIN_TO = 18;
 const mskParts = ms => { const d = new Date(ms + MSK); return {dow: d.getUTCDay(), h: d.getUTCHours() + d.getUTCMinutes() / 60 + d.getUTCSeconds() / 3600, d}; };
+/* заказ на тестовую базу владельца (без реальной доп. базы): окно 06:00–18:00 МСК, выходные и 10-часовой темп не применяются */
+const isTest = o => !!o && o.base === "test" && !o.extra_base;
 const inWindow = ms => { const p = mskParts(ms); return p.dow >= 1 && p.dow <= 5 && p.h >= WIN_FROM && p.h < WIN_TO; };
 /* Пауза клиента — не дольше 2 рабочих дней: прибавляем 2 будних дня (суббота и воскресенье не считаются) */
 const PAUSE_DAYS = 2;
@@ -254,15 +256,15 @@ module.exports = function engine(db){
                 if(job.status === "wait"){
                     if(Number(o.cover) && !o.cover_ok) continue;                       // ждём персональное письмо и подтверждение клиента
                     if(o.kind === "cv" && o.base && !o.res_ok) continue;               // резюме «Стандарт» + рассылка: ждём, пока клиент проверит и подтвердит готовое резюме
-                    if(Date.parse(job.start_at) > Date.now() || !inWindow(Date.now()) || !["paid", "in_progress"].includes(o.status) || !o.email_ok) continue;           // ждём оплату и подтверждение e-mail
+                    if(Date.parse(job.start_at) > Date.now() || (!isTest(o) && !inWindow(Date.now())) || !["paid", "in_progress"].includes(o.status) || !o.email_ok) continue;           // ждём оплату и подтверждение e-mail
                     try { await prepare(job, o); } catch(e){
                         await q(`UPDATE jobs SET last_error = $1 WHERE id = $2`, [String(e.message).slice(0, 300), job.id]);
                         alertOnce("prep:" + job.id, `⚠️ Не удалось подготовить рассылку по заказу №${o.num}: ${e.message}`, 120);
                     }
                     continue;
                 }
-                if(!inWindow(Date.now())) continue;                                            // вне окна 06:00–18:00 МСК и в выходные не отправляем
-                if(Date.now() - (lastSend.get(job.id) || 0) < Math.max(GAP(), MIN_HOURS * 3600e3 / Math.max(1, Number(job.total) || 1))) continue;   // темп: вся рассылка не быстрее 10 часов
+                if(!isTest(o) && !inWindow(Date.now())) continue;                              // вне окна 06:00–18:00 МСК и в выходные не отправляем
+                if(Date.now() - (lastSend.get(job.id) || 0) < (isTest(o) ? GAP() : Math.max(GAP(), MIN_HOURS * 3600e3 / Math.max(1, Number(job.total) || 1)))) continue;   // темп: вся рассылка не быстрее 10 часов
                 lastSend.set(job.id, Date.now());
                 const more = await sendOne(job, o);
                 if(!more){
@@ -371,15 +373,15 @@ module.exports = function engine(db){
 
     /* клиент меняет время старта ещё не начавшейся рассылки; at — «YYYY-MM-DDTHH:MM» по Москве */
     async function setJobTime(o, job, at){
-        const ms = parseMsk(at); if(!Number.isFinite(ms)) throw new Error("Неверная дата");
-        const p = mskParts(ms); if(p.h < WIN_FROM || p.h >= WIN_TO) throw new Error("Время старта — с 06:00 до 18:00 по Москве");
-        if(ms < Date.now() + 3600e3) throw new Error("Старт — не раньше чем через час от текущего момента");
+        const T = isTest(o), ms = parseMsk(at); if(!Number.isFinite(ms)) throw new Error("Неверная дата");
+        const p = mskParts(ms); if(!T && (p.h < WIN_FROM || p.h >= WIN_TO)) throw new Error("Время старта — с 06:00 до 18:00 по Москве");
+        if(ms < Date.now() + (T ? 60e3 : 3600e3)) throw new Error(T ? "Время должно быть в будущем" : "Старт — не раньше чем через час от текущего момента");
         if(ms > Date.now() + 200 * DAY) throw new Error("Дата слишком далеко");
         const jobs = await q(`SELECT * FROM jobs WHERE order_id = $1 ORDER BY m`, [o.id]), day = t => Math.floor((t + MSK) / DAY);
         const prev = jobs.find(x => x.m === job.m - 1), next = jobs.find(x => x.m === job.m + 1);
-        if(prev && day(ms) <= day(Date.parse(prev.start_at))) throw new Error("Каждая следующая рассылка — на более позднюю дату, чем предыдущая");
-        if(next && day(ms) >= day(Date.parse(next.start_at))) throw new Error("Эта рассылка должна быть раньше следующей");
-        const at2 = nextWindow(ms);
+        if(!T && prev && day(ms) <= day(Date.parse(prev.start_at))) throw new Error("Каждая следующая рассылка — на более позднюю дату, чем предыдущая");
+        if(!T && next && day(ms) >= day(Date.parse(next.start_at))) throw new Error("Эта рассылка должна быть раньше следующей");
+        const at2 = T ? ms : nextWindow(ms);
         await q(`UPDATE jobs SET start_at = $1, status = CASE WHEN status = 'pause' THEN 'pause' ELSE 'wait' END WHERE id = $2`, [new Date(at2).toISOString(), job.id]);
         let sched = []; try { sched = JSON.parse(o.schedule || "[]"); } catch(e){}
         sched[job.m - 1] = at; await q(`UPDATE orders SET schedule = $1 WHERE id = $2`, [JSON.stringify(sched), o.id]);
@@ -388,9 +390,11 @@ module.exports = function engine(db){
 
     /* владелец из CRM: поставить старт на ближайшее разрешённое время («сейчас» — но только будни 06:00–18:00 МСК) */
     async function startJobNow(job){
-        const at2 = nextWindow(Date.now()), prev = await one(`SELECT m, start_at FROM jobs WHERE order_id = $1 AND m < $2 ORDER BY m DESC LIMIT 1`, [job.order_id, job.m]);
-        if(prev && Date.parse(prev.start_at) >= at2) throw new Error(`Рассылка №${prev.m} должна стартовать раньше — сначала запустите её`);
+        const o = await one(`SELECT * FROM orders WHERE id = $1`, [job.order_id]), T = isTest(o);
+        const at2 = T ? Date.now() : nextWindow(Date.now()), prev = await one(`SELECT m, start_at FROM jobs WHERE order_id = $1 AND m < $2 ORDER BY m DESC LIMIT 1`, [job.order_id, job.m]);
+        if(!T && prev && Date.parse(prev.start_at) >= at2) throw new Error(`Рассылка №${prev.m} должна стартовать раньше — сначала запустите её`);
         await q(`UPDATE jobs SET start_at = $1, status = CASE WHEN status = 'pause' THEN 'pause' ELSE 'wait' END WHERE id = $2`, [new Date(at2).toISOString(), job.id]);
+        setTimeout(() => tick().catch(() => {}), 1000);
         return new Date(at2).toISOString();
     }
 

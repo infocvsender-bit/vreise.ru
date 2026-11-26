@@ -609,7 +609,7 @@ function parseBase(text, defaultBase){
             const fw2 = new Set((await q(`SELECT reply_id FROM reply_fwd WHERE order_id = $1`, [o.id])).map(x => x.reply_id)); for(const r of replies) r.fwd = fw2.has(r.id);
             const def = o.base ? engine.letterFor({...o, letter: "", subject: ""}) : null;
             const started = Number((await one(`SELECT COUNT(*) AS n FROM queue WHERE job_id IN (SELECT id FROM jobs WHERE order_id = $1)`, [o.id])).n) > 0;
-            const baseInfo = o.base ? {name: C.baseName(o.base), extraName: o.extra_base ? C.baseName(o.extra_base) : "", can: !started && o.status !== "cancelled", options: C.BASES.map(b => ({key: b.key, name: b.name})).concat([{key: C.TEST_KEY, name: "Тест (только для владельца)"}])} : null;
+            const baseInfo = o.base ? {test: o.base === C.TEST_KEY && !o.extra_base, name: C.baseName(o.base), extraName: o.extra_base ? C.baseName(o.extra_base) : "", can: !started && o.status !== "cancelled", options: C.BASES.map(b => ({key: b.key, name: b.name})).concat([{key: C.TEST_KEY, name: "Тест (только для владельца)"}])} : null;
             return json(res, 200, {order: o, details: det, def, docs, replies, sent, jobs, notes, boxes, link: Mail.orderLink(o), baseInfo});
         }
         if(req.method === "GET" && (m = p.match(/^\/orders\/([\w-]+)\/doc\/([\w-]+)$/))){
