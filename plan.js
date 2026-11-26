@@ -16,7 +16,7 @@ function plannedEnd(startMs, left = 10 * 3600e3){
 const plural = (n, a, b, c) => { const m = n % 100, k = n % 10; return m > 10 && m < 20 ? c : k === 1 ? a : k >= 2 && k <= 4 ? b : c; };
 const hoursText = ms => { const h = Math.max(1, Math.round(ms / 3600e3)); return `${h} ${plural(h, "час", "часа", "часов")}`; };
 const fmtMsk = ms => new Date(ms).toLocaleString("ru-RU", {timeZone: "Europe/Moscow", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"});
-/* Базы «в день старта» (catalog.sameDay: Россия, Офшор, Европа): вся рассылка идёт не быстрее 6 часов (вместо 10) — при старте до 12:00 МСК уходит в тот же день;
+/* База «Россия» (catalog.sameDay): вся рассылка идёт не быстрее 6 часов (вместо 10) — при старте до 12:00 МСК уходит в тот же день;
    пауза между письмами не меньше SAMEDAY_GAP_SEC (по умолчанию 3 с). При более позднем старте часть уходит до 18:00, остаток — на следующий рабочий день. */
 const SAME_MIN_H = 6, sameGapMs = () => Math.max(2, Number(process.env.SAMEDAY_GAP_SEC) || 3) * 1000;
 function calc(startMs, total, sameDay){
