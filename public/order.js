@@ -357,6 +357,7 @@
     [].forEach.call(document.querySelectorAll("[data-chips]"), function(box){
         var name = box.getAttribute("data-chips"), max = Number(box.getAttribute("data-max")) || 0, hid = $(name), pop = box.querySelector(".ms-pop"), btn = box.querySelector(".ms-btn");
         btn.addEventListener("click", function(){ var open = pop.hidden; [].forEach.call(document.querySelectorAll(".ms-pop"), function(p){ p.hidden = true; }); pop.hidden = !open; });
+        var dn = box.querySelector(".ms-done"); if(dn) dn.addEventListener("click", function(){ pop.hidden = true; try { btn.scrollIntoView({block: "center", behavior: "smooth"}); } catch(e){} });
         document.addEventListener("click", function(e){ if(!box.contains(e.target)) pop.hidden = true; });
         document.addEventListener("keydown", function(e){ if(e.key === "Escape") pop.hidden = true; });
         box.addEventListener("change", function(ev){

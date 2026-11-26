@@ -328,3 +328,6 @@ button#go[disabled]{opacity:.5;cursor:not-allowed}
 .schnote summary{cursor:pointer;font-weight:700;color:var(--deep);font-size:14px;list-style:none;padding:2px 0}.schnote summary::-webkit-details-marker{display:none}.schnote summary:after{content:" ▾"}.schnote[open] summary:after{content:" ▴"}.schnote p{margin:6px 0 0}
 
 details.autofill>summary{cursor:pointer;list-style:none;font-size:19px;font-weight:800;letter-spacing:-.3px;color:var(--deep);display:flex;justify-content:space-between;align-items:center;gap:10px}details.autofill>summary::-webkit-details-marker{display:none}details.autofill>summary:after{content:"▾";font-size:16px}details.autofill[open]>summary:after{content:"▴"}
+
+.ms-pop{position:static!important;margin-top:6px;max-height:340px;box-shadow:none;border-color:var(--deep)}.ms-tip{font-size:13.5px;color:var(--muted);padding:6px 10px 8px}
+.ms-done{position:sticky;bottom:0;display:block;width:100%;margin-top:6px;padding:13px 16px;font-size:16px;box-shadow:0 -8px 12px #fff}

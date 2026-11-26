@@ -152,7 +152,7 @@ ${faqList.map(([q, a]) => `<details><summary>${esc(q)}</summary><p>${esc(a)}</p>
 
 /* ---------- форма заказа ---------- */
 const ENGLISH = ["Elementary", "Pre-Intermediate", "Intermediate", "Upper-Intermediate", "Advanced"];
-const chips = (name, list, max, ph) => `<div class="msel" data-chips="${name}"${max ? ` data-max="${max}"` : ""} data-ph="${esc(ph)}"><button type="button" class="ms-btn">${esc(ph)}</button><div class="ms-pop" hidden>${list.map(x => `<label><input type="checkbox" value="${esc(x)}"><span>${esc(x)}</span></label>`).join("")}</div></div>`;
+const chips = (name, list, max, ph) => `<div class="msel" data-chips="${name}"${max ? ` data-max="${max}"` : ""} data-ph="${esc(ph)}"><button type="button" class="ms-btn">${esc(ph)}</button><div class="ms-pop" hidden><div class="ms-tip">Отметьте нужное${max ? ` (до ${max})` : ""} и нажмите «Выбрать»</div>${list.map(x => `<label><input type="checkbox" value="${esc(x)}"><span>${esc(x)}</span></label>`).join("")}<button type="button" class="btn gold ms-done">✅ Выбрать</button></div></div>`;
 /* Форма заказа резюме «Стандарт»: те же поля, что нужны для международной анкеты (Application Form) */
 const coverModal = () => `<div class="modal" id="coverModal" data-price="${C.coverPrice()}" hidden role="dialog" aria-modal="true" aria-labelledby="cvmT"><div class="mbox">
 <div class="mico">💌</div><h3 id="cvmT">Добавить персональное сопроводительное письмо?</h3>
