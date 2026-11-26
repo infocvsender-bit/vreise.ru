@@ -179,7 +179,14 @@ function parseBase(text, defaultBase){
             return send(res, 200, fs.readFileSync(f), MIME[path.extname(f).toLowerCase()] || "application/octet-stream", {"Cache-Control": "public, max-age=86400"});
         }
         if(p === "/") return send(res, 200, P.home(await getCounts().catch(() => null), await approvedReviews(20).catch(() => [])));
-        if(p === "/reviews") return send(res, 200, P.reviewsPage(await approvedReviews(200).catch(() => [])));
+        if(p === "/reviews"){
+            const tk = String(u.searchParams.get("o") || ""); let ask = null;                   // ссылка из письма «Оставьте отзыв» (?o=<токен заказа>)
+            if(/^[A-Za-z0-9_-]{10,80}$/.test(tk)){
+                const o = await byToken(tk);
+                if(o){ const jb = await q(`SELECT sent FROM jobs WHERE order_id = $1`, [o.id]); ask = {token: o.token, state: (await one(`SELECT id FROM reviews WHERE order_id = $1`, [o.id])) ? "done" : reviewAllowed(o, jb) ? "form" : "na"}; }
+            }
+            return send(res, 200, P.reviewsPage(await approvedReviews(200).catch(() => []), ask), "text/html; charset=utf-8", ask ? {"Cache-Control": "no-store"} : {});
+        }
         if(p === "/order") return send(res, 200, P.orderForm(u.searchParams.get("s") || "", await getCounts().catch(() => null), await ordersClosed() ? CLOSED_MSG() : ""));
         if(p === "/policy" || p === "/offer") return send(res, 200, P.legal(p.slice(1)));
         if(p === "/blog") return send(res, 200, P.blogIndex());
@@ -251,7 +258,7 @@ function parseBase(text, defaultBase){
                 const id = uuid(), at = now(); await q(`INSERT INTO chat_msgs(id, sid, who, text, at) VALUES($1, $2, 'user', $3, $4)`, [id, sid, text, at]);
                 await q(`INSERT INTO chat_contacts(email, name, first_at, last_at, chats, msgs, last_sid) VALUES($1, $2, $3, $3, 1, 1, $4) ON CONFLICT(email) DO UPDATE SET name = excluded.name, last_at = excluded.last_at, msgs = chat_contacts.msgs + 1, chats = chat_contacts.chats + $5, last_sid = excluded.last_sid`, [email, name, at, sid, last ? 0 : 1]).catch(e => console.error("chat_contacts:", e.message));
                 const note = `${reopened ? "🔄 Чат открыт снова" : "💬 Чат с сайта"} · ${name} (${email}) · #${sid.slice(0, 8)}\n${text}\n\nОтветить или закрыть чат — кнопками в боте или CRM → «Чаты»`;
-                (fresh ? Mail.owner(note, "chat:" + sid) : Mail.toBot(note, "chat:" + sid)).catch(() => {});
+                Mail.toBot(note, "chat:" + sid).catch(() => {});
                 return json(res, 200, {ok: true, id, at});
             }
         }
@@ -375,7 +382,7 @@ function parseBase(text, defaultBase){
             }
             if(!o) return json(res, 500, {error: "Не удалось создать заказ, попробуйте ещё раз"});
             Mail.T.confirm(o).catch(() => {});
-            Mail.owner(ownerOrderText(o), o.id);
+            Mail.owner(ownerOrderText(o), o.id, true);                 // единственное уведомление, которое идёт и на почту
             ordersToday().then(n => { if(n === ordersLimit()) Mail.toBot(`🚦 Дневной лимит заказов достигнут (${n}). До полуночи по Москве новые заказы не принимаются.`, "limit"); }).catch(() => {});
             return json(res, 200, {url: "/payment_in_rub?o=" + o.token, id: o.id, token: o.token});
         }
@@ -971,7 +978,7 @@ function parseBase(text, defaultBase){
             const map = {
                 confirm: () => Mail.T.confirm(ord), paid: () => Mail.T.paid(ord), started: () => Mail.T.started(ord, job), finished: () => Mail.T.finished(ord, job),
                 reply: () => Mail.T.reply(ord, "Здравствуйте! Это пример ответа менеджера по вашему заказу.", "", null), newReplies: () => Mail.T.newReplies(ord, 2),
-                coverDraft: () => Mail.T.coverDraft(ord, L.subject, L.text), preview: () => Mail.T.preview(ord, L, ord.cv_name), cvReady: () => Mail.T.cvReady(ord),
+                coverDraft: () => Mail.T.coverDraft(ord, L.subject, L.text), preview: () => Mail.T.preview(ord, L, ord.cv_name), cvReady: () => Mail.T.cvReady(ord), reviewAsk: () => Mail.T.reviewAsk(ord),
                 owner_order: () => { const t = ownerOrderText(ord); return Mail.send(to, t.split("\n")[0].slice(0, 120), `<pre style="font:14px/1.5 Arial,sans-serif;white-space:pre-wrap">${Mail.esc(t)}</pre>`, t); }};
             if(!map[name]) return json(res, 400, {error: "Неизвестное письмо"});
             const okSend = await map[name]();

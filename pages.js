@@ -56,13 +56,20 @@ const reviewsSection = list => !list.length ? "" : `<section class="sec alt" id=
 <div class="rv-car" data-rv><div class="rv-track">${list.map(reviewCard).join("")}</div>
 <div class="rv-nav"><button type="button" class="rv-prev" aria-label="Назад">‹</button><button type="button" class="rv-next" aria-label="Вперёд">›</button></div></div>
 <p style="text-align:center;margin:18px 0 0"><a class="rv-all" href="/reviews">Все отзывы →</a></p></div></section>`;
-function reviewsPage(list){
+function reviewsPage(list, ask = null){
+    const askHtml = !ask ? "" : ask.state === "done" ? `<div class="panel"><h3>⭐ Спасибо за отзыв!</h3><p class="hint" style="margin:0">Ваш отзыв получен и появится на сайте после проверки.</p></div>`
+        : ask.state === "form" ? `<div class="panel" id="rvBox"><h3>⭐ Оставьте отзыв</h3><p class="hint" style="margin:0 0 12px">Расскажите, как всё прошло. Отзыв появится на сайте после проверки; имя — только имя и первая буква фамилии.</p>
+<form id="rvForm"><div class="rv-pick" id="rvStars" role="radiogroup" aria-label="Оценка">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-s="${n}" aria-label="${n}">★</button>`).join("")}</div><input type="hidden" id="rvVal" value="0">
+<label class="f" style="margin-top:12px">Ваш отзыв<textarea class="in" id="rvText" maxlength="1500" style="min-height:120px" placeholder="Что понравилось, что получилось, что можно улучшить"></textarea></label>
+<div style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><button class="btn gold sm" id="rvGo" type="submit">Отправить отзыв</button><span class="hint" id="rvMsg"></span></div></form></div>`
+        : `<div class="panel"><h3>⭐ Отзыв</h3><p class="hint" style="margin:0">Оставить отзыв можно, когда заказ будет выполнен. Мы пришлём ссылку на почту.</p></div>`;
     const body = `<div class="page">${crumbsHtml([["/", "Главная"], [null, "Отзывы"]])}<h1>Отзывы клиентов</h1>
-<p class="sub">Эти отзывы моряки оставили сами — в личном кабинете после выполненного заказа. Мы публикуем только отзывы наших клиентов.</p>
+<p class="sub">Эти отзывы моряки оставили сами — по ссылке из письма после выполненного заказа. Мы публикуем только отзывы наших клиентов.</p>
+${askHtml}
 ${list.length ? `<div class="rv-grid">${list.map(reviewCard).join("")}</div>` : `<p class="hint">Пока отзывов нет — они появятся здесь после первых выполненных заказов.</p>`}
 <p style="margin-top:26px"><a class="btn gold" href="/order">Оформить заказ</a></p></div>`;
-    return shell({title: "Отзывы клиентов — Vreise.ru", desc: "Отзывы моряков о рассылке резюме и составлении резюме на Vreise.ru: оставлены клиентами в личном кабинете после выполненного заказа.", path: "/reviews", noindex: !list.length,
-        hero: `<header class="hero short">${navTop(false)}</header>`, body, jsonld: [crumbLd([["/", "Главная"], ["/reviews", "Отзывы"]]), {"@context": "https://schema.org", ...ORG()}]});
+    return shell({title: "Отзывы клиентов — Vreise.ru", desc: "Отзывы моряков о рассылке резюме и составлении резюме на Vreise.ru: оставлены клиентами после выполненного заказа.", path: "/reviews", noindex: !list.length || !!ask,
+        hero: `<header class="hero short">${navTop(false)}</header>`, body, scripts: ask && ask.state === "form" ? `<script>window.__tok=${JSON.stringify(ask.token)}</script><script src="/static/order.js?v=${V}" defer></script>` : "", jsonld: [crumbLd([["/", "Главная"], ["/reviews", "Отзывы"]]), {"@context": "https://schema.org", ...ORG()}]});
 }
 
 /* ---------- главная ---------- */
@@ -385,17 +392,12 @@ ${schedList.length ? `<p style="margin:0 0 10px"><b>Старт${schedList.length
 <div style="margin-top:14px"><label class="f">Текст письма<textarea class="in" id="ltxt" maxlength="4000" style="min-height:230px">${esc(std.cur.text)}</textarea></label></div>
 <div style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><button class="btn gold sm" id="lsave" type="submit">Сохранить</button><button class="btn line sm" id="lreset" type="button" style="color:var(--deep);border-color:#9fb6bb">Вернуть стандартное</button><span class="hint" id="lmsg"></span></div></form>
 <script type="application/json" id="lstd">${JSON.stringify({subject: std.def.subject, text: std.def.text}).replace(/</g, "\\u003c")}</script></div>` : "";
-    const reviewBlock = rv ? `<div class="panel"><h3>⭐ Ваш отзыв</h3><p class="hint" style="margin:0">${rv.status === "ok" ? "Ваш отзыв опубликован на сайте. Спасибо!" : "Спасибо! Ваш отзыв получен и появится на сайте после проверки."}</p></div>`
-        : canReview ? `<div class="panel" id="rvBox"><h3>⭐ Оставьте отзыв</h3><p class="hint" style="margin:0 0 12px">Ваш заказ выполнен — расскажите, как всё прошло. Отзыв появится на сайте после проверки; имя — только имя и первая буква фамилии.</p>
-<form id="rvForm"><div class="rv-pick" id="rvStars" role="radiogroup" aria-label="Оценка">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-s="${n}" aria-label="${n}">★</button>`).join("")}</div><input type="hidden" id="rvVal" value="0">
-<label class="f" style="margin-top:12px">Ваш отзыв<textarea class="in" id="rvText" maxlength="1500" style="min-height:120px" placeholder="Что понравилось, что получилось, что можно улучшить"></textarea></label>
-<div style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><button class="btn gold sm" id="rvGo" type="submit">Отправить отзыв</button><span class="hint" id="rvMsg"></span></div></form></div>` : "";
     const chat = `<div class="faq" style="margin-bottom:22px"><details${msgs.length ? " open" : ""} style="border:1px solid var(--line);border-radius:16px;padding:16px 20px;background:#fff"><summary>💬 Что-то непонятно? Напишите менеджеру</summary>
 ${msgs.map(m => `<div style="margin-top:14px;padding:10px 14px;border-radius:12px;background:${m.author === "Ответ менеджера" ? "#e9f6f3" : "#f3f6f7"}"><span class="hint">${m.author === "Ответ менеджера" ? "Менеджер" : "Вы"} · ${esc(new Date(m.at).toLocaleString("ru-RU", {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"}))}</span><div style="color:var(--ink);white-space:pre-wrap">${esc(m.text)}</div></div>`).join("")}
 <form id="msgf" style="margin-top:14px"><textarea class="in" id="msgt" maxlength="1500" placeholder="Ваш вопрос. Ответ придёт на ${esc(o.email)} и появится здесь." style="min-height:90px"></textarea>
 <div style="margin-top:10px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><button class="btn gold sm" id="msgb" type="submit">Отправить</button><span class="hint" id="msgs"></span></div></form></details></div>`;
     const body = `<div class="page"><h1>Заказ №${o.num}</h1><p class="sub">${esc(o.title)} · <span class="tag ${o.status}">${STATUS[o.status] || o.status}</span></p>
-${tracker}${mail ? `<div id="pushbar"></div>` : ""}${emailBanner}${noCv ? `<div class="err" style="background:#fff7dc;color:#6b4e00;border-color:#f0d78a;margin-bottom:18px">📎 <b>Файл резюме не прикреплён.</b> <a href="#cvfile" style="color:#6b4e00;text-decoration:underline">Прикрепите ваше резюме в личном кабинете</a> — без него рассылка не начнётся.</div>` : ""}${startBlock}${coverBanner}${coverDraft}${payBlock}${wait}${res}${progress}${exclBlock}${replyBlock}${repl}${list}${letterBlock}${resumeBlock}${reviewBlock}${chat}
+${tracker}${mail ? `<div id="pushbar"></div>` : ""}${emailBanner}${noCv ? `<div class="err" style="background:#fff7dc;color:#6b4e00;border-color:#f0d78a;margin-bottom:18px">📎 <b>Файл резюме не прикреплён.</b> <a href="#cvfile" style="color:#6b4e00;text-decoration:underline">Прикрепите ваше резюме в личном кабинете</a> — без него рассылка не начнётся.</div>` : ""}${startBlock}${coverBanner}${coverDraft}${payBlock}${wait}${res}${progress}${exclBlock}${replyBlock}${repl}${list}${letterBlock}${resumeBlock}${chat}
 <div class="panel"><h3>Данные заказа</h3><table class="t"><tbody>
 <tr><td>Клиент</td><td>${esc([o.first_name, o.last_name].filter(Boolean).join(" "))}</td></tr><tr><td>E-mail</td><td>${esc(o.email)}</td></tr>
 ${o.phone ? `<tr><td>Телефон</td><td>${esc(o.phone)}</td></tr>` : ""}${o.position ? `<tr><td>Должность</td><td>${esc(o.position)}</td></tr>` : ""}

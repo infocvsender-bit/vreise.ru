@@ -369,7 +369,21 @@ module.exports = function engine(db){
         } catch(e){ console.error("inbox:", e); } finally { inboxBusy = false; }
     }
     const REPLY_MS = () => { const m = Number(env("REPLY_MIN")); return (m > 0 ? m : 5) * 60e3; };
-    const start = () => { if(!timer) timer = setInterval(() => { tick().catch(() => {}); if(Date.now() - replyAt > REPLY_MS()){ replyAt = Date.now(); pollReplies().catch(() => {}); pollInbox().catch(() => {}); } }, 5000); };
+    /* через 3 дня после выполнения заказа — письмо «Оставьте отзыв» (ссылка на /reviews?o=<токен>); раз на заказ (`orders.review_ask`) */
+    const REVIEW_DAYS = 3; let reviewAt = 0;
+    async function askReviews(){
+        const cut = new Date(Date.now() - REVIEW_DAYS * DAY).toISOString();
+        const rows = await q(`SELECT * FROM orders WHERE status = 'done' AND done_at IS NOT NULL AND done_at <= $1 AND review_ask IS NULL ORDER BY done_at LIMIT 20`, [cut]);
+        for(const o of rows){
+            await q(`UPDATE orders SET review_ask = $1 WHERE id = $2`, [now(), o.id]);          // сначала отмечаем — повторов не будет
+            if(!o.email_ok || await one(`SELECT id FROM reviews WHERE order_id = $1`, [o.id])) continue;
+            const sent = (await q(`SELECT sent FROM jobs WHERE order_id = $1`, [o.id])).some(j => Number(j.sent) > 0);
+            if(!(sent || (o.kind === "cv" && o.res_name))) continue;                          // услуга не оказана (отмена до старта) — отзыв не просим
+            Mail.T.reviewAsk(o).catch(() => {});
+            await note(o.id, "Клиенту отправлена просьба оставить отзыв (через 3 дня после выполнения)", "Система");
+        }
+    }
+    const start = () => { if(!timer) timer = setInterval(() => { tick().catch(() => {}); if(Date.now() - reviewAt > 600e3){ reviewAt = Date.now(); askReviews().catch(() => {}); } if(Date.now() - replyAt > REPLY_MS()){ replyAt = Date.now(); pollReplies().catch(() => {}); pollInbox().catch(() => {}); } }, 5000); };
 
     /* клиент поменял список исключений: убираем подходящие адреса из ещё не отправленной очереди уже идущих рассылок */
     async function applyExclude(o){
@@ -455,5 +469,5 @@ module.exports = function engine(db){
         return c.domain;
     }
 
-    return {pollReplies, pollInbox, startOrder, tick, start, jobCtl, applyExclude, setJobTime, startJobNow, sameDayCheck, addJob, createBoxes, note, pick, baseCounts, testSend, letterFor, hasBase, parseExclude, deleteBox, byFleet, push: Push, flushReplies, progressMark};
+    return {askReviews, pollReplies, pollInbox, startOrder, tick, start, jobCtl, applyExclude, setJobTime, startJobNow, sameDayCheck, addJob, createBoxes, note, pick, baseCounts, testSend, letterFor, hasBase, parseExclude, deleteBox, byFleet, push: Push, flushReplies, progressMark};
 };

@@ -85,6 +85,9 @@ const T = {
         `<p>Здравствуйте, ${esc(o.first_name || "")}!</p><p>Всё готово к рассылке по заказу <b>№${o.num}</b>. Ниже — письмо ровно в том виде, в каком его получат работодатели${file ? `; резюме <b>${esc(file)}</b> прикладывается к нему файлом` : ""}.</p>
          <div style="margin:16px 0;padding:16px 18px;border:1px solid #d5e3e6;border-radius:12px;background:#f6fafb"><div style="font-size:13px;color:#5b727a">Тема письма</div><div style="font-weight:700;margin:2px 0 12px">${esc(L.subject)}</div><div style="font-size:13px;color:#5b727a">Текст письма</div><div style="margin-top:4px">${esc(L.text).replace(/\n/g, "<br>")}</div></div>
          <p>${o.start_ok ? "" : `<b>Чтобы рассылка началась, откройте личный кабинет и нажмите «Старт рассылки».</b> Она уйдёт в выбранное вами время. `}<b>Хотите что-то поменять?</b> Тему, текст письма и резюме можно изменить там же — новый вариант уйдёт во всех ещё не отправленных письмах.</p>`, o.start_ok ? "Открыть личный кабинет" : "Открыть кабинет и запустить рассылку", orderLink(o)),
+    reviewAsk: o => toClient(o.email, `Как всё прошло? Оставьте отзыв — заказ №${o.num}`,
+        `<p>Здравствуйте, ${esc(o.first_name || "")}!</p><p>Прошло несколько дней после вашего заказа <b>№${o.num}</b> — ${o.kind === "cv" ? "резюме" : "рассылки резюме"}. Нам важно знать, как всё прошло и что можно сделать лучше.</p>
+         <p>Оставьте, пожалуйста, отзыв на сайте — это займёт минуту. Он появится на сайте после проверки, имя — только имя и первая буква фамилии.</p>`, "Оставить отзыв", `${siteUrl()}/reviews?o=${o.token}`),
     cvReady: o => toClient(o.email, `Резюме по заказу №${o.num} готово${o.base ? " — проверьте и подтвердите" : ""}`,
         o.base ? `<p>Ваше резюме «Стандарт» готово. Скачать его можно в личном кабинете — нажмите кнопку ниже и внимательно проверьте.</p>
          <p><b>Рассылка начнётся только после вашего подтверждения:</b> всё верно — нажмите в кабинете «Подтвердить резюме». Нужна правка — напишите нам там же внизу страницы, одна правка входит в стоимость.</p>
@@ -92,16 +95,16 @@ const T = {
         : `<p>Ваше резюме «Стандарт» готово — скачать файл можно в личном кабинете. Если нужна правка, напишите нам: одна правка входит в стоимость.</p>`, "Личный кабинет", orderLink(o))
 };
 
-/* уведомление владельцу: письмо на OWNER_EMAIL + (если заданы ADMIN_HOOK_URL и ADMIN_HOOK_KEY) копия в админ-бот. Клиентам бот нигде не показывается. */
+/* уведомление владельцу: в админ-бот (если заданы ADMIN_HOOK_URL и ADMIN_HOOK_KEY); письмо на OWNER_EMAIL — только с withEmail (заявка о новом заказе). Клиентам бот нигде не показывается. */
 async function toBot(text, id){
     const url = env("ADMIN_HOOK_URL"), key = env("ADMIN_HOOK_KEY"); if(!url || key.length < 16) return;
     try { const r = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json", "x-hook-key": key}, body: JSON.stringify({text: String(text).slice(0, 3500), id: id || ""}), signal: AbortSignal.timeout(15000)}); if(!r.ok) console.error("admin-hook:", r.status); }
     catch(e){ console.error("admin-hook:", e.message); }
 }
-async function owner(text, id){
+async function owner(text, id, withEmail = false){        // решение владельца 26.11: всё — только в админ-бот; на почту — одна заявка (новый заказ, withEmail = true)
     toBot(text, id);
     const subj = text.split("\n")[0].slice(0, 120);
-    if(env("OWNER_EMAIL")) await send(env("OWNER_EMAIL"), subj, `<pre style="font:14px/1.5 Arial,sans-serif;white-space:pre-wrap">${esc(text)}</pre>`, text).catch(() => {});
+    if(withEmail && env("OWNER_EMAIL")) await send(env("OWNER_EMAIL"), subj, `<pre style="font:14px/1.5 Arial,sans-serif;white-space:pre-wrap">${esc(text)}</pre>`, text).catch(() => {});
     console.log("🔔", text.replace(/\n/g, " | "));
 }
 
