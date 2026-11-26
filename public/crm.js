@@ -151,6 +151,7 @@
         b.push(o.email_ok ? pill("ok", "✉️ Почта: ✅ подтверждена") : pill("bad", "✉️ Почта не подтверждена" + (o.base ? " — рассылка ждёт" : "")));
         if(o.base){
             if(o.kind === "cv" && o.res_name) b.push(o.res_ok ? pill("ok", "📄 Резюме: ✅ подтверждено клиентом") : pill("warn", "📄 Резюме: ⏳ ждёт подтверждения клиента"));
+            b.push(o.start_ok ? pill("ok", "🚀 «Старт рассылки»: ✅ нажат клиентом") : pill("warn", "🚀 «Старт рассылки»: ⏳ клиент ещё не нажал"));
             if(Number(o.cover)) b.push(o.cover_ok ? pill("ok", "💌 Персональное письмо: ✅ подтверждено") : pill("warn", "💌 Персональное письмо: ⏳ " + (o.status === "new" || o.status === "claimed" ? "после оплаты" : "нужно составить / подтвердить")));
             else b.push(pill("", o.own_letter ? "📝 своё письмо" : "📝 стандартное письмо"));
         }
@@ -201,6 +202,7 @@
                 (o.comment ? '<p class="mut" style="margin-top:12px">Данные для резюме:</p><div class="pre">' + esc(o.comment) + "</div>" : "") +
                 '<div class="acts">' + (["new", "claimed"].indexOf(o.status) >= 0 ? '<button class="btn gold sm" id="confirm">✔ Подтвердить оплату и запустить</button>' : "") +
                 (["done", "cancelled"].indexOf(o.status) < 0 ? '<button class="btn sm red" id="cancel">Отменить заказ</button>' : "") + '<button class="btn sm line" id="delorder" style="color:#a33;border-color:#e0b3a8">🗑 Удалить заказ</button></div></div>';
+            if(o.base && !o.start_ok && o.status !== "cancelled" && !(cv && !o.res_ok)) h += '<div class="panel" style="border:2px solid #f2b400"><h3>🚀 Ждём, пока клиент нажмёт «Старт рассылки»</h3><p class="mut">После подтверждения e-mail клиент попадает в кабинет и должен нажать «Старт рассылки» (можно сначала поменять тему и письмо). Рассылка уйдёт в выбранное им время. Если клиент не нажимает — можно запустить за него.</p><div class="acts"><button class="btn sm line" id="startskip" style="color:var(--deep);border-color:#9fb6bb">Запустить без нажатия клиента</button></div></div>';
             if(cv && o.base && o.res_name && !o.res_ok) h += '<div class="panel" style="border:2px solid #f2b400"><h3>📄 Резюме отправлено клиенту — ждём его подтверждения</h3><p class="mut">Рассылка стартует только после того, как клиент проверит резюме в кабинете и нажмёт «Подтвердить» (и подтвердит e-mail). Нужна правка — загрузите новый файл в блоке результата: клиент получит его снова.</p><div class="acts"><button class="btn sm line" id="resskip" style="color:var(--deep);border-color:#9fb6bb">Запустить без подтверждения клиента</button></div></div>';
             if(Number(o.cover)) h += '<div class="panel" style="border:2px solid #f2b400"><h3>💌 Персональное письмо (оплачено клиентом)</h3>' + (d.def ?
                 (o.cover_ok ? '<p class="mut">✅ Клиент подтвердил письмо ' + dt(o.cover_ok) + '. Новое сохранение снова уйдёт ему на подтверждение, но на уже идущую рассылку не повлияет.</p>' : o.draft_letter ? '<p class="mut" style="color:#b9770e">Письмо отправлено клиенту — <b>ждём его подтверждения</b>, рассылка стоит. Можно поправить и отправить заново.</p>' : '<p class="mut" style="color:#b9770e">Письмо ещё не написано — <b>рассылка ждёт</b>. Отредактируйте текст ниже (подставлен стандартный), сохраните — клиент получит его на подтверждение.</p>') +
@@ -250,6 +252,7 @@
                 if(!confirm("Отправить письмо клиенту на подтверждение? Рассылка начнётся после его «Подтвердить».")) return;
                 api("/orders/" + id + "/cover-letter", {body: {subject: $("cvs").value, text: $("cvt").value}}).then(function(){ order(id); }).catch(alertErr);
             };
+            if($("startskip")) $("startskip").onclick = function(){ post("/orders/" + id + "/start-skip", {}, "Запустить рассылку без нажатия «Старт рассылки» клиентом?"); };
             if($("resskip")) $("resskip").onclick = function(){ post("/orders/" + id + "/res-skip", {}, "Запустить рассылку без подтверждения резюме клиентом?"); };
             if($("cvskip")) $("cvskip").onclick = function(){ post("/orders/" + id + "/cover-skip", {}, "Снять ожидание и запустить рассылку со стандартным письмом, без подтверждения клиента?"); };
             $("ntgo").onclick = function(){ if($("nt").value.trim()) post("/orders/" + id + "/note", {text: $("nt").value}); };

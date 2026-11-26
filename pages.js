@@ -169,9 +169,9 @@ function orderFormCv(counts){
 <form id="f" novalidate><div class="err" id="err" hidden></div>
 <input type="hidden" id="slug" value="${C.CV.slug}" data-price="${C.cvPrice()}">
 <div class="panel"><h3>Услуга</h3><p class="hint" style="margin-top:0">${esc(C.CV.title)} · <b>${rub(C.cvPrice())}</b></p><p class="hint" style="margin:8px 0 0"><a href="/static/resume-example.pdf" target="_blank" rel="noopener">👁 Посмотреть пример готового резюме</a></p></div>
-<div class="panel autofill"><h3>⚡ Не хотите заполнять вручную?</h3>
-<p class="hint" style="margin-top:0">Прикрепите ваше резюме (PDF, Word .docx, фото или скан) — мы прочитаем его и заполним анкету сами. Вам останется проверить данные и дописать то, чего в резюме нет.</p>
-<input class="in" type="file" id="autoFile" accept=".pdf,.docx,.odt,.txt,.rtf,.jpg,.jpeg,.png,.webp"><div class="hint" id="autoMsg" style="margin-top:8px"></div></div>
+<details class="panel autofill"><summary>⚡ Не хотите заполнять вручную?</summary>
+<p class="hint" style="margin-top:10px">Прикрепите <b>один файл</b> с вашим резюме — PDF, Word (.doc, .docx) или Excel (.xls, .xlsx); подойдут также фото или скан. Мы прочитаем его и заполним анкету сами. Вам останется проверить данные и дописать то, чего в резюме нет.</p>
+<input class="in" type="file" id="autoFile" accept=".pdf,.doc,.docx,.xls,.xlsx,.odt,.txt,.rtf,.jpg,.jpeg,.png,.webp"><div class="hint" id="autoMsg" style="margin-top:8px"></div></details>
 <div class="panel"><h3>👤 Основные данные</h3><div class="grid2">
 ${r("first", "Имя (на английском)", 'autocomplete="given-name" placeholder="Ivan" lang="en"')}
 ${r("last", "Фамилия (на английском)", 'autocomplete="family-name" placeholder="Petrov" lang="en"')}
@@ -239,9 +239,9 @@ function orderFormMain(slug, counts){
 <form id="f" novalidate><div class="err" id="err" hidden></div>
 <div class="panel">${cv ? "<h3>Услуга</h3>" : ""}${pick}${cv ? `<p class="hint" style="margin-top:0">${esc(C.CV.title)} · <b>${rub(C.cvPrice())}</b></p>` : ""}</div>
 ${cv ? "" : `<div class="panel"><h3>📅 Дата и время рассылки</h3><div id="sched"></div><div class="hint" style="margin:12px 0 0">${SCHED_NOTE}</div></div>`}
-${cv ? "" : `<div class="panel autofill"><h3>⚡ Не хотите заполнять вручную?</h3>
-<p class="hint" style="margin-top:0">Прикрепите ваше резюме (PDF или Word) — мы прочитаем его и заполним имя, e-mail, телефон, должность и суда сами. Это же резюме уйдёт в рассылку, второй раз прикреплять не нужно.</p>
-<input class="in" type="file" id="autoFile" accept=".pdf,.doc,.docx"><div class="hint" id="autoMsg" style="margin-top:8px"></div></div>`}
+${cv ? "" : `<details class="panel autofill"><summary>⚡ Не хотите заполнять вручную?</summary>
+<p class="hint" style="margin-top:10px">Прикрепите <b>один файл</b> с вашим резюме — PDF, Word (.doc, .docx) или Excel (.xls, .xlsx). Мы прочитаем его и заполним имя, e-mail, телефон, должность и суда сами. Это же резюме уйдёт в рассылку, второй раз прикреплять не нужно.</p>
+<input class="in" type="file" id="autoFile" accept=".pdf,.doc,.docx,.xls,.xlsx"><div class="hint" id="autoMsg" style="margin-top:8px"></div></details>`}
 <div class="panel"><h3>О вас</h3><div class="grid2">
 <label class="f">Имя<input class="in" id="first" autocomplete="given-name" required></label>
 <label class="f">Фамилия<input class="in" id="last" autocomplete="family-name" required></label>
@@ -255,7 +255,7 @@ ${cv ? `<div class="panel"><h3>Данные для резюме</h3>
 <label class="f">Расскажите о себе и опыте<small> — должности, суда, даты контрактов, образование, сертификаты, языки</small><textarea class="in" id="comment" style="min-height:190px"></textarea></label>
 <div style="margin-top:16px"><label class="f">Старое резюме или документы<small> — по желанию, PDF / Word / фото, до 5 МБ</small><input class="in" type="file" id="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"></label></div></div>` :
 `<div class="panel"><h3>Резюме и письмо</h3>
-<label class="f">Ваше резюме<small> — PDF или Word, до 5 МБ</small><input class="in" type="file" id="file" accept=".pdf,.doc,.docx" required></label>
+<label class="f">Ваше резюме<small> — PDF, Word или Excel, до 5 МБ</small><input class="in" type="file" id="file" accept=".pdf,.doc,.docx,.xls,.xlsx" required></label>
 <div style="margin-top:16px"><label class="f">Сопроводительное письмо<small> — по желанию</small><textarea class="in" id="letter" placeholder="Если оставить пустым, отправим стандартное письмо"></textarea></label></div>
 <div style="margin-top:16px"><label class="f">Исключить компании<small> — по желанию, по одному в строке. Можно указать название компании, но лучше домен — так точнее: например, <b>@marlownavigation.com</b></small><textarea class="in" id="exclude" style="min-height:80px" placeholder="@marlownavigation.com"></textarea></label></div></div>`}
 ${extraPanel}
@@ -288,7 +288,7 @@ ${o.status === "new" ? `<div style="margin-top:18px"><button class="btn gold" id
         {t: "Оплата", s: paidDone ? "done" : "todo", d: o.status === "claimed" ? "проверяем платёж" : o.status === "new" ? "ждём оплату" : "получена"}];
     const resPending = cv && mail && !!o.res_name && !o.res_ok && o.status !== "cancelled";
     if(cv) steps.push({t: "Резюме", s: o.res_name && !resPending ? "done" : "todo", d: resPending ? "ждёт вашего подтверждения" : o.res_name ? (mail ? "подтверждено" : "готово") : paidDone ? "составляем" : ""});
-    if(mail) steps.push({t: "Рассылка", s: jobsEnded ? "done" : "todo", d: jobsEnded ? "завершена" : jobs.some(j => j.status === "pause") ? "на паузе" : jobs.some(j => j.status === "run") ? "идёт" : jobs.length ? (resPending ? "после подтверждения резюме" : !o.email_ok ? "после подтверждения e-mail" : "ждёт старта") : paidDone ? "готовим" : ""});
+    if(mail) steps.push({t: "Рассылка", s: jobsEnded ? "done" : "todo", d: jobsEnded ? "завершена" : jobs.some(j => j.status === "pause") ? "на паузе" : jobs.some(j => j.status === "run") ? "идёт" : jobs.length ? (resPending ? "после подтверждения резюме" : !o.email_ok ? "после подтверждения e-mail" : !o.start_ok ? "ждёт вашего «Старта»" : "ждёт старта") : paidDone ? "готовим" : ""});
     steps.push({t: "Готово", s: o.status === "done" || steps.every(x => x.s === "done") ? "done" : "todo", d: ""});
     const nowIdx = steps.findIndex(x => x.s !== "done"); if(nowIdx >= 0) steps[nowIdx].s = "now";
     const tracker = o.status === "cancelled" ? `<div class="err">Заказ отменён.</div>`
@@ -302,7 +302,7 @@ ${o.status === "new" ? `<div style="margin-top:18px"><button class="btn gold" id
         const sentN = Number(j.sent), failN = Number(j.failed), total = Number(j.total || 0), pct = total ? Math.round((sentN + failN) / total * 100) : 0, left = Math.max(0, total - sentN - failN);
         const act = total ? PL.activeMs(total) : 10 * 3600e3, startMs = Date.parse(j.started_at || j.start_at), endMs = plannedEnd(startMs, act), late = j.status === "wait" && Date.parse(j.start_at) < Date.now();
         const notStarted = !j.started_at && ["wait", "pause"].includes(j.status), active = ["wait", "run", "pause"].includes(j.status);
-        const why = j.status === "wait" ? (!o.email_ok ? "Рассылка не начнётся, пока вы не подтвердите e-mail — нажмите кнопку в письме, которое мы отправили на " + o.email + "." : resPending ? "Рассылка начнётся после того, как вы проверите и подтвердите готовое резюме (блок выше)." : Number(o.cover) && !o.cover_ok ? "Рассылка начнётся после подтверждения персонального письма." : "") : "";
+        const why = j.status === "wait" ? (!o.email_ok ? "Рассылка не начнётся, пока вы не подтвердите e-mail — нажмите кнопку в письме, которое мы отправили на " + o.email + "." : resPending ? "Рассылка начнётся после того, как вы проверите и подтвердите готовое резюме (блок выше)." : Number(o.cover) && !o.cover_ok ? "Рассылка начнётся после подтверждения персонального письма." : !o.start_ok ? "Рассылка начнётся после того, как вы нажмёте «Старт рассылки» (блок «Всё готово» вверху страницы)." : "") : "";
         const badge = j.status === "wait" && why ? "⏳ Ждёт подтверждения" : j.status === "wait" ? `🕒 Запланирована на ${fmtShort(Date.parse(j.start_at))}` : JST[j.status] || j.status;
         const info = {
             wait: why ? why : late ? "Рассылка стартует в ближайшее рабочее время (будни с 06:00 до 18:00 МСК)." : "До старта можно поменять время, письмо, резюме и список исключений — всё ниже на этой странице.",
@@ -352,6 +352,13 @@ ${notStarted ? `<div class="jtf" hidden data-j="${esc(j.id)}"><label class="f">�
     const wait = cv && ["paid", "in_progress"].includes(o.status) && !o.res_name ? `<div class="ok">Оплата получена. Готовим ваше резюме — оно придёт на почту и появится здесь в течение 6 часов.</div>` : "";
     const emailBanner = !o.email_ok && o.status !== "cancelled" ? `<div class="err" style="background:#fff7dc;color:#6b4e00;border-color:#f0d78a;margin-bottom:18px">✉️ <b>Подтвердите e-mail.</b> Мы отправили письмо на <b>${esc(o.email)}</b> — нажмите в нём кнопку. ${cv ? "" : "Без подтверждения рассылка не начнётся. "}Письма нет? Проверьте «Спам» или <button class="btn gold sm" id="resend" type="button" style="margin:0 6px">отправьте ещё раз</button><span class="hint" id="rsmsg"></span></div>` : "";
     const running = jobs.some(j => j.status === "run");
+    const startPending = mail && !o.start_ok && !!o.email_ok && o.status !== "cancelled" && !(cv && !o.res_ok) && !(Number(o.cover) && !o.cover_ok) && !!std;
+    let schedList = []; if(jobs.length) schedList = jobs.map(j => fmtMsk(Date.parse(j.start_at))); else { try { schedList = (JSON.parse(o.schedule || "[]") || []).map(v => fmtMsk(Date.parse(v + ":00+03:00"))); } catch(e){} }
+    const startBlock = startPending ? `<div class="panel" id="start" style="border:2px solid #f2b400"><h3>🚀 Всё готово — запустите рассылку</h3>
+<p class="hint" style="margin:0 0 12px">E-mail подтверждён ✅. Проверьте дату и время, тему и письмо ниже. Нажмите <b>«Старт рассылки»</b> — и она уйдёт в выбранное вами время (будни с 06:00 до 18:00 МСК)${pay ? ", как только мы подтвердим оплату" : ""}. Если выбранное время уже прошло — рассылка начнётся сразу. Хотите что-то поменять — измените тему или письмо ниже на странице <b>до</b> нажатия кнопки.</p>
+${schedList.length ? `<p style="margin:0 0 10px"><b>Старт${schedList.length > 1 ? " рассылок" : " рассылки"}:</b> ${schedList.map(esc).join(" · ")} МСК</p>` : ""}
+<div style="margin:0 0 14px;padding:12px 14px;border:1px solid #d5e3e6;border-radius:12px;background:#f6fafb"><div class="hint" style="margin:0">Тема письма</div><div style="font-weight:700;margin:2px 0 8px">${esc(std.cur.subject)}</div><div class="hint" style="margin:0">Текст письма</div><div style="white-space:pre-wrap;max-height:140px;overflow:hidden">${esc(String(std.cur.text).slice(0, 420))}${String(std.cur.text).length > 420 ? "…" : ""}</div></div>
+<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><button class="btn gold" id="startgo" type="button">🚀 Старт рассылки</button><a class="btn line" href="#lf" style="color:var(--deep);border-color:#9fb6bb">✏️ Изменить письмо или тему</a><span class="hint" id="startmsg"></span></div></div>` : "";
     const draftReady = Number(o.cover) && o.base && !o.cover_ok && String(o.draft_letter || "").trim() && o.status !== "cancelled";
     const coverBanner = Number(o.cover) && o.status !== "cancelled" && !draftReady ? `<div class="err" style="background:#eef8f5;color:#0b3641;border-color:#bfe0d6;margin-bottom:18px">💌 <b>Персональное сопроводительное письмо</b> — ${!o.base ? "заказано. Пришлём его вместе с готовым резюме." : o.cover_ok ? "готово и подтверждено вами ✅" : "заказано. Мы составляем его для вас. Когда оно будет готово, мы пришлём его вам на почту и покажем на этой странице — рассылка начнётся только после вашего подтверждения."}</div>` : "";
     const coverDraft = draftReady ? `<div class="panel" style="border:2px solid #f2b400"><h3>💌 Ваше персональное письмо готово — подтвердите</h3>
@@ -361,8 +368,8 @@ ${notStarted ? `<div class="jtf" hidden data-j="${esc(j.id)}"><label class="f">�
 <div style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><button class="btn gold" id="cvok" type="button">Подтвердить и запустить рассылку</button><span class="hint" id="cvmsg"></span></div></div>` : "";
     const resumeBlock = o.kind === "mailing" && o.status !== "cancelled" ? `<div class="panel"><h3>Ваше резюме</h3>
 <p class="hint" style="margin:0 0 12px">Сейчас компаниям уходит файл <b>${esc(o.cv_name || "резюме")}</b>. Можно заменить его в любой момент${running ? " — новый файл будет приложен к письмам, которые ещё не отправлены" : ""}.</p>
-<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><input class="in" type="file" id="rsfile" accept=".pdf,.doc,.docx" style="max-width:360px"><button class="btn gold sm" id="rsgo" type="button">Заменить резюме</button><span class="hint" id="rsmsg2"></span></div>
-<p class="hint" style="margin:10px 0 0">PDF или Word, до 5 МБ.</p></div>` : "";
+<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><input class="in" type="file" id="rsfile" accept=".pdf,.doc,.docx,.xls,.xlsx" style="max-width:360px"><button class="btn gold sm" id="rsgo" type="button">Заменить резюме</button><span class="hint" id="rsmsg2"></span></div>
+<p class="hint" style="margin:10px 0 0">PDF, Word или Excel, до 5 МБ.</p></div>` : "";
     const letterBlock = std && o.status !== "cancelled" ? `<div class="panel"><h3>Тема и сопроводительное письмо</h3>
 <p class="hint" style="margin:0 0 14px">✉️ ${jobs.length ? "Мы отправили" : "Как только всё будет готово, мы отправим"} вам на почту <b>${esc(o.email)}</b> письмо — так ваша рассылка будет выглядеть для работодателей. ${o.letter || o.subject ? "Здесь ваш вариант письма." : "Сейчас стоит стандартное письмо, составленное по вашим данным."} Резюме прикладывается автоматически. <b>Если хотите что-то поменять — сделайте это здесь:</b> новый вариант применится ко всем ещё не отправленным письмам${running ? " (уже отправленные не изменятся)" : ""}.</p>
 <form id="lf"><label class="f">Тема письма<input class="in" id="lsub" maxlength="200" value="${esc(std.cur.subject)}"></label>
@@ -379,7 +386,7 @@ ${msgs.map(m => `<div style="margin-top:14px;padding:10px 14px;border-radius:12p
 <form id="msgf" style="margin-top:14px"><textarea class="in" id="msgt" maxlength="1500" placeholder="Ваш вопрос. Ответ придёт на ${esc(o.email)} и появится здесь." style="min-height:90px"></textarea>
 <div style="margin-top:10px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><button class="btn gold sm" id="msgb" type="submit">Отправить</button><span class="hint" id="msgs"></span></div></form></details></div>`;
     const body = `<div class="page"><h1>Заказ №${o.num}</h1><p class="sub">${esc(o.title)} · <span class="tag ${o.status}">${STATUS[o.status] || o.status}</span></p>
-${tracker}${mail ? `<div id="pushbar"></div>` : ""}${emailBanner}${coverBanner}${coverDraft}${payBlock}${wait}${res}${progress}${exclBlock}${replyBlock}${repl}${list}${letterBlock}${resumeBlock}${reviewBlock}${chat}
+${tracker}${mail ? `<div id="pushbar"></div>` : ""}${emailBanner}${startBlock}${coverBanner}${coverDraft}${payBlock}${wait}${res}${progress}${exclBlock}${replyBlock}${repl}${list}${letterBlock}${resumeBlock}${reviewBlock}${chat}
 <div class="panel"><h3>Данные заказа</h3><table class="t"><tbody>
 <tr><td>Клиент</td><td>${esc([o.first_name, o.last_name].filter(Boolean).join(" "))}</td></tr><tr><td>E-mail</td><td>${esc(o.email)}</td></tr>
 ${o.phone ? `<tr><td>Телефон</td><td>${esc(o.phone)}</td></tr>` : ""}${o.position ? `<tr><td>Должность</td><td>${esc(o.position)}</td></tr>` : ""}

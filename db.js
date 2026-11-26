@@ -62,6 +62,7 @@ module.exports = async function openDb(){
         `CREATE TABLE IF NOT EXISTS mail_log(id TEXT PRIMARY KEY, at TEXT NOT NULL, to_email TEXT, subject TEXT, ok INTEGER NOT NULL, error TEXT)`
     ]) await db.query(s);
     for(const c of ["subject TEXT", "letter_ok TEXT", "email_ok TEXT", "details TEXT", "extra_base TEXT", "cover INTEGER DEFAULT 0", "cover_ok TEXT", "draft_subject TEXT", "draft_letter TEXT", "schedule TEXT", "reply_to TEXT", "res_ok TEXT"]) await db.query(`ALTER TABLE orders ADD COLUMN ${c}`).catch(() => {});
+    try { await db.query(`ALTER TABLE orders ADD COLUMN start_ok TEXT`); await db.query(`UPDATE orders SET start_ok = created_at`); } catch(e){}     // «Старт рассылки» клиентом: при первом добавлении колонки у всех уже оформленных заказов считаем нажатым
     try { await db.query(`ALTER TABLE replies ADD COLUMN notified TEXT`); await db.query(`UPDATE replies SET notified = created_at`); } catch(e){}     // при первом добавлении колонки старые письма считаем уже показанными
     await db.query(`INSERT INTO chat_contacts(email, name, first_at, last_at, chats, msgs, last_sid) SELECT i.email, i.name, i.upd, i.upd, 1, 1, i.sid FROM chat_info i WHERE i.email <> '' AND NOT EXISTS (SELECT 1 FROM chat_contacts c WHERE c.email = i.email) GROUP BY i.email`).catch(() => {});     // контакты из уже существующих чатов
     await db.query(`ALTER TABLE jobs ADD COLUMN pause_until TEXT`).catch(() => {});

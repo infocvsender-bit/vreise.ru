@@ -151,7 +151,7 @@ async function sendSystem(to, subject, text, html, replyTo, attach){
 }
 
 const MIME = {pdf: "application/pdf", doc: "application/msword", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", rtf: "application/rtf",
-    jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", txt: "text/plain"};
+    jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", txt: "text/plain", xls: "application/vnd.ms-excel", xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"};
 const mimeOf = name => MIME[String(name).split(".").pop().toLowerCase()] || "application/octet-stream";
 
 module.exports = {env, encrypt, decrypt, cfgs, sendCfgs, hestia, variants, newPass, smtp, SmtpError, message, encWord, sysOn, sendSystem, mimeOf, translit};

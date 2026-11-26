@@ -267,6 +267,7 @@ module.exports = function engine(db){
                 const o = await one(`SELECT * FROM orders WHERE id = $1`, [job.order_id]); if(!o) continue;
                 if(job.status === "wait"){
                     if(Number(o.cover) && !o.cover_ok) continue;                       // ждём персональное письмо и подтверждение клиента
+                    if(!o.start_ok) continue;                                           // клиент ещё не нажал «Старт рассылки» в кабинете (или менеджер не запустил без него)
                     if(o.kind === "cv" && o.base && !o.res_ok) continue;               // резюме «Стандарт» + рассылка: ждём, пока клиент проверит и подтвердит готовое резюме
                     if(Date.parse(job.start_at) > Date.now() || (!isTest(o) && !inWindow(Date.now())) || !["paid", "in_progress"].includes(o.status) || !o.email_ok) continue;           // ждём оплату и подтверждение e-mail
                     try { await prepare(job, o); } catch(e){

@@ -158,7 +158,7 @@ function parseBase(text, defaultBase){
     const SEC = SECM.create({one, q, now, Mail, env, siteUrl: Mail.siteUrl});
     await SEC.rotate().catch(e => console.error("🔐 CRM-ключ:", e.message)); setInterval(() => SEC.rotate().catch(() => {}), 3600e3).unref();
     const byToken = async t => { const o = await one(`SELECT * FROM orders WHERE token = $1`, [clean(t, 80)]); if(!o) SEC.badToken((SEC.als.getStore() || {}).ip); return o; };
-    const ORDER_LIST = `id, num, email_ok, token, kind, slug, title, base, times, price, status, first_name, last_name, email, phone, position, vessel, created_at, claimed_at, paid_at, done_at, cv_name, res_name, cover`;
+    const ORDER_LIST = `id, num, email_ok, start_ok, token, kind, slug, title, base, times, price, status, first_name, last_name, email, phone, position, vessel, created_at, claimed_at, paid_at, done_at, cv_name, res_name, cover`;
 
     /* ---------- сайт ---------- */
     async function site(req, res, u){
@@ -189,7 +189,7 @@ function parseBase(text, defaultBase){
         if(m){
             const o = await byToken(m[1]); if(!o) return send(res, 404, P.notFound());
             if(!o.email_ok){ await q(`UPDATE orders SET email_ok = $1 WHERE id = $2`, [now(), o.id]); await engine.note(o.id, "E-mail подтверждён клиентом", "Клиент"); }
-            return redirect(res, "/o/" + o.token);
+            return redirect(res, "/o/" + o.token + (o.base ? "#start" : ""));
         }
         /* /payment_in_rub — адрес страницы оплаты (на него настроены цели конверсии): та же личная страница заказа, пока заказ ждёт оплаты; токен — в ?o= */
         if(p === "/payment_in_rub"){
@@ -292,7 +292,7 @@ function parseBase(text, defaultBase){
             if(!String(env("ASSISTANT_API_KEY") || "").trim() || env("PARSE_CV") === "0") return json(res, 503, {error: "Автозаполнение сейчас недоступно — заполните анкету вручную"});
             if(limited("parse:" + ip, 4, 3600e3) || limited("parsed:" + ip, 12, 864e5) || limited("parseall:" + day, Number(env("PARSE_DAILY")) || 150, 864e5)) return json(res, 429, {error: "Много попыток. Заполните анкету вручную или попробуйте позже"});
             const name = clean(decodeURIComponent(String(req.headers["x-name"] || "resume")), 120) || "resume";
-            if(!/\.(pdf|docx|odt|txt|rtf|jpe?g|png|webp)$/i.test(name)) return json(res, 400, {error: "Для автозаполнения подойдёт PDF, Word (.docx), фото или скан. Файл .doc приложите в разделе «Документы» и заполните анкету вручную"});
+            if(!/\.(pdf|docx|xlsx|odt|txt|rtf|jpe?g|png|webp)$/i.test(name)) return json(res, 400, {error: "Для автозаполнения подойдёт PDF, Word (.docx), Excel (.xlsx), фото или скан. Старые форматы .doc и .xls приложите как документ и заполните анкету вручную"});
             const buf = await rawBody(req, 5 * 1024 * 1024); if(!buf.length) return json(res, 400, {error: "Пустой файл"});
             let r; try { r = await Resume.parseForm({file: {name, buf}, positions: P.POSITIONS, vessels: P.VESSELS, english: P.ENGLISH}); }
             catch(e){ console.error("Автозаполнение анкеты:", e.message); return json(res, 502, {error: "Не удалось прочитать файл. Заполните анкету вручную"}); }
@@ -322,9 +322,9 @@ function parseBase(text, defaultBase){
             if(b.file && b.file.b64){
                 cvName = clean(b.file.name, 120) || "resume.pdf"; cvB64 = String(b.file.b64).replace(/^data:[^,]*,/, "").replace(/\s+/g, "");
                 if(!/^[A-Za-z0-9+/=]+$/.test(cvB64) || Buffer.from(cvB64, "base64").length > MAX_FILE) return json(res, 400, {error: "Файл слишком большой (до 5 МБ) или повреждён"});
-                if(!/\.(pdf|docx?|jpe?g|png)$/i.test(cvName)) return json(res, 400, {error: "Допустимы файлы PDF, Word, JPG или PNG"});
+                if(!/\.(pdf|docx?|xlsx?|jpe?g|png)$/i.test(cvName)) return json(res, 400, {error: "Допустимы файлы PDF, Word, Excel, JPG или PNG"});
             }
-            if(sv.kind === "mailing" && !cvB64) return json(res, 400, {error: "Загрузите ваше резюме (PDF или Word)"});
+            if(sv.kind === "mailing" && !cvB64) return json(res, 400, {error: "Загрузите ваше резюме (PDF, Word или Excel)"});
             let details = null, price = sv.price, title = sv.title, base = sv.base || null, times = sv.times || 1, extra = null;
             if(sv.kind === "cv"){
                 const v = cvDetails(b, first, last); if(v.error) return json(res, 400, {error: v.error});
@@ -427,7 +427,7 @@ function parseBase(text, defaultBase){
             if(o.cover_ok) return json(res, 200, {ok: true});
             const b = await body(req, 40000), text = clean(b.text, 4000) || o.draft_letter, subject = clean(b.subject, 200) || o.draft_subject || "";
             if(text.length < 40) return json(res, 400, {error: "Текст письма слишком короткий"});
-            await q(`UPDATE orders SET letter = $1, subject = $2, letter_ok = $3, cover_ok = $3 WHERE id = $4`, [text, subject, now(), o.id]);
+            await q(`UPDATE orders SET letter = $1, subject = $2, letter_ok = $3, cover_ok = $3, start_ok = COALESCE(start_ok, $3) WHERE id = $4`, [text, subject, now(), o.id]);
             await engine.note(o.id, "Клиент подтвердил персональное письмо" + (text !== o.draft_letter ? " (с правками)" : ""), "Клиент");
             Mail.owner(`✅ Клиент подтвердил персональное письмо — заказ №${o.num}${text !== o.draft_letter ? " (с правками)" : ""}\nРассылка стартует.`, o.id);
             engine.tick().catch(() => {});
@@ -439,10 +439,10 @@ function parseBase(text, defaultBase){
             const o = await byToken(m[1]); if(!o) return json(res, 404, {error: "Заказ не найден"});
             if(o.kind !== "cv" || !o.base || !o.res_name || o.status === "cancelled") return json(res, 400, {error: "Резюме ещё не готово"});
             if(o.res_ok) return json(res, 200, {ok: true});
-            await q(`UPDATE orders SET res_ok = $1 WHERE id = $2`, [now(), o.id]);
+            await q(`UPDATE orders SET res_ok = $1, start_ok = COALESCE(start_ok, $1) WHERE id = $2`, [now(), o.id]);
             await engine.note(o.id, "Клиент проверил и подтвердил готовое резюме" + (o.email_ok ? "" : " (e-mail ещё не подтверждён — рассылка стартует после подтверждения почты)"), "Клиент");
             Mail.owner(`✅ Клиент подтвердил резюме — заказ №${o.num}\n${o.email_ok ? "Рассылка стартует по выбранным датам." : "⚠️ E-mail клиента ещё не подтверждён — рассылка ждёт."}`, o.id);
-            if(o.email_ok){ const jb = await q(`SELECT id FROM jobs WHERE order_id = $1`, [o.id]); if(jb.length){ try { const L = engine.letterFor({...o, res_ok: now()}); Mail.T.preview(o, L, o.res_name).catch(() => {}); } catch(e){} } }
+            if(o.email_ok){ const jb = await q(`SELECT id FROM jobs WHERE order_id = $1`, [o.id]); if(jb.length){ try { const L = engine.letterFor({...o, res_ok: now()}); Mail.T.preview({...o, start_ok: now()}, L, o.res_name).catch(() => {}); } catch(e){} } }
             engine.tick().catch(() => {});
             return json(res, 200, {ok: true});
         }
@@ -460,13 +460,28 @@ function parseBase(text, defaultBase){
             await engine.note(o.id, b.reset ? "Клиент вернул стандартное письмо" : "Клиент изменил тему и текст письма", "Клиент");
             return json(res, 200, {ok: true});
         }
+        m = p.match(/^\/api\/o\/([A-Za-z0-9_-]{10,80})\/start$/);                                  // клиент нажал «Старт рассылки»: после этого рассылка уйдёт в выбранное им время
+        if(req.method === "POST" && m){
+            if(limited("start:" + m[1], 20, 3600e3)) return json(res, 429, {error: "Слишком много попыток, попробуйте позже"});
+            const o = await byToken(m[1]); if(!o || !o.base) return json(res, 404, {error: "Заказ не найден"});
+            if(o.status === "cancelled") return json(res, 400, {error: "Заказ отменён"});
+            if(!o.email_ok) return json(res, 400, {error: "Сначала подтвердите e-mail — нажмите кнопку в письме, которое мы отправили"});
+            if(o.kind === "cv" && !o.res_ok) return json(res, 400, {error: "Сначала проверьте и подтвердите готовое резюме"});
+            if(Number(o.cover) && !o.cover_ok) return json(res, 400, {error: "Сначала подтвердите персональное письмо"});
+            if(o.start_ok) return json(res, 200, {ok: true});
+            await q(`UPDATE orders SET start_ok = $1 WHERE id = $2`, [now(), o.id]);
+            await engine.note(o.id, "Клиент нажал «Старт рассылки»", "Клиент");
+            Mail.owner(`🚀 Клиент нажал «Старт рассылки» — заказ №${o.num}\nРассылка уйдёт в выбранное им время (будни 06:00–18:00 МСК), если оплата подтверждена.`, o.id);
+            engine.tick().catch(() => {});
+            return json(res, 200, {ok: true});
+        }
         m = p.match(/^\/api\/o\/([A-Za-z0-9_-]{10,80})\/resume$/);
         if(req.method === "POST" && m){
             if(limited("resume:" + m[1], 10, 3600e3)) return json(res, 429, {error: "Слишком много замен, попробуйте позже"});
             const o = await byToken(m[1]); if(!o || o.kind !== "mailing") return json(res, 404, {error: "Заказ не найден"});
             if(["cancelled"].includes(o.status)) return json(res, 400, {error: "Заказ отменён"});
             const nm = clean(decodeURIComponent(String(req.headers["x-name"] || "cv.pdf")), 120) || "cv.pdf";
-            if(!/\.(pdf|docx?)$/i.test(nm)) return json(res, 400, {error: "Нужен файл PDF или Word"});
+            if(!/\.(pdf|docx?|xlsx?)$/i.test(nm)) return json(res, 400, {error: "Нужен файл PDF, Word или Excel"});
             const buf = await rawBody(req, 5 * 1024 * 1024);
             if(!buf.length) return json(res, 400, {error: "Пустой файл"});
             await q(`UPDATE orders SET cv_name = $1, cv_b64 = $2 WHERE id = $3`, [nm, buf.toString("base64"), o.id]);
@@ -734,14 +749,21 @@ function parseBase(text, defaultBase){
         }
         if(req.method === "POST" && (m = p.match(/^\/orders\/([\w-]+)\/res-skip$/))){
             const o = await one(`SELECT * FROM orders WHERE id = $1`, [m[1]]); if(!o) return json(res, 404, {error: "нет заказа"});
-            await q(`UPDATE orders SET res_ok = $1 WHERE id = $2`, [now(), o.id]);
+            await q(`UPDATE orders SET res_ok = $1, start_ok = COALESCE(start_ok, $1) WHERE id = $2`, [now(), o.id]);
             await engine.note(o.id, "Рассылка разблокирована без подтверждения резюме клиентом", who);
+            engine.tick().catch(() => {});
+            return json(res, 200, {ok: true});
+        }
+        if(req.method === "POST" && (m = p.match(/^\/orders\/([\w-]+)\/start-skip$/))){          // запустить рассылку без нажатия «Старт рассылки» клиентом
+            const o = await one(`SELECT * FROM orders WHERE id = $1`, [m[1]]); if(!o) return json(res, 404, {error: "нет заказа"});
+            await q(`UPDATE orders SET start_ok = COALESCE(start_ok, $1) WHERE id = $2`, [now(), o.id]);
+            await engine.note(o.id, "Рассылка запущена менеджером без нажатия «Старт рассылки» клиентом", who);
             engine.tick().catch(() => {});
             return json(res, 200, {ok: true});
         }
         if(req.method === "POST" && (m = p.match(/^\/orders\/([\w-]+)\/cover-skip$/))){
             const o = await one(`SELECT * FROM orders WHERE id = $1`, [m[1]]); if(!o) return json(res, 404, {error: "нет заказа"});
-            await q(`UPDATE orders SET cover_ok = $1 WHERE id = $2`, [now(), o.id]);
+            await q(`UPDATE orders SET cover_ok = $1, start_ok = COALESCE(start_ok, $1) WHERE id = $2`, [now(), o.id]);
             await engine.note(o.id, "Рассылка разблокирована без подтверждения персонального письма (стандартное письмо)", who);
             engine.tick().catch(() => {});
             return json(res, 200, {ok: true});
@@ -1038,7 +1060,7 @@ function parseBase(text, defaultBase){
                 const rest = u.pathname.slice("/api/hook".length);
                 if(req.method === "GET" && rest === "/crm-link") return json(res, 200, {link: SEC.link()});
                 if(req.method === "POST" && rest === "/crm-rotate"){ await SEC.rotate(true); return json(res, 200, {link: SEC.link()}); }
-                if(!/^\/(orders|orders\/[\w-]+|orders\/[\w-]+\/(confirm|cancel|note|reply|email-ok|cover-skip|res-skip|base|letter|cover-letter|add-job|result|cv|res|sent\.csv|ai-resume|ai-resume\.docx|ai-resume\/reset|boxes\/delete|doc\/[\w-]+)|bases|bases\/test|bases\/[\w-]+\.csv|boxes|boxes\/[\w-]+\/delete|chats|chats\/[a-z0-9]{10,24}|chats\/[a-z0-9]{10,24}\/(reply|close)|jobs\/[\w-]+|jobs\/[\w-]+\/(pause|resume|stop|retry|time|boxes))$/.test(rest)) return json(res, 404, {error: "not found"});
+                if(!/^\/(orders|orders\/[\w-]+|orders\/[\w-]+\/(confirm|cancel|note|reply|email-ok|cover-skip|res-skip|start-skip|base|letter|cover-letter|add-job|result|cv|res|sent\.csv|ai-resume|ai-resume\.docx|ai-resume\/reset|boxes\/delete|doc\/[\w-]+)|bases|bases\/test|bases\/[\w-]+\.csv|boxes|boxes\/[\w-]+\/delete|chats|chats\/[a-z0-9]{10,24}|chats\/[a-z0-9]{10,24}\/(reply|close)|jobs\/[\w-]+|jobs\/[\w-]+\/(pause|resume|stop|retry|time|boxes))$/.test(rest)) return json(res, 404, {error: "not found"});
                 if(req.method === "GET" && /^\/jobs\/[\w-]+$/.test(rest)){ const j = await one(`SELECT id, order_id, m, status FROM jobs WHERE id = $1`, [rest.slice(6)]); return j ? json(res, 200, j) : json(res, 404, {error: "нет задания"}); }
                 const u2 = new URL(u); u2.pathname = "/crm/api" + rest; u2.viaBot = true;
                 return await crmApi(req, res, u2);

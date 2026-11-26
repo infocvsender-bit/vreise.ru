@@ -151,6 +151,14 @@
             .then(function(x){ if(!x.ok) throw new Error(x.j.error || "Не удалось подтвердить"); msg.textContent = "✅ Подтверждено"; setTimeout(function(){ location.reload(); }, 800); })
             .catch(function(e){ rok.disabled = false; msg.textContent = "❌ " + e.message; });
     });
+    var sg = $("startgo");
+    if(sg) sg.addEventListener("click", function(){
+        var msg = $("startmsg"); sg.disabled = true; msg.textContent = "Запускаем…";
+        fetch("/api/o/" + window.__tok + "/start", {method: "POST", headers: {"Content-Type": "application/json"}, body: "{}"})
+            .then(function(r){ return r.json().then(function(j){ return {ok: r.ok, j: j}; }); })
+            .then(function(x){ if(!x.ok) throw new Error(x.j.error || "Не удалось запустить"); msg.textContent = "✅ Готово! Рассылка уйдёт в выбранное время"; setTimeout(function(){ location.href = location.pathname; }, 900); })
+            .catch(function(e){ sg.disabled = false; msg.textContent = "❌ " + e.message; });
+    });
     var lf = $("lf");
     if(lf){
         var std = {}; try { std = JSON.parse($("lstd").textContent); } catch(e){}
@@ -171,7 +179,7 @@
     if(rg) rg.addEventListener("click", function(){
         var fl = $("rsfile").files[0], st = $("rsmsg2");
         if(!fl){ st.textContent = "Выберите файл"; return; }
-        if(!/\.(pdf|docx?)$/i.test(fl.name)){ st.textContent = "Нужен файл PDF или Word"; return; }
+        if(!/\.(pdf|docx?|xlsx?)$/i.test(fl.name)){ st.textContent = "Нужен файл PDF, Word или Excel"; return; }
         if(fl.size > 5 * 1024 * 1024){ st.textContent = "Файл больше 5 МБ"; return; }
         rg.disabled = true; st.textContent = "Загружаем…";
         fetch("/api/o/" + window.__tok + "/resume", {method: "POST", headers: {"Content-Type": "application/octet-stream", "X-Name": encodeURIComponent(fl.name)}, body: fl})
@@ -396,7 +404,7 @@
     }
     function autoRead(fl){
         var msg = $("autoMsg"); if(!msg || !fl) return;
-        if(/\.doc$/i.test(fl.name)){ msg.textContent = isCv ? "Файл .doc автоматически не читается — приложите его в разделе «Документы» ниже и заполните анкету вручную. Или сохраните резюме как PDF / .docx." : "Резюме прикреплено, но файл .doc автоматически не читается — заполните поля вручную (или сохраните резюме как PDF / .docx и прикрепите заново)."; return; }
+        if(/\.(doc|xls)$/i.test(fl.name)){ msg.textContent = isCv ? "Файл .doc автоматически не читается — приложите его в разделе «Документы» ниже и заполните анкету вручную. Или сохраните резюме как PDF / .docx." : "Резюме прикреплено, но файл .doc автоматически не читается — заполните поля вручную (или сохраните резюме как PDF / .docx и прикрепите заново)."; return; }
         if(fl.size > 5 * 1024 * 1024){ msg.textContent = "Файл больше 5 МБ — заполните поля вручную."; return; }
         msg.textContent = "⏳ Читаем резюме… обычно до минуты. Не закрывайте страницу.";
         fetch("/api/parse-cv", {method: "POST", headers: {"Content-Type": "application/octet-stream", "X-Name": encodeURIComponent(fl.name)}, body: fl})
@@ -455,7 +463,7 @@
             if(!val("first") || !val("last")) return fail("Укажите имя и фамилию");
             if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(val("email"))) return fail("Укажите корректный e-mail");
             if($("position").value.split(", ").indexOf("Другая") >= 0 && !val("positionOther")) return fail("Укажите вашу должность");
-            if(fileEl && fileEl.hasAttribute("required") && !file) return fail("Загрузите ваше резюме (PDF или Word)");
+            if(fileEl && fileEl.hasAttribute("required") && !file) return fail("Загрузите ваше резюме (PDF, Word или Excel)");
             if(file && file.size > 5 * 1024 * 1024) return fail("Файл больше 5 МБ — уменьшите его или напишите менеджеру в чате");
         }
         if(!$("agree").checked) return fail("Нужно согласие с офертой и политикой конфиденциальности");

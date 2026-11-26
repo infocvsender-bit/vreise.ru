@@ -50,6 +50,20 @@ function filesToBlocks(files){
                 const t = x ? xmlText(x.toString("utf8"), ext === "docx" ? "w:p" : "text:p") : "";
                 if(!t){ skipped.push(`${f.name} — не удалось прочитать текст`); continue; }
                 blocks.push({type: "text", text: `[Файл: ${f.name}]\n${t.slice(0, 40000)}`});
+            } else if(ext === "xlsx"){                                   // Excel: текст ячеек всех листов (до 6), строки через табуляцию
+                const z = unzip(f.buf, n => n === "xl/sharedStrings.xml" || /^xl\/worksheets\/sheet\d+\.xml$/.test(n)), ss = [];
+                if(z["xl/sharedStrings.xml"]) for(const m of z["xl/sharedStrings.xml"].toString("utf8").matchAll(/<si>([\s\S]*?)<\/si>/g)) ss.push(unent([...m[1].matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map(x => x[1]).join("")));
+                const lines = [];
+                for(const n of Object.keys(z).filter(n => n.startsWith("xl/worksheets/")).sort().slice(0, 6)) for(const row of z[n].toString("utf8").matchAll(/<row[^>]*>([\s\S]*?)<\/row>/g)){
+                    const cells = [...row[1].matchAll(/<c([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)].map(c => {
+                        const body = c[2] || "", isS = /t="s"/.test(c[1]), isI = /t="inlineStr"/.test(c[1]), v = (body.match(/<v>([\s\S]*?)<\/v>/) || [])[1];
+                        return isS ? (ss[Number(v)] || "") : isI ? unent([...body.matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map(x => x[1]).join("")) : unent(v || "");
+                    }).filter(Boolean);
+                    if(cells.length) lines.push(cells.join("\t"));
+                }
+                const t = lines.join("\n").trim();
+                if(!t){ skipped.push(`${f.name} — не удалось прочитать текст`); continue; }
+                blocks.push({type: "text", text: `[Файл: ${f.name}]\n${t.slice(0, 40000)}`});
             } else if(ext === "txt" || ext === "rtf"){
                 let t = f.buf.toString("utf8"); if(ext === "rtf") t = t.replace(/\\'([0-9a-f]{2})/gi, (m, h) => String.fromCharCode(parseInt(h, 16))).replace(/\\[a-z]+-?\d* ?|[{}]/gi, "");
                 blocks.push({type: "text", text: `[Файл: ${f.name}]\n${t.trim().slice(0, 40000)}`});
