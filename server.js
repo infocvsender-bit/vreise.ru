@@ -324,7 +324,6 @@ function parseBase(text, defaultBase){
                 if(!/^[A-Za-z0-9+/=]+$/.test(cvB64) || Buffer.from(cvB64, "base64").length > MAX_FILE) return json(res, 400, {error: "Файл слишком большой (до 5 МБ) или повреждён"});
                 if(!/\.(pdf|docx?|xlsx?|jpe?g|png)$/i.test(cvName)) return json(res, 400, {error: "Допустимы файлы PDF, Word, Excel, JPG или PNG"});
             }
-            if(sv.kind === "mailing" && !cvB64) return json(res, 400, {error: "Загрузите ваше резюме (PDF, Word или Excel)"});
             let details = null, price = sv.price, title = sv.title, base = sv.base || null, times = sv.times || 1, extra = null;
             if(sv.kind === "cv"){
                 const v = cvDetails(b, first, last); if(v.error) return json(res, 400, {error: v.error});
@@ -410,7 +409,7 @@ function parseBase(text, defaultBase){
             await q(`UPDATE orders SET status = 'claimed', claimed_at = $1 WHERE id = $2 AND status = 'new'`, [now(), o.id]);
             await engine.note(o.id, "Клиент нажал «Я оплатил(а)»", "Клиент");
             Mail.owner(`💳 Клиент сообщил об оплате\nЗаказ №${o.num} · ${Mail.rub(o.price)}\n${o.first_name || ""} ${o.last_name || ""} · ${o.email}\nПроверьте карту и подтвердите в CRM: ${Mail.siteUrl()}/crm`, o.id);
-            return json(res, 200, {ok: true});
+            return json(res, 200, {ok: true, noCv: o.kind === "mailing" && !o.cv_b64});
         }
         m = p.match(/^\/api\/o\/([A-Za-z0-9_-]{10,80})\/resend$/);
         if(req.method === "POST" && m){
@@ -466,6 +465,7 @@ function parseBase(text, defaultBase){
             const o = await byToken(m[1]); if(!o || !o.base) return json(res, 404, {error: "Заказ не найден"});
             if(o.status === "cancelled") return json(res, 400, {error: "Заказ отменён"});
             if(!o.email_ok) return json(res, 400, {error: "Сначала подтвердите e-mail — нажмите кнопку в письме, которое мы отправили"});
+            if(o.kind === "mailing" && !o.cv_b64) return json(res, 400, {error: "Сначала прикрепите ваше резюме — без файла рассылка не начнётся"});
             if(o.kind === "cv" && !o.res_ok) return json(res, 400, {error: "Сначала проверьте и подтвердите готовое резюме"});
             if(Number(o.cover) && !o.cover_ok) return json(res, 400, {error: "Сначала подтвердите персональное письмо"});
             if(o.start_ok) return json(res, 200, {ok: true});
@@ -486,6 +486,7 @@ function parseBase(text, defaultBase){
             if(!buf.length) return json(res, 400, {error: "Пустой файл"});
             await q(`UPDATE orders SET cv_name = $1, cv_b64 = $2 WHERE id = $3`, [nm, buf.toString("base64"), o.id]);
             await engine.note(o.id, `Клиент заменил резюме: ${nm}`, "Клиент");
+            engine.tick().catch(() => {});
             return json(res, 200, {ok: true});
         }
         /* пауза / продолжение рассылки самим клиентом */
