@@ -178,7 +178,7 @@ module.exports = function engine(db){
         let prev = 0;
         for(let m = 1; m <= Number(o.times || 1); m++){
             let chosen = parseMsk(sched[m - 1]); if(Number.isFinite(chosen)){ const wd = mskParts(chosen).dow; if(wd === 6) chosen += 2 * DAY; else if(wd === 0) chosen += DAY; }   // выходной → тот же час в понедельник
-            const want = Math.max(Number.isFinite(chosen) ? chosen : Date.now() + (m - 1) * WEEK, Date.now(), prev ? prev + DAY : 0);
+            const want = Math.max(Number.isFinite(chosen) ? chosen : Date.now() + (m - 1) * WEEK, Date.now(), prev ? prev + 2 * DAY : 0);
             const at = nextWindow(want); prev = at;
             await q(`INSERT INTO jobs(id, order_id, m, status, start_at) VALUES($1,$2,$3,'wait',$4)`, [uuid(), o.id, m, new Date(at).toISOString()]);
         }
@@ -393,8 +393,9 @@ module.exports = function engine(db){
         if(ms > Date.now() + 200 * DAY) throw new Error("Дата слишком далеко");
         const jobs = await q(`SELECT * FROM jobs WHERE order_id = $1 ORDER BY m`, [o.id]), day = t => Math.floor((t + MSK) / DAY);
         const prev = jobs.find(x => x.m === job.m - 1), next = jobs.find(x => x.m === job.m + 1);
-        if(!T && prev && day(ms) <= day(Date.parse(prev.start_at))) throw new Error("Каждая следующая рассылка — на более позднюю дату, чем предыдущая");
-        if(!T && next && day(ms) >= day(Date.parse(next.start_at))) throw new Error("Эта рассылка должна быть раньше следующей");
+        const GAPD = opt.client ? 2 : 1, fd = t => new Date(t).toLocaleDateString("ru-RU", {timeZone: "Europe/Moscow", day: "2-digit", month: "2-digit"});     // клиенту между рассылками — минимум один свободный день (26.11 → следующая с 28.11), менеджеру — просто позже
+        if(!T && prev && day(ms) - day(Date.parse(prev.start_at)) < GAPD) throw new Error(opt.client ? `Между рассылками должен пройти минимум один день — рассылка №${job.m} доступна с ${fd(Date.parse(prev.start_at) + 2 * DAY)}: так вашу рассылку не примут за спам` : "Каждая следующая рассылка — на более позднюю дату, чем предыдущая");
+        if(!T && next && day(Date.parse(next.start_at)) - day(ms) < GAPD) throw new Error(opt.client ? `Между рассылками должен пройти минимум один день: эта рассылка должна быть не позже ${fd(Date.parse(next.start_at) - 2 * DAY)} (следующая стоит на ${fd(Date.parse(next.start_at))})` : "Эта рассылка должна быть раньше следующей");
         const at2 = T ? ms : nextWindow(ms);
         await q(`UPDATE jobs SET start_at = $1, status = CASE WHEN status = 'pause' THEN 'pause' ELSE 'wait' END WHERE id = $2`, [new Date(at2).toISOString(), job.id]);
         let sched = []; try { sched = JSON.parse(o.schedule || "[]"); } catch(e){}

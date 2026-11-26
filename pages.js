@@ -127,7 +127,7 @@ function home(counts, reviews = []){
 <section class="sec" id="pay"><div class="c"><div class="pay"><div><div class="kick">Оплата</div><h2>Картой, в рублях</h2>
 <p class="sub" style="margin-bottom:0">После оформления заказа вы увидите сумму и реквизиты карты для перевода. Платёж проверяем вручную и сразу запускаем работу.</p></div>
 <div class="note"><p><b>Что входит в стоимость.</b> Рассылка по выбранной базе, сопроводительное письмо, статистика и статус рассылки в личном кабинете.</p>
-<p style="margin-top:10px"><b>Даты рассылок.</b> Дату и время старта каждой рассылки вы выбираете при оформлении заказа: сегодня — если заказ оформлен в будний день до 12:00 по Москве (старт не позже 15:00), иначе — с завтрашнего дня; старт с 06:00 до 18:00 по Москве. Письма уходят по будням с 06:00 до 18:00, рассылка занимает не менее 10 часов, в выходные перерыв — продолжение в понедельник.</p></div></div></div></section>
+<p style="margin-top:10px"><b>Даты рассылок.</b> Дату и время старта каждой рассылки вы выбираете при оформлении заказа: сегодня — если заказ оформлен в будний день до 12:00 по Москве (старт не позже 15:00), иначе — с завтрашнего дня; старт с 06:00 до 18:00 по Москве. Если рассылок две или три, между ними должен пройти минимум один день (первая 26.11 — вторая не раньше 28.11), чтобы рассылку не приняли за спам. Письма уходят по будням с 06:00 до 18:00, рассылка занимает не менее 10 часов, в выходные перерыв — продолжение в понедельник.</p></div></div></div></section>
 ${reviewsSection(reviews)}
 <section class="sec${reviews.length ? "" : " alt"}"><div class="c faq"><div class="kick">Вопросы</div><h2>Коротко о главном</h2><div style="margin-top:20px">
 ${faqList.map(([q, a]) => `<details><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join("\n")}
@@ -322,7 +322,7 @@ ${active && j.status !== "pause" ? `<div class="chips"><span>🕒 ${fmtShort(sta
 ${active ? `<span class="hint">Старт: ${fmtShort(startMs)} МСК · плановое окончание: ${fmtShort(endMs)} МСК</span>` : ""}</div></div>
 <p class="jn">${info}</p>
 ${btns.length ? `<div class="ja">${btns.join("")}<span class="hint jmsg"></span></div>` : ""}
-${notStarted ? `<div class="jtf" hidden data-j="${esc(j.id)}"><label class="f">Новое время старта <small>— по Москве, с 06:00 до 18:00, не раньше чем через час; на сегодня — только до 12:00 (старт не позже 15:00)</small><input class="in jtv" type="datetime-local" value="${mskVal}" step="60"></label>
+${notStarted ? `<div class="jtf" hidden data-j="${esc(j.id)}"><label class="f">Новое время старта <small>— по Москве, с 06:00 до 18:00, не раньше чем через час; на сегодня — только до 12:00 (старт не позже 15:00); между рассылками — минимум один день</small><input class="in jtv" type="datetime-local" value="${mskVal}" step="60"></label>
 <div class="ja"><button class="btn gold sm jtsave" type="button">Сохранить время</button><button class="btn sm jline jtcancel" type="button">Отмена</button><span class="hint jtmsg"></span></div></div>` : ""}</div>`; }).join("")}</div>` : "";
     /* куда не отправлять / адрес для ответов */
     const exList = String(o.exclude || "").split(/[\n,;]+/).map(x => x.trim()).filter(Boolean);

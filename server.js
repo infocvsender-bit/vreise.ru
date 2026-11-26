@@ -353,7 +353,7 @@ function parseBase(text, defaultBase){
                     if(new Date(day).getUTCDate() !== +m[3] || hh < 6 || hh > 17 || mm > 59) return json(res, 400, {error: "Время старта — с 06:00 до 18:00 по Москве"});
                     if(day < today) return json(res, 400, {error: "Эта дата уже прошла — выберите другую"});
                     if(day === today){ const e = engine.sameDayCheck(String(x)); if(e) return json(res, 409, {error: e}); }   // сегодня — только до 12:00 МСК, старт не позже 15:00
-                    if(prevDay !== null && day <= prevDay) return json(res, 400, {error: "Каждая следующая рассылка — на более позднюю дату"});
+                    if(prevDay !== null && day - prevDay < 2 * 864e5) return json(res, 400, {error: "Между рассылками должен пройти минимум один день: следующую можно выбрать не раньше, чем через день после предыдущей — так вашу рассылку не примут за спам"});
                     if(day - today > 200 * 864e5) return json(res, 400, {error: "Дата рассылки слишком далеко"});
                     prevDay = day;
                 }

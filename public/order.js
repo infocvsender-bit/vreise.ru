@@ -244,13 +244,18 @@
         if(list.indexOf(sel) < 0) sel = list.indexOf("10:00") >= 0 ? "10:00" : list[0];
         return {sel: sel, html: list.map(function(t){ return "<option" + (t === sel ? " selected" : "") + ">" + t + "</option>"; }).join("")};
     }
+    var GAP_MSG = "Между рассылками — минимум один день: так вашу рассылку не примут за спам.";
+    function addDays(d, n){ var t = new Date(d + "T00:00:00Z"); t.setUTCDate(t.getUTCDate() + n); return dstr(t); }
+    function ruDate(d){ return d.slice(8, 10) + "." + d.slice(5, 7); }
+    function minFor(i){ var min = mskDay(0); return i > 0 && schedVals[i - 1] && schedVals[i - 1].d ? (addDays(schedVals[i - 1].d, 2) > min ? addDays(schedVals[i - 1].d, 2) : min) : min; }
     function renderSched(){
         if(!schedBox) return;
         var n = mailCount(), min = mskDay(0), html = "";
         for(var i = 0; i < n; i++){
-            var v = schedVals[i] || {d: mskDay(1 + 7 * i), t: "10:00"};
-            if(v.d < min) v.d = mskDay(1 + 7 * i);
-            var to = timeOpts(v.d, v.t); v.t = to.sel; schedVals[i] = v;
+            var v = schedVals[i] || {d: mskDay(1 + 7 * i), t: "10:00"}; schedVals[i] = v;
+            min = minFor(i);                                                   // 2-я и 3-я рассылки — не раньше чем через день после предыдущей
+            var def = mskDay(1 + 7 * i); if(!v.d || v.d < min) v.d = def >= min ? def : min;
+            var to = timeOpts(v.d, v.t); v.t = to.sel;
             html += '<div class="schrow"><span class="schn">' + (n > 1 ? "Рассылка №" + (i + 1) : "Рассылка") + '</span><input type="date" class="in" data-sd="' + i + '" min="' + min + '" value="' + v.d + '"><select class="in" data-st="' + i + '">' + to.html + '</select><span class="schw" data-sw="' + i + '"></span></div>';
         }
         schedBox.innerHTML = html; weekendNotes();
@@ -264,13 +269,17 @@
                 if(todayOpen()) w.textContent = "Сегодня — старт не позже 15:00; письма уйдут, как только вы и мы подтвердим заказ";
                 else { w.textContent = NO_PLACES; w.style.color = "#c0392b"; }
             } else w.textContent = dw === 6 || dw === 0 ? "Выходной — старт перенесётся на понедельник" : "";
+            var wi = Number(w.getAttribute("data-sw"));
+            if(wi > 0 && schedVals[wi - 1]){ var gm = "Доступно с " + ruDate(minFor(wi)) + ". " + GAP_MSG; if(w.style.color !== "rgb(192, 57, 43)" && w.textContent !== NO_PLACES) w.textContent = (w.textContent ? w.textContent + ". " : "") + gm; }
         });
     }
     if(schedBox) schedBox.addEventListener("change", function(e){
         var a = e.target.getAttribute("data-sd"), b = e.target.getAttribute("data-st");
         if(a !== null){
-            var i = Number(a), v = schedVals[i]; v.d = e.target.value;
+            var i = Number(a), v = schedVals[i]; v.d = e.target.value; if(!v.d || v.d < minFor(i)) v.d = minFor(i);
             var sel = schedBox.querySelector('[data-st="' + i + '"]'), to = timeOpts(v.d, v.t); v.t = to.sel; if(sel) sel.innerHTML = to.html;     // для «сегодня» — только время от текущего момента до 15:00
+            for(var k = i + 1; k < mailCount(); k++) if(schedVals[k] && schedVals[k].d < minFor(k)) schedVals[k].d = "";
+            renderSched(); return;
         }
         if(b !== null){ schedVals[Number(b)].t = e.target.value; }
         weekendNotes();
@@ -285,7 +294,7 @@
                 if(v.t > "15:00") return "Сегодня старт возможен не позже 15:00 по Москве";
                 var tm = v.t.split(":"); if(Number(tm[0]) * 60 + Number(tm[1]) < minTodayMin() - 30) return "Это время уже прошло — выберите более позднее";
             }
-            if(prev && v.d <= prev) return "Каждая следующая рассылка — на более позднюю дату, чем предыдущая";
+            if(prev && v.d < addDays(prev, 2)) return "Рассылка №" + (i + 1) + " доступна с " + ruDate(addDays(prev, 2)) + ": между рассылками — минимум один день, чтобы вашу рассылку не приняли за спам";
             prev = v.d;
         }
         return "";
