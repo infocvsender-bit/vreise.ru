@@ -75,7 +75,7 @@
     var claim = $("claim");
     if(claim) claim.addEventListener("click", function(){
         claim.disabled = true;
-        fetch("/api/o/" + window.__tok + "/claim", {method: "POST"}).then(function(r){ return r.json(); }).then(function(j){ if(j && j.noCv){ alert("Файл резюме не прикреплён. Прикрепите ваше резюме в личном кабинете — без него рассылка не начнётся."); location.hash = "#cvfile"; } location.reload(); }).catch(function(){ claim.disabled = false; });
+        fetch("/api/o/" + window.__tok + "/claim", {method: "POST"}).then(function(r){ return r.json(); }).then(function(j){ if(j && j.noCv){ alert("Файл резюме не прикреплён. Прикрепите ваше резюме в личном кабинете — без него рассылка не начнётся."); } location.href = "/o/" + window.__tok + (j && j.noCv ? "#cvfile" : ""); }).catch(function(){ claim.disabled = false; });
     });
 
     /* повторное письмо с подтверждением e-mail */

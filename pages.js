@@ -269,7 +269,7 @@ ${extraPanel}
 /* ---------- страница заказа ---------- */
 const STATUS = {new: "Ожидает оплаты", claimed: "Проверяем оплату", paid: "Оплачен", in_progress: "В работе", done: "Выполнен", cancelled: "Отменён"};
 const fmtCard = c => String(c).replace(/\s+/g, "").replace(/(\d{4})(?=\d)/g, "$1 ");
-function orderPage(o, jobs, sent, msgs = [], std = null, replies = [], rv = null, canReview = false){
+function orderPage(o, jobs, sent, msgs = [], std = null, replies = [], rv = null, canReview = false, payOnly = false){
     const cv = o.kind === "cv", mail = !!o.base, pay = o.status === "new" || o.status === "claimed";
     const cards = [["PAY_CARD", "PAY_BANK"], ["PAY_CARD_2", "PAY_BANK_2"]].map(([c, b]) => ({card: String(env(c) || "").replace(/\s+/g, ""), bank: env(b) || ""})).filter(x => x.card);
     const cardsHtml = (cards.length > 1 ? `<div class="seg" style="margin-top:12px">${cards.map((x, i) => `<button type="button" class="${i ? "" : "on"}" data-bank="${i}">${esc(x.bank || "Карта " + (i + 1))}</button>`).join("")}</div>` : "")
@@ -281,6 +281,14 @@ ${cards.length ? `<p style="margin-top:12px;margin-bottom:0">${cards.length > 1 
  : `<div class="err">Реквизиты для оплаты пока не заданы. Напишите нам в чате на сайте (кнопка справа внизу).</div>`}
 <p class="hint" style="margin-top:14px">В комментарии к платежу, если есть такая возможность, укажите номер заказа <b>№${o.num}</b>. Переводите точную сумму.</p>
 ${o.status === "new" ? `<div style="margin-top:18px"><button class="btn gold" id="claim" type="button">Я оплатил(а)</button></div>` : ""}</div>` : "";
+    if(payOnly){                                                              // страница оплаты (/payment_in_rub): только оплата, кабинет откроется после «Я оплатил(а)»
+        const pbody = `<div class="page"><h1>Оплата заказа №${o.num}</h1><p class="sub">${esc(o.title)}</p>
+${!o.email_ok ? `<div class="err" style="background:#fff7dc;color:#6b4e00;border-color:#f0d78a;margin-bottom:18px">✉️ Не забудьте подтвердить e-mail: нажмите кнопку в письме, которое мы отправили на <b>${esc(o.email)}</b>.</div>` : ""}
+${payBlock}
+<p class="hint" style="margin-top:4px">После нажатия «Я оплатил(а)» откроется ваш личный кабинет: статус заказа, письмо, рассылка и ответы компаний.</p></div>`;
+        return shell({title: `Оплата заказа №${o.num} — Vreise.ru`, desc: "Оплата заказа", path: "/payment_in_rub", noindex: true, hero: `<header class="hero short">${navTop(false)}</header>`, body: pbody,
+            scripts: `<script>window.__tok=${JSON.stringify(o.token)}</script><script src="/static/order.js?v=${V}" defer></script><script src="/static/noselect.js?v=${V}" defer></script>`});
+    }
     const fmtMsk = s => new Date(s).toLocaleString("ru-RU", {timeZone: "Europe/Moscow", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit"});
     /* трекер этапов заказа */
     const paidDone = ["paid", "in_progress", "done"].includes(o.status), jobsEnded = jobs.length > 0 && jobs.every(j => ["done", "stop"].includes(j.status));

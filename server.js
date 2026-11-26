@@ -189,14 +189,14 @@ function parseBase(text, defaultBase){
         if(m){
             const o = await byToken(m[1]); if(!o) return send(res, 404, P.notFound());
             if(!o.email_ok){ await q(`UPDATE orders SET email_ok = $1 WHERE id = $2`, [now(), o.id]); await engine.note(o.id, "E-mail подтверждён клиентом", "Клиент"); }
-            return redirect(res, "/o/" + o.token + (o.base ? "#start" : ""));
+            return redirect(res, o.status === "new" ? "/payment_in_rub?o=" + o.token : "/o/" + o.token + (o.base ? "#start" : ""));
         }
         /* /payment_in_rub — адрес страницы оплаты (на него настроены цели конверсии): та же личная страница заказа, пока заказ ждёт оплаты; токен — в ?o= */
         if(p === "/payment_in_rub"){
             const tk = String(u.searchParams.get("o") || ""); if(!/^[A-Za-z0-9_-]{10,80}$/.test(tk)) return redirect(res, "/order");
             const o = await byToken(tk); if(!o) return send(res, 404, P.notFound());
-            if(!["new", "claimed"].includes(o.status)) return redirect(res, "/o/" + o.token);
-            return send(res, 200, await cabinetHtml(o), "text/html; charset=utf-8", {"Cache-Control": "no-store"});
+            if(o.status !== "new") return redirect(res, "/o/" + o.token);
+            return send(res, 200, await cabinetHtml(o, true), "text/html; charset=utf-8", {"Cache-Control": "no-store"});
         }
         m = p.match(/^\/o\/([A-Za-z0-9_-]{10,80})(\/file)?$/);
         if(m){
@@ -206,6 +206,7 @@ function parseBase(text, defaultBase){
                 return send(res, 200, Buffer.from(o.res_b64, "base64"), M.mimeOf(o.res_name || "cv.pdf"),
                     {"Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(o.res_name || "cv.pdf")}`, "Cache-Control": "no-store"});
             }
+            if(o.status === "new") return redirect(res, "/payment_in_rub?o=" + o.token);                // пока не нажато «Я оплатил(а)» — сначала страница оплаты, кабинет откроется после
             return send(res, 200, await cabinetHtml(o), "text/html; charset=utf-8", {"Cache-Control": "no-store"});
         }
         return send(res, 404, P.notFound());
@@ -215,7 +216,7 @@ function parseBase(text, defaultBase){
     const approvedReviews = (lim = 20) => q(`SELECT name, position, stars, text, created_at FROM reviews WHERE status = 'ok' ORDER BY created_at DESC LIMIT $1`, [lim]);
     const refreshReviews = async () => { try { P.setReviews(Number((await one(`SELECT COUNT(*) AS n FROM reviews WHERE status = 'ok'`)).n)); } catch(e){} };
     const reviewAllowed = (o, jobs) => o.status !== "cancelled" && (o.status === "done" || jobs.some(j => Number(j.sent) > 0) || (o.kind === "cv" && !!o.res_name));
-    async function cabinetHtml(o){
+    async function cabinetHtml(o, payOnly = false){
         const jobs = await q(`SELECT * FROM jobs WHERE order_id = $1 ORDER BY m`, [o.id]);
         const msgs = await q(`SELECT at, author, text FROM notes WHERE order_id = $1 AND author IN ('Сообщение клиента', 'Ответ менеджера') ORDER BY at`, [o.id]);
         const sent = (jobs.length ? await q(`SELECT qu.company, qu.email, qu.sent_at FROM queue qu JOIN jobs j ON j.id = qu.job_id WHERE j.order_id = $1 AND qu.status = 'sent' ORDER BY qu.sent_at DESC LIMIT 200`, [o.id]) : []).map(r => ({company: Mask.maskCompany(r.company || ""), email: Mask.maskEmail(r.email), sent_at: r.sent_at}));
@@ -223,7 +224,7 @@ function parseBase(text, defaultBase){
         const replies = o.base ? await q(`SELECT id, from_email, from_name, subject, text, kind, at FROM replies WHERE order_id = $1 AND kind <> 'bounce' ORDER BY at DESC LIMIT 100`, [o.id]) : [];
         if(replies.length){ const fw = new Set((await q(`SELECT reply_id FROM reply_fwd WHERE order_id = $1`, [o.id])).map(x => x.reply_id)); for(const r of replies) r.fwd = fw.has(r.id); }
         const rv = await one(`SELECT status FROM reviews WHERE order_id = $1`, [o.id]);
-        return P.orderPage(o, jobs, sent, msgs, std, replies, rv, !rv && reviewAllowed(o, jobs));
+        return P.orderPage(o, jobs, sent, msgs, std, replies, rv, !rv && reviewAllowed(o, jobs), payOnly);
     }
 
     /* ---------- публичные API ---------- */
