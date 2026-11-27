@@ -172,7 +172,7 @@ function parseBase(text, defaultBase){
             return send(res, 200, `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`, "application/xml; charset=utf-8");
         }
         if(p === "/sw.js") return send(res, 200, fs.readFileSync(path.join(PUB, "sw.js")), "text/javascript; charset=utf-8", {"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"});
-        if(p === "/favicon.ico") return redirect(res, "/static/favicon.png", 301);
+        if(p === "/favicon.ico") return send(res, 200, fs.readFileSync(path.join(PUB, "favicon.ico")), "image/x-icon", {"Cache-Control": "public, max-age=86400"});
         if(p.startsWith("/static/")){
             const f = path.normalize(path.join(PUB, p.slice(8)));
             if(!f.startsWith(PUB + path.sep) || !fs.existsSync(f) || !fs.statSync(f).isFile()) return send(res, 404, "not found", "text/plain");

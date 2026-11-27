@@ -23,7 +23,7 @@ ${noindex ? '<meta name="robots" content="noindex,nofollow">' : `<meta name="rob
 <meta property="og:type" content="${ogType}"><meta property="og:site_name" content="Vreise.ru"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(desc)}"><meta property="og:url" content="${esc(url)}"><meta property="og:locale" content="ru_RU">
 <meta property="og:image" content="${esc(img)}"><meta property="og:image:width" content="${iw}"><meta property="og:image:height" content="${ih}"><meta property="og:image:alt" content="${esc(alt)}">${published ? `<meta property="article:published_time" content="${esc(published)}"><meta property="article:modified_time" content="${esc(modified || published)}"><meta property="article:author" content="Vreise.ru"><meta property="article:section" content="Блог для моряков">` : ""}
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(desc)}"><meta name="twitter:image" content="${esc(img)}"><meta name="twitter:image:alt" content="${esc(alt)}">
-<link rel="icon" type="image/png" href="/static/favicon.png"><link rel="apple-touch-icon" href="/static/icon-192.png"><meta name="theme-color" content="#0A3340">
+<link rel="icon" href="/favicon.ico" sizes="any"><link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.png"><link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png"><link rel="apple-touch-icon" href="/static/icon-192.png"><meta name="theme-color" content="#0A3340">
 <link rel="stylesheet" href="/static/style.css?v=${V}">${noindex ? "" : jsonld.map(ld).join("")}</head><body>
 ${hero}${body}
 ${footer()}
